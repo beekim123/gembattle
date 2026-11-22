@@ -246,3 +246,23 @@ function makeTiko(spread, flap, k = 1.3) {
     }
   });
 }
+
+// 石门：两根方石柱架一根横梁，柱子正面刻一竖排短道道、横梁上三个点；门开了刻痕发冷光。前方是 +y。
+// 柱子中心离门中心 ±9.5 体素（world.js 里的挡块跟着这个数）。颜色取 neo-1 颜色表里的石头色。
+function makeGate(open) {
+  const W = 32, D = 9, Z = 38;
+  const dark = [44, 58, 65], light = [92, 111, 122], moss = [42, 64, 52], cut = [28, 36, 42], glow = [118, 206, 255, 1];
+  return build(W, D, Z, (x, y, z) => {
+    const X = x + .5, Y = y + .5, Zz = z + .5, n = vnoise(x * .45 + z * .21, y * .5 + z * .37, 41);
+    const inPillar = cx => Math.abs(X - cx) < 3.2 - Zz * .015 + n * .35 && Math.abs(Y - D / 2) < 3 - Zz * .01 + n * .3;
+    const pl = inPillar(6.5), pr = inPillar(W - 6.5);
+    const lintel = Zz > 29 && Zz < 34.5 - Math.abs(X - W / 2) * .04 && X > 1.5 - n && X < W - 1.5 + n && Math.abs(Y - D / 2) < 2.6;
+    const cap = Zz >= 34.5 && Zz < 36 && Math.abs(X - W / 2) < 9 && Math.abs(Y - D / 2) < 1.6;
+    if (!((pl || pr) && Zz < 31) && !lintel && !cap) return null;
+    const front = Y > D / 2 + 1.9;
+    if (front && (pl || pr) && Zz > 6 && Zz < 26 && Math.abs(X - (pl ? 6.5 : W - 6.5)) < 1.2 && Math.floor(Zz) % 4 !== 0) return open ? glow : cut;
+    if (front && lintel && Zz > 30.5 && Zz < 33 && [W / 2 - 5, W / 2, W / 2 + 5].some(c => Math.abs(X - c) < .9)) return open ? glow : cut;
+    if (Zz < 5 + n * 4) return mix(moss, dark, n);
+    return mix(light, dark, clamp(n * 1.2 - .1 + (Zz < 12 ? .2 : 0), 0, 1));
+  });
+}

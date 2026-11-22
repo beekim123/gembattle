@@ -53,7 +53,7 @@ function buildArena(seed) {
 }
 
 function enterBattle(w) {
-  const b = startFight(run, w.kind, 1.5 ** run.wins);   // 先按这一趟打倒几只涨血；第 2 步换成按段数和鬼火种类
+  const b = startFight(run, w.spec);   // 血量、攻击、是不是看门的，都在鬼火身上（world.js placeWisps）
   const dx = w.x - player.x, dy = w.y - player.y, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d;
   for (const k of Object.keys(BT)) delete BT[k];
   const back = { x: player.x, y: player.y, h: player.h, view: CAM.view, ux, uy };   // 记下在林子里的位置，打完送回来
@@ -108,13 +108,13 @@ function stripHit(m) {
   return -1;
 }
 const stripVisible = () => BT.drag || BT.b.line.length > 0 || BT.phase === 'cast';
-const canFlee = () => run.hearts > .5;
+const canFlee = () => !BT.b.mon.guard && run.hearts > .5;
 const overlayOpen = () => BT.over || BT.loot || BT.confirm;
 
 // ---------- 输入 ----------
 const CONFIRM_BTNS = () => ({ yes: { x: 520, y: 380, w: 110, h: 40 }, no: { x: 650, y: 380, w: 110, h: 40 } });
 function battleDown(m) {
-  if (BT.over) { if (inRect(m, BT.over.btn)) { BT.over = null; goLobby(); } return; }
+  if (BT.over) { if (inRect(m, BT.over.btn)) { BT.over = null; goLobby('dead'); } return; }
   if (BT.loot) {
     const i = BT.loot.rects.findIndex(r => inRect(m, r));
     if (i >= 0) { run.deck.push(BT.loot.cards[i]); BT.loot = null; leaveBattle('win'); }
@@ -590,7 +590,7 @@ function drawBattleUI(ctx) {
       const j = clamp(Math.floor((mouse.y - 576) / 40), 0, 2), g = run.gems[j];
       tip(ctx, [`${GEM_NAMES[j]}宝石 Lv${g.level}：${GEM_NAMES[j]}色每发 ×${+gemPow(run, j).toFixed(2)}`, `再打出 ${gemNeed(g.level) - g.exp} 发${GEM_NAMES[j]}色升一级`]);
     } else if (BT.hover >= 0 && b.hand[BT.hover]) tip(ctx, [b.hand[BT.hover].name + '：' + b.hand[BT.hover].text]);
-    else if (inRect(mouse, L.escape) && !canFlee()) tip(ctx, ['只剩半颗心，逃不动了']);
+    else if (inRect(mouse, L.escape) && !canFlee()) tip(ctx, [BT.b.mon.guard ? '看门的跑不掉，只能打' : '只剩半颗心，逃不动了']);
   }
   if (BT.confirm) {
     ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, 1280, 720);

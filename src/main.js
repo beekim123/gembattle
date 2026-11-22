@@ -32,31 +32,56 @@ function fit() {
 }
 addEventListener('resize', fit);
 
-// 大厅 → 进林子：新的一趟（心回满、宝石等级清零），牌组用存档里的
+// 大厅 → 进林子：新的一趟（心回满、宝石等级清零、起手牌组），从第一段砍柴坡开始
 function startRunFromLobby() {
   trans = { kind: 'out', t: 0, then: () => { profile.runs++; saveProfile(); restartRun(); } };
 }
-// 回大厅：这一趟结束，牌留着
-function goLobby() {
-  if (run) saveRunRecords(run);
+// 回大厅：这一趟结束（reason：quit 自己回来 / dead 心打光 / clear 走穿了），大厅里出一张结算
+function goLobby(reason = 'quit') {
+  if (run) {
+    saveRunRecords(run);
+    const floor = FLOOR ? FLOOR.i : 0;
+    profile.bestFloor = Math.max(profile.bestFloor, floor); if (reason === 'clear') profile.clears++;
+    saveProfile();
+    lobbySummary = { reason, floor, kills: run.wins, bestHit: run.bestHit, bestCast: run.bestCast, deck: run.deck.length };
+  }
   trans = { kind: 'out', t: 0, then: () => { mode = 'lobby'; shake(0); exploreConfirm = null; enterLobby(); } };
 }
 function restartRun() {
   run = newRun((Math.random() * 1e9) | 0);
-  CAM.ox = 0;
-  player = { x: 0, y: 6, h: -Math.PI / 2, walk: 0, moving: false, grace: 0 };
-  CAM.x = player.x; CAM.y = player.y; CAM.view = viewT = 0; CAM.oy = 14; setTilt(.6);
-  wisps.length = 0; wispRng = rngFrom((Math.random() * 1e9) | 0);
-  mode = 'explore'; setRes('explore');
+  enterFloor(0);
+}
+// 进第 i 段：重新生成这一段的林子，人站在南边入口
+function enterFloor(i) {
+  chunks.clear();
+  FLOOR = makeFloor(i, (run.seed + i * 7919 + 1) >>> 0);
+  run.floor = i;
+  placeWisps(FLOOR);
+  player = { x: FLOOR.entry.x, y: FLOOR.entry.y, h: -Math.PI / 2, walk: 0, moving: false, grace: 1 };
+  CAM.ox = 0; CAM.x = player.x; CAM.y = player.y; CAM.view = viewT = 0; CAM.oy = 14; setTilt(.6);
+  mode = 'explore'; setRes('explore'); exploreConfirm = null;
+  titleCard = { name: FLOOR.def.name, sub: `第${NUM_CN[i]}段`, t: 0 };
+  exploreToast = null;
+}
+// 走进开着的石门
+function nextFloor() {
+  const i = FLOOR.i + 1;
+  if (i >= FLOORS.length) { goLobby('clear'); return; }   // 第 6 步：这里接空场子和高个儿
+  trans = { kind: 'out', t: 0, then: () => enterFloor(i) };
 }
 function leaveBattle(how) {
   trans = { kind: 'out', t: 0, then: () => {
-    const w = BT.wisp;
-    const bk = BT.back;   // 从空地送回林子里原来的位置
+    const w = BT.wisp, bk = BT.back;   // 从空地送回林子里原来的位置
     player.x = bk.x; player.y = bk.y; player.h = bk.h;
     for (const c of BT.arena) chunks.delete(c.cx + ',' + c.cy);
-    if (how === 'win') { const i = wisps.indexOf(w); if (i >= 0) wisps.splice(i, 1); profile.wins++; saveRunRecords(run); }
-    else { player.x -= bk.ux * 22; player.y -= bk.uy * 22; player.grace = 3; }
+    if (how === 'win') {
+      const i = wisps.indexOf(w); if (i >= 0) wisps.splice(i, 1);
+      profile.wins++; saveRunRecords(run);
+      if (w.guard) { openGate(); exploreToast = { text: '石门开了，往北走', t: 0 }; }
+    } else {   // 逃跑：往回退一段，鬼火回原处，几秒内不会再撞上
+      for (const d of [22, 16, 10, 5]) { const nx = bk.x - bk.ux * d, ny = bk.y - bk.uy * d; if (!blocked(nx, ny, 2.6)) { player.x = nx; player.y = ny; break; } }
+      w.x = w.hx; w.y = w.hy; player.grace = 3;
+    }
     mode = 'explore'; setRes('explore'); CAM.oy = 14; setTilt(.6); CAM.view = viewT = bk.view; CAM.x = player.x; CAM.y = player.y; shake(0);
   } };
 }
@@ -85,6 +110,7 @@ addEventListener('mousemove', e => { toUI(e); if (mode === 'battle') battleMove(
 addEventListener('mouseup', e => { toUI(e); mouse.down = false; if (dragView != null) viewT = Math.round(viewT / SNAP) * SNAP; dragView = null; if (mode === 'battle' && !trans) battleUp(mouse); });
 
 // ---------- 探索 ----------
+let titleCard = null, exploreToast = null;
 function updateExplore(dt) {
   CAM.view += (viewT - CAM.view) * Math.min(1, dt * 7);
   if (Math.abs(viewT - CAM.view) < .002) CAM.view = viewT;   // 停下来时正好落在直角上
@@ -107,8 +133,13 @@ function updateExplore(dt) {
   CAM.x += (player.x - CAM.x) * Math.min(1, dt * 5); CAM.y += (player.y - CAM.y) * Math.min(1, dt * 5);
   updateChunks(player.x, player.y);
   updateWisps(player.x, player.y, dt);
-  if (!trans && !exploreConfirm && player.grace <= 0) for (const w of wisps) if (Math.hypot(w.x - player.x, w.y - player.y) < WISP.guard) {
-    w.flare = 0;
+  exploreAround(FLOOR, player.x, player.y, 58);
+  if (titleCard) { titleCard.t += dt; if (titleCard.t > 3.2) titleCard = null; }
+  if (exploreToast) { exploreToast.t += dt; if (exploreToast.t > 3) exploreToast = null; }
+  if (trans || exploreConfirm) return;
+  const G = FLOOR.gate;   // 走进开着的石门 → 下一段
+  if (FLOOR.gateOpen && Math.abs(player.x - G.x) < 5.5 && player.y < G.y + 6) { nextFloor(); return; }
+  if (player.grace <= 0) for (const w of wisps) if (Math.hypot(w.x - player.x, w.y - player.y) < WISP.guard * (w.guard ? 1.25 : 1)) {
     trans = { kind: 'enter', t: 0, wisp: w };
     break;
   }
@@ -117,32 +148,81 @@ function drawWisps(ctx, t) {
   for (const w of wisps) {
     const d = Math.hypot(w.x - player.x, w.y - player.y);
     if (d > 260) continue;
-    const p = proj(w.x, w.y, 12 + Math.sin(t * 2 + w.phase) * 2);
-    if (p.x < -20 || p.x > CAM.W + 20 || p.y < -20 || p.y > CAM.H + 20) continue;
+    const p = proj(w.x, w.y, (w.guard ? 18 : 12) + Math.sin(t * 2 + w.phase) * 2);
+    if (p.x < -30 || p.x > CAM.W + 30 || p.y < -30 || p.y > CAM.H + 30) continue;
     const flare = trans && trans.wisp === w ? 1 + trans.t * 3 : 1;
-    drawWisp(ctx, p, t + w.phase, w.color, flare);
+    drawWisp(ctx, p, t + w.phase, w.color, (w.guard ? 2 : 1) * flare);
   }
 }
-function drawMinimap(ctx, t) {
-  const cx = 1180, cy = 100, R0 = 72, range = 360;
-  ctx.save();
-  ctx.fillStyle = 'rgba(8,10,16,.7)'; ctx.beginPath(); ctx.arc(cx, cy, R0, 0, TAU); ctx.fill();
-  ctx.strokeStyle = 'rgba(160,150,130,.5)'; ctx.lineWidth = 1.5; ctx.stroke();
-  ctx.beginPath(); ctx.arc(cx, cy, R0, 0, TAU); ctx.clip();
-  const c = Math.cos(CAM.view), s = Math.sin(CAM.view);
+// 鬼火和看门的也照亮一点脚下：看门的那团从老远就能看见
+function wispLights() {
+  const out = [];
   for (const w of wisps) {
-    const dx = w.x - player.x, dy = w.y - player.y, rx = c * dx - s * dy, ry = s * dx + c * dy;
-    const x = cx + rx / range * R0, y = cy + ry / range * R0, pulse = 3.5 + Math.sin(t * 5 + w.phase) * .8;
+    if (Math.hypot(w.x - player.x, w.y - player.y) > 300) continue;
+    out.push(w.guard ? { x: w.x, y: w.y, z: 18, r: 46, a: .7, c: w.color } : { x: w.x, y: w.y, z: 12, r: 16, a: .45, c: w.color });
+  }
+  return out;
+}
+// 小地图：跟着镜头转；只画走过的地方；看门的和石门一开始就标着，出了圈就在边上指方向
+function drawMinimap(ctx, t) {
+  const cx = 1180, cy = 100, R0 = 72, range = 170, k = R0 / range, F = FLOOR;
+  const c = Math.cos(CAM.view), s = Math.sin(CAM.view);
+  const at = (x, y) => { const dx = x - player.x, dy = y - player.y; return [cx + (c * dx - s * dy) * k, cy + (s * dx + c * dy) * k]; };
+  ctx.save();
+  ctx.fillStyle = 'rgba(6,8,12,.86)'; ctx.beginPath(); ctx.arc(cx, cy, R0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy, R0, 0, TAU); ctx.clip();
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(CAM.view); ctx.scale(k, k); ctx.translate(-player.x, -player.y);
+  ctx.imageSmoothingEnabled = false; ctx.drawImage(F.mm, 0, 0, FLOOR_W, FLOOR_W); ctx.restore();
+  for (const w of wisps) {
+    if (w.guard || !w.seen) continue;
+    const [x, y] = at(w.x, w.y), pulse = 3 + Math.sin(t * 5 + w.phase) * .7;
     ctx.fillStyle = rgba(w.color, .35); ctx.beginPath(); ctx.arc(x, y, pulse + 3, 0, TAU); ctx.fill();
     ctx.fillStyle = rgba(w.color); ctx.beginPath(); ctx.arc(x, y, pulse, 0, TAU); ctx.fill();
   }
   ctx.restore();
+  ctx.strokeStyle = 'rgba(160,150,130,.5)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, R0, 0, TAU); ctx.stroke();
+  // 看门的 / 石门：圈里就画在原处，圈外就贴着边指过去
+  const mark = (x, y, col, open) => {
+    let [mx, my] = at(x, y); const dx = mx - cx, dy = my - cy, d = Math.hypot(dx, dy);
+    if (d > R0 - 7) {
+      const ux = dx / d, uy = dy / d; mx = cx + ux * (R0 - 7); my = cy + uy * (R0 - 7);
+      ctx.save(); ctx.translate(mx, my); ctx.rotate(Math.atan2(uy, ux));
+      ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(7, 0); ctx.lineTo(-3, -5); ctx.lineTo(-3, 5); ctx.fill(); ctx.restore();
+    } else if (open) { ctx.fillStyle = col; ctx.fillRect(mx - 5, my - 6, 3, 10); ctx.fillRect(mx + 2, my - 6, 3, 10); ctx.fillRect(mx - 5, my - 7, 10, 3); }
+    else { const p = 4.5 + Math.sin(t * 4) * 1; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(mx, my, p, 0, TAU); ctx.fill(); }
+  };
+  const guard = wisps.find(w => w.guard);
+  if (guard) mark(guard.x, guard.y, '#ff7a54', false);
+  else mark(F.gate.x, F.gate.y, '#7cc8ff', true);
   // 主角：白色箭头，永远在正中，指向他面朝的方向
-  const [fx, fy] = [Math.cos(player.h), Math.sin(player.h)];
-  const ang = Math.atan2(s * fx + c * fy, c * fx - s * fy);
+  const fx = Math.cos(player.h), fy = Math.sin(player.h), ang = Math.atan2(s * fx + c * fy, c * fx - s * fy);
   ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang + Math.PI / 2);
   ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(5, 5); ctx.lineTo(0, 2); ctx.lineTo(-5, 5); ctx.fill();
   ctx.restore();
+}
+function drawExploreUI(ctx, t) {
+  drawMinimap(ctx, t);
+  btn(ctx, EXPLORE_LOBBY, '回大厅', true, inRect(mouse, EXPLORE_LOBBY));
+  heartRow(ctx, 24, 20, 4, run.hearts, run.maxHearts);
+  txt(ctx, `${FLOOR.def.name}　打倒 ${run.wins} 只　牌 ${run.deck.length} 张`, 24, 56, 14, 'rgba(220,210,190,.75)', 'left', 500);
+  txt(ctx, 'WASD 走（Shift 跑）· Q E 或拖鼠标 转镜头 · 碰到鬼火就开打 · Esc 回大厅', 24, 700, 13, 'rgba(200,190,170,.6)', 'left', 500);
+  const G = FLOOR.gate, nearGate = Math.hypot(player.x - G.x, player.y - G.y) < 70;
+  if (nearGate && !FLOOR.gateOpen && !wisps.some(w => w.guard && Math.hypot(w.x - player.x, w.y - player.y) < 60)) txt(ctx, '石门关着。打倒看门的才开。', 640, 560, 16, 'rgba(220,210,190,.8)', 'center', 600);
+  if (exploreToast) { const a = Math.min(1, exploreToast.t * 4, (3 - exploreToast.t) * 2); ctx.globalAlpha = a; txt(ctx, exploreToast.text, 640, 560, 20, '#cfe6ff', 'center', 700); ctx.globalAlpha = 1; }
+  if (titleCard) {   // 进一段时正中出它的名字
+    const a = Math.min(1, titleCard.t * 1.6, (3.2 - titleCard.t) * 1.4);
+    ctx.globalAlpha = Math.max(0, a);
+    txt(ctx, titleCard.sub, 640, 250, 16, '#a9b7b2', 'center', 500);
+    txt(ctx, titleCard.name, 640, 296, 46, '#efe2c4', 'center', 800);
+    ctx.fillStyle = 'rgba(216,187,136,.45)'; ctx.fillRect(560, 330, 160, 1);
+    ctx.globalAlpha = 1;
+  }
+  if (exploreConfirm) {
+    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, 1280, 720);
+    txt(ctx, '回大厅吗？', 640, 300, 26, '#efe4cc', 'center', 800);
+    txt(ctx, '这一趟就到这儿', 640, 338, 15, '#a49c8c');
+    btn(ctx, CONFIRM.yes, '回大厅', true, inRect(mouse, CONFIRM.yes)); btn(ctx, CONFIRM.no, '接着走', true, inRect(mouse, CONFIRM.no));
+  }
 }
 
 // ---------- 主循环 ----------
@@ -162,7 +242,7 @@ function frame(now) {
     updateLobby(dt); renderLobby(wctx, T, dt);
   } else if (mode === 'explore') {
     updateExplore(dt);
-    renderWorld(wctx, { player, t: T, dt, overFx: ctx => drawWisps(ctx, T) });
+    renderWorld(wctx, { player, t: T, dt, dark: FLOOR.def.dark, lights: wispLights(), overFx: ctx => drawWisps(ctx, T) });
   } else {
     updateBattle(dt);
     const sh = BT.shake;
@@ -174,19 +254,8 @@ function frame(now) {
   uctx.setTransform(1, 0, 0, 1, 0, 0); uctx.clearRect(0, 0, uc.width, uc.height);
   uctx.setTransform(s, 0, 0, s, 0, 0);
   if (mode === 'lobby') drawLobbyUI(uctx, T);
-  else if (mode === 'explore') {
-    drawMinimap(uctx, T);
-    btn(uctx, EXPLORE_LOBBY, '回大厅', true, inRect(mouse, EXPLORE_LOBBY));
-    if (exploreConfirm) {
-      uctx.fillStyle = 'rgba(0,0,0,.6)'; uctx.fillRect(0, 0, 1280, 720);
-      txt(uctx, '回大厅吗？', 640, 300, 26, '#efe4cc', 'center', 800);
-      txt(uctx, '这一趟结束，路上拿到的牌留着', 640, 338, 15, '#a49c8c');
-      btn(uctx, CONFIRM.yes, '回大厅', true, inRect(mouse, CONFIRM.yes)); btn(uctx, CONFIRM.no, '接着走', true, inRect(mouse, CONFIRM.no));
-    }
-    txt(uctx, 'WASD 走（Shift 跑）· Q E 或拖鼠标 转镜头 · 碰到鬼火就开打 · Esc 回大厅', 24, 700, 13, 'rgba(200,190,170,.6)', 'left', 500);
-    heartRow(uctx, 24, 20, 4, run.hearts, run.maxHearts);
-    txt(uctx, `牌 ${run.deck.length} 张　打倒 ${run.wins} 只`, 24, 56, 14, 'rgba(220,210,190,.75)', 'left', 500);
-  } else drawBattleUI(uctx);
+  else if (mode === 'explore') drawExploreUI(uctx, T);
+  else drawBattleUI(uctx);
   if (fade > 0) { uctx.fillStyle = `rgba(0,0,0,${fade})`; uctx.fillRect(0, 0, 1280, 720); }
   requestAnimationFrame(frame);
 }

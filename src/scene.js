@@ -98,6 +98,7 @@ function renderWorld(ctx, view) {
   // 物件
   const pp = proj(pl.x, pl.y), list = [];
   for (const c of near) for (const o of c.objs) {
+    if (!o.m) continue;   // 看不见的挡块（石门的柱脚）
     const p = proj(o.x, o.y);
     if (p.x < -40 || p.x > W + 40 || p.y < -8 || p.y - o.m.sz * CAM.hs > H + 8) continue;
     list.push({ o, p, ry: p.ry });
@@ -119,7 +120,11 @@ function renderWorld(ctx, view) {
     if (it.mon) { if (mon.alpha > 0) drawStack(ctx, mon.model, it.p, mon.ro, mon.alpha, mon.lift); continue; }
     const o = it.o;
     let a = 1;
-    if (o.tall && it.ry > pp.ry && Math.abs(it.p.x - pp.x) < o.m.sx * .5 && it.p.y - o.m.sz * CAM.hs < pp.y - 6 && it.p.y > pp.y - 4) a = .35;
+    if (o.tall) {   // 树在主角前面、树冠盖住了主角的身子：慢慢变透明，永远看得见自己
+      const cover = it.ry > pp.ry && Math.abs(it.p.x - pp.x) < o.m.sx * .5 + 5 && it.p.y - o.m.sz * CAM.hs < pp.y - 2 && it.p.y > pp.y - 2;
+      o.fade = lerp(o.fade ?? 1, cover ? .28 : 1, Math.min(1, dt * 8));
+      a = o.fade > .99 ? 1 : o.fade;
+    }
     if (view.battle && o.r && mon && it.ry > proj(mon.x, mon.y).ry - 6 && Math.abs(it.p.x - CAM.W / 2) < 70) a = Math.min(a, .22);
     const sway = o.tall ? Math.sin(t * .7 + o.x * .13) * 1.2 : 0;   // 只把上面几层整像素地挪一点，不重新采样
     drawStack(ctx, o.m, it.p, o.ro, a, 0, sway);
@@ -162,11 +167,12 @@ function renderWorld(ctx, view) {
   const k = SK();
   sctx.setTransform(1, 0, 0, 1, 0, 0); sctx.globalCompositeOperation = 'source-over';
   sctx.clearRect(0, 0, shadeC.width, shadeC.height);
-  const lights = [{ x: pl.x, y: pl.y, z: 8, r: view.lightR || 66, a: 1 }];
+  const lights = [{ x: pl.x, y: pl.y, z: 8, r: view.lightR || 66, a: 1 }, ...(view.lights || [])];
   if (mon && mon.alpha > 0) { lights.push({ x: mon.x, y: mon.y, z: mon.lift + 30, r: 48, a: .85 * mon.alpha }); }
   for (const c of near) for (const o of c.objs) {
     if (o.glow) lights.push({ x: o.x, y: o.y, z: 2, r: 13, a: .45, c: [110, 200, 186] });
     if (o.light) lights.push({ x: o.x, y: o.y + 3, z: 14, r: 62 + 3 * Math.sin(t * 2.1), a: .95, c: ART.on ? artCol('runeGlow', [110, 200, 255]) : [255, 150, 70] });
+    if (o.gate) { const open = FLOOR && FLOOR.gateOpen; lights.push({ x: o.x, y: o.y + 3, z: 18, r: open ? 74 + 3 * Math.sin(t * 2.3) : 30, a: open ? .95 : .45, c: open ? [110, 200, 255] : null }); }
   }
   if (!window.NOLIGHT) {
     sctx.fillStyle = `rgba(6,10,22,${view.dark ?? .76})`; sctx.fillRect(0, 0, shadeC.width, shadeC.height);

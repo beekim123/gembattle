@@ -1,7 +1,7 @@
 'use strict';
-// 无限林子：按 64×64 的区块随机生成（同一个种子同样的林子），走到哪生成到哪，远的扔掉。
+// 林子：一段一段的（见 设计.md「整局流程」）。每段 7×7 块（一块 64×64 体素），按这一段的种子生成；
+// 南边进，北边是石门，门前站着看门的；四周是走不过去的密林，越往外越黑。
 const CH = 64;
-const WORLD_SEED = 20261121;
 const MODELS = {};
 function initModels() {
   rimLight = false;
@@ -15,102 +15,157 @@ function initModels() {
   MODELS.reeds = [0, 1, 2].map(i => makeReeds(i));
   MODELS.player = [makePlayer(0), makePlayer(1), makePlayer(2)];
   MODELS.stone = makeStone();
+  MODELS.gate = [makeGate(false), makeGate(true)];
 }
 const chunks = new Map();
-const START_CLEAR = 30;
 const quarter = r => ((r() * 4) | 0) * Math.PI / 2;   // 物件只转直角：镜头停下时切片正好对齐像素
 
-const pondField = (gx, gy) => fbm(gx * .014, gy * .014, 9);
-const groveField = (gx, gy) => fbm(gx * .011 + 50, gy * .011, 14);           // 高的地方成片林子，低的地方是林间空地
-const trailAt = (gx, gy) => Math.abs(vnoise(gx * .0065 + 2 * vnoise(gx * .02, gy * .02, 7) * .3, gy * .0065, 21) - .5) < .03 + .014 * vnoise(gx * .05, gy * .05, 3);   // 弯弯的林间小路
+// ---------- 这一段的设定 ----------
+const FLOOR_N = 7, FLOOR_W = FLOOR_N * CH, EDGE = 12;   // 离边 12 体素以内走不过去
+// normal：普通怪的血（越靠北越多，最多 ×3）；guard：看门的（先都用提可顶着，第 3~5 步换成各段自己的）
+const FLOORS = [
+  { name: '砍柴坡', dark: .74, kinds: ['tiko'], wisps: 5, normal: 1500, guard: { kind: 'tiko', hp: 12e4, atk: 1, name: '提可（看门的）' } },
+  { name: '老林子', dark: .8, kinds: ['tiko'], wisps: 5, normal: 5e4, guard: { kind: 'tiko', hp: 4e6, atk: 1, name: '提可（看门的）' } },
+  { name: '蛤蟆塘', dark: .84, kinds: ['tiko'], wisps: 6, normal: 1.6e6, guard: { kind: 'tiko', hp: 1.6e8, atk: 1.5, name: '提可（看门的）' } },
+];
+const NUM_CN = ['一', '二', '三', '四'];
+let FLOOR = null;
+const MM_CELL = 4, MM_N = FLOOR_W / MM_CELL;   // 小地图：4×4 体素一格
+
+function makeFloor(i, seed) {
+  const r = rngFrom(seed), def = FLOORS[i];
+  const F = { i, def, seed, nx: (seed % 997) * 3.1, ny: (seed % 991) * 2.7, wisps: [], gateOpen: false,
+    explored: new Uint8Array(MM_N * MM_N), mm: document.createElement('canvas') };
+  F.mm.width = F.mm.height = MM_N;
+  F.entry = { x: FLOOR_W / 2 + (r() - .5) * 120, y: FLOOR_W - 34 };
+  F.gate = { x: FLOOR_W / 2 + (r() - .5) * 160, y: 30 };
+  F.guardPos = { x: F.gate.x, y: F.gate.y + 46 };
+  // 一条弯弯的主路从入口通到石门：路上不长树、不积水，保证走得到
+  const pts = [[F.entry.x, FLOOR_W]];
+  for (let k = 1; k <= 3; k++) pts.push([70 + r() * (FLOOR_W - 140), F.entry.y - k * (F.entry.y - F.gate.y) / 4]);
+  pts.push([F.gate.x, F.gate.y]);
+  F.path = pts;
+  return F;
+}
+function pathDist(x, y, pts = FLOOR.path) {
+  let best = 1e9;
+  for (let k = 0; k < pts.length - 1; k++) {
+    const [ax, ay] = pts[k], [bx, by] = pts[k + 1], vx = bx - ax, vy = by - ay;
+    const t = clamp(((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy || 1), 0, 1);
+    best = Math.min(best, Math.hypot(x - ax - vx * t, y - ay - vy * t));
+  }
+  return best;
+}
+// 离可走区域的边还有多远（负数 = 在外面）
+const edgeDist = (x, y) => Math.min(x - EDGE, FLOOR_W - EDGE - x, y - EDGE, FLOOR_W - EDGE - y);
+const inFloor = (x, y, m = 0) => edgeDist(x, y) >= m;
+
+const pondField = (gx, gy) => fbm((gx + FLOOR.nx) * .014, (gy + FLOOR.ny) * .014, 9);
+const groveField = (gx, gy) => fbm((gx + FLOOR.nx) * .011 + 50, (gy + FLOOR.ny) * .011, 14);   // 高的地方成片林子，低的地方是林间空地
+const trailAt = (gx, gy) => { const x = gx + FLOOR.nx, y = gy + FLOOR.ny; return Math.abs(vnoise(x * .0065 + 2 * vnoise(x * .02, y * .02, 7) * .3, y * .0065, 21) - .5) < .03 + .014 * vnoise(x * .05, y * .05, 3); };   // 弯弯的林间小路
+const mainPath = (gx, gy) => pathDist(gx, gy) < 3.2 + 1.4 * vnoise(gx * .08, gy * .08, 5);
+function keepClear(gx, gy, m) {   // 入口、石门前、主路边上不放东西
+  const F = FLOOR;
+  return Math.hypot(gx - F.entry.x, gy - F.entry.y) < 30 + m || Math.hypot(gx - F.gate.x, gy - F.gate.y - 26) < 48 + m || pathDist(gx, gy) < 7 + m;
+}
 function waterAt(gx, gy) {
-  if (Math.hypot(gx, gy) < START_CLEAR + 14) return false;
+  if (!FLOOR || !inFloor(gx, gy, 10) || keepClear(gx, gy, 8)) return false;
   return pondField(gx, gy) > .655;
 }
 function genChunk(cx, cy) {
-  const r = rngFrom(Math.floor(hash(cx, cy, 0, WORLD_SEED) * 4294967296));
+  const F = FLOOR, r = rngFrom(Math.floor(hash(cx, cy, F.i + 1, F.seed) * 4294967296));
   const ox = cx * CH, oy = cy * CH;
   const g = document.createElement('canvas'); g.width = g.height = CH;
   const gc = g.getContext('2d'), im = gc.createImageData(CH, CH);
   const water = new Uint8Array(CH * CH);
   // 地面只放大块的颜色变化（林下暗、空地亮、小路、水），细碎的东西另外按像素点上去
   for (let y = 0; y < CH; y++) for (let x = 0; x < CH; x++) {
-    const gx = ox + x, gy = oy + y, i = y * CH + x;
-    const n = fbm(gx * .03, gy * .03, 1), grove = groveField(gx, gy);
-    const far = Math.hypot(gx, gy) > START_CLEAR + 14, w = pondField(gx, gy);
+    const gx = ox + x, gy = oy + y, i = y * CH + x, ed = edgeDist(gx, gy);
+    const n = fbm(gx * .03, gy * .03, 1), grove = groveField(gx, gy), w = waterAt(gx, gy) ? 1 : 0;
+    const shore = !w && ed > 10 && !keepClear(gx, gy, 6) && pondField(gx, gy) > .645;
+    const trail = ed > 4 && (mainPath(gx, gy) || trailAt(gx, gy));
     let col;
     if (ART.on) {   // 画师的底图 + 颜色表里的路和水，不混色
       col = artBaseCol(gx, gy);
-      if (far && trailAt(gx, gy)) col = artCol('trail', col);
-      if (far && w > .655) { water[i] = 1; col = w < .664 ? artCol('waterHi', col) : artCol('water', col); }
-      else if (far && w > .645) col = artCol('soilDark', col);
+      if (trail) col = artCol('trail', col);
+      if (w) { water[i] = 1; col = pondField(gx, gy) < .664 ? artCol('waterHi', col) : artCol('water', col); }
+      else if (shore) col = artCol('soilDark', col);
     } else {
       col = mix([46, 62, 48], [58, 76, 56], n);
-      col = mix(col, [34, 46, 40], smooth(clamp((grove - .45) / .2, 0, 1)) * .8);          // 林子底下暗一些
-      const mud = fbm(gx * .02 + 40, gy * .02, 5); if (mud > .64) col = mix(col, [58, 54, 46], Math.min(1, (mud - .64) * 5) * .7);
-      if (far && trailAt(gx, gy)) col = mix([78, 70, 58], [66, 60, 50], fbm(gx * .1, gy * .1, 6));
-      if (far && w > .655) {
-        water[i] = 1;
-        col = mix([16, 28, 40], [26, 44, 58], fbm(gx * .06, gy * .2, 6));
-        if (w < .668) col = mix(col, [46, 66, 72], .55);
-      } else if (far && w > .635) col = mix(col, [54, 60, 52], (w - .635) / .02 * .8);
+      col = mix(col, [34, 46, 40], smooth(clamp((grove - .45) / .2, 0, 1)) * .8);
+      if (trail) col = mix([78, 70, 58], [66, 60, 50], fbm(gx * .1, gy * .1, 6));
+      if (w) { water[i] = 1; col = mix([16, 28, 40], [26, 44, 58], fbm(gx * .06, gy * .2, 6)); }
     }
+    if (ed < 6) col = col.map(v => v * clamp(.25 + (ed + 18) / 32, .14, 1));   // 边上沉进黑里
     const k = i * 4; im.data[k] = col[0]; im.data[k + 1] = col[1]; im.data[k + 2] = col[2]; im.data[k + 3] = 255;
   }
   gc.putImageData(im, 0, 0);
   const decals = [];
-  if (ART.on) artDecorate(gc, ox, oy, r, 3, 16, (x, y) => { const f = Math.hypot(x, y) > START_CLEAR + 14; return f && (pondField(x, y) > .64 || trailAt(x, y)); });
+  const badDecal = (x, y) => edgeDist(x, y) < 4 || waterAt(x, y) || pondField(x, y) > .64 || mainPath(x, y) || trailAt(x, y);
+  if (ART.on) artDecorate(gc, ox, oy, r, 3, 16, badDecal);
   else for (let i = 0; i < 46; i++) {
-    const x = ox + r() * CH, y = oy + r() * CH; if (waterAt(x, y)) continue;
-    const k = r();
-    decals.push({ x, y, c: k < .55 ? (r() < .5 ? '#5e4a3a' : '#6e5844') : k < .85 ? '#4f6a4c' : '#6a6c66' });
+    const x = ox + r() * CH, y = oy + r() * CH; if (badDecal(x, y)) continue;
+    const k = r(); decals.push({ x, y, c: k < .55 ? (r() < .5 ? '#5e4a3a' : '#6e5844') : k < .85 ? '#4f6a4c' : '#6a6c66' });
   }
   const objs = [];
   const free = (x, y, rad) => objs.every(o => Math.hypot(o.x - x, o.y - y) > (o.r || 1.5) + rad);
   const dry = (x, y, m) => { for (let a = 0; a < 8; a++) if (waterAt(x + Math.cos(a * TAU / 8) * m, y + Math.sin(a * TAU / 8) * m)) return false; return !waterAt(x, y); };
-  const clear = (x, y, m) => Math.hypot(x, y) > START_CLEAR + m && !trailAt(x, y) && !trailAt(x + m, y) && !trailAt(x - m, y);
+  const clear = (x, y, m) => !keepClear(x, y, m) && !trailAt(x, y) && !trailAt(x + m, y) && !trailAt(x - m, y);
   const place = (n, tries, fn) => { for (let k = 0, c = 0; k < tries && c < n; k++) if (fn()) c++; };
-  const deadness = fbm(ox * .004 - 9, oy * .004, 12);
+  const deadness = clamp(fbm(ox * .004 - 9, oy * .004, 12) + F.i * .18, 0, 1);   // 越往里枯树越多
+  const tree = (x, y, rad) => { const dead = r() < deadness * .7; const o = { m: dead ? MODELS.dead[(r() * 4) | 0] : MODELS.live[(r() * 6) | 0], x, y, ro: quarter(r), r: dead ? 4 : 3.4, tall: true, dead }; objs.push(o); return o; };
   const trees = [];
-  // 树：按林子的疏密接受，成片长
+  // 外面和贴边的一圈：密密的树，挡住视线
+  place(14, 140, () => {
+    const x = ox + 2 + r() * (CH - 4), y = oy + 2 + r() * (CH - 4), ed = edgeDist(x, y);
+    if (ed > 14 || ed < -60 || !free(x, y, ART.on ? 15 : 11) || keepClear(x, y, 0)) return false;
+    tree(x, y); return true;
+  });
+  // 里面的树：按林子的疏密接受，成片长
   place(6, 90, () => {
     const x = ox + 4 + r() * (CH - 8), y = oy + 4 + r() * (CH - 8);
+    if (edgeDist(x, y) < 14) return false;
     if (r() > smooth(clamp((groveField(x, y) - .36) / .26, 0, 1))) return false;
     if (!dry(x, y, 6) || !clear(x, y, 6) || !free(x, y, ART.on ? 27 : 17)) return false;   // 画师的树冠大而实，隔开一点免得连成一片
-    const dead = r() < deadness * .7;
-    const o = { m: dead ? MODELS.dead[(r() * 4) | 0] : MODELS.live[(r() * 6) | 0], x, y, ro: quarter(r), r: dead ? 4 : 3.4, tall: true, dead };
-    objs.push(o); trees.push(o); return true;
+    trees.push(tree(x, y)); return true;
   });
   // 树脚下：灌木、草、偶尔一簇菌子
   for (const t of trees) {
     const n = 1 + (r() * 2 | 0);
     for (let i = 0; i < n; i++) {
       const a = r() * TAU, d = 6 + r() * 5, x = t.x + Math.cos(a) * d, y = t.y + Math.sin(a) * d;
-      if (!dry(x, y, 2) || !free(x, y, 3)) continue;
+      if (!dry(x, y, 2) || !free(x, y, 3) || keepClear(x, y, 0)) continue;
       objs.push({ m: r() < .6 ? MODELS.bush[(r() * 4) | 0] : MODELS.grass[(r() * 4) | 0], x, y, ro: quarter(r), r: 0 });
     }
     if (r() < .18) { const a = r() * TAU, x = t.x + Math.cos(a) * 5, y = t.y + Math.sin(a) * 5; if (dry(x, y, 1) && free(x, y, 2)) { const glow = r() < .5; objs.push({ m: MODELS.fungus[glow ? 1 : 0], x, y, ro: quarter(r), r: 0, glow }); } }
   }
   if (r() < .25) place(1, 20, () => {
     const x = ox + r() * CH, y = oy + r() * CH;
-    if (!dry(x, y, 4) || !clear(x, y, 4) || !free(x, y, 8)) return false;
+    if (edgeDist(x, y) < 16 || !dry(x, y, 4) || !clear(x, y, 4) || !free(x, y, 8)) return false;
     objs.push({ m: MODELS.stumps[(r() * 2) | 0], x, y, ro: quarter(r), r: 4 }); return true;
   });
   // 水边：石头、枯苇、灌木
   place(8, 80, () => {
     const x = ox + r() * CH, y = oy + r() * CH;
-    if (waterAt(x, y) || dry(x, y, 5)) return false;
+    if (edgeDist(x, y) < 12 || waterAt(x, y) || dry(x, y, 5)) return false;
     const k = r(), m = k < .55 ? MODELS.reeds[(r() * 3) | 0] : k < .8 ? MODELS.bush[(r() * 4) | 0] : MODELS.rocks[(r() * 5) | 0];
     const rad = m.r || 0;
-    if (!free(x, y, (rad || 2) + 1)) return false;
+    if (!free(x, y, (rad || 2) + 1) || keepClear(x, y, 0)) return false;
     objs.push({ m, x, y, ro: quarter(r), r: rad }); return true;
   });
   // 空地上稀稀的几丛草
   place(2, 20, () => {
     const x = ox + r() * CH, y = oy + r() * CH;
-    if (!dry(x, y, 2) || !free(x, y, 6)) return false;
+    if (edgeDist(x, y) < 12 || !dry(x, y, 2) || !free(x, y, 6)) return false;
     objs.push({ m: MODELS.grass[(r() * 4) | 0], x, y, ro: quarter(r), r: 0 }); return true;
   });
+  // 石门（两根柱子各放一个看不见的挡块）
+  const G = F.gate;
+  if (Math.floor(G.x / CH) === cx && Math.floor(G.y / CH) === cy) {
+    objs.push({ gate: true, m: MODELS.gate[F.gateOpen ? 1 : 0], x: G.x, y: G.y, ro: 0, r: 0 });
+    for (const dx of [-9.5, 9.5]) objs.push({ m: null, x: G.x + dx, y: G.y, r: 3.4 });
+    objs.push({ m: null, gateBar: true, x: G.x, y: G.y, r: F.gateOpen ? 0 : 5.5 });   // 关着的门洞也挡住
+  }
   return { cx, cy, ground: g, water, objs, decals };
 }
 function getChunk(cx, cy) {
@@ -122,7 +177,6 @@ function getChunk(cx, cy) {
 function updateChunks(x, y) {
   const pcx = Math.floor(x / CH), pcy = Math.floor(y / CH);
   for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) getChunk(pcx + dx, pcy + dy);
-  for (const [k, c] of chunks) if (Math.abs(c.cx - pcx) > 5 || Math.abs(c.cy - pcy) > 5) chunks.delete(k);
 }
 function isWater(x, y) {
   const cx = Math.floor(x / CH), cy = Math.floor(y / CH), c = chunks.get(cx + ',' + cy);
@@ -130,6 +184,7 @@ function isWater(x, y) {
   return c.water[(Math.floor(y) - cy * CH) * CH + (Math.floor(x) - cx * CH)] === 1;
 }
 function blocked(x, y, rad) {
+  if (mode === 'explore' && FLOOR && (!inFloor(x, y) || y < FLOOR.gate.y - 3)) return true;   // 石门那一排就是北边的头
   if (isWater(x, y)) return true;
   const pcx = Math.floor(x / CH), pcy = Math.floor(y / CH);
   for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
@@ -143,26 +198,48 @@ function nearChunks(x, y, rad) {
   for (let dy = -n; dy <= n; dy++) for (let dx = -n; dx <= n; dx++) { const c = chunks.get((pcx + dx) + ',' + (pcy + dy)); if (c) out.push(c); }
   return out;
 }
+// 看门的打倒了：石门换成开着的样子
+function openGate() {
+  FLOOR.gateOpen = true;
+  for (const c of chunks.values()) for (const o of c.objs) { if (o.gate) o.m = MODELS.gate[1]; if (o.gateBar) o.r = 0; }
+}
 
-// ---------- 鬼火（一团 = 一只怪；这版只有提可，蓝属性） ----------
-const WISP = { keep: 3, near: 420, spacing: 150, spawnMin: 200, spawnMax: 380, guard: 34, seeRange: 110 };
-const wisps = [];
-let wispRng = rngFrom(77);
-function updateWisps(px, py, dt) {
-  for (let i = wisps.length - 1; i >= 0; i--) if (Math.hypot(wisps[i].x - px, wisps[i].y - py) > WISP.near * 1.6) wisps.splice(i, 1);
-  let tries = 0;
-  while (wisps.length < WISP.keep && tries++ < 40) {
-    const a = wispRng() * TAU, d = WISP.spawnMin + wispRng() * (WISP.spawnMax - WISP.spawnMin);
-    const x = px + Math.cos(a) * d, y = py + Math.sin(a) * d;
-    if (waterAt(x, y) || Math.hypot(x, y) < START_CLEAR + 30) continue;
-    if (wisps.some(w => Math.hypot(w.x - x, w.y - y) < WISP.spacing)) continue;
+// ---------- 鬼火（一团 = 一只怪），一开始就摆好，不再刷新 ----------
+const WISP = { guard: 34, aggro: 64, chase: 9 };
+const WISP_COL = { tiko: [110, 150, 255] };
+let wisps = [];
+function placeWisps(F) {
+  const r = rngFrom(F.seed ^ 0x5bd1e995), out = [];
+  const ok = (x, y) => {
+    if (!inFloor(x, y, 24) || Math.hypot(x - F.entry.x, y - F.entry.y) < 110 || Math.hypot(x - F.guardPos.x, y - F.guardPos.y) < 90) return false;
+    if (out.some(w => Math.hypot(w.x - x, w.y - y) < 95)) return false;
     getChunk(Math.floor(x / CH), Math.floor(y / CH));
-    if (blocked(x, y, 6)) continue;
-    wisps.push({ x, y, kind: 'tiko', color: MONSTERS.tiko.color, phase: wispRng() * TAU, hx: x, hy: y });
+    return !waterAt(x, y) && !blocked(x, y, 6);
+  };
+  for (let k = 0; k < 600 && out.length < F.def.wisps; k++) {
+    const x = 30 + r() * (FLOOR_W - 60), y = 50 + r() * (FLOOR_W - 140);
+    if (!ok(x, y)) continue;
+    const kind = F.def.kinds[(r() * F.def.kinds.length) | 0], depth = clamp((F.entry.y - y) / (F.entry.y - F.gate.y), 0, 1);
+    out.push({ x, y, hx: x, hy: y, kind, color: WISP_COL[kind], phase: r() * TAU, seen: false,
+      spec: { kind, hp: F.def.normal * (1 + 2 * depth) } });
   }
-  for (const w of wisps) {   // 在原地附近慢慢飘
+  const g = F.guardPos, gs = F.def.guard;
+  out.push({ x: g.x, y: g.y, hx: g.x, hy: g.y, kind: gs.kind, color: [255, 120, 84], phase: 0, seen: true, guard: true,
+    spec: { ...gs, guard: true } });
+  wisps = out;
+  return out;
+}
+function updateWisps(px, py, dt) {
+  for (const w of wisps) {
     w.phase += dt;
-    w.x = w.hx + Math.sin(w.phase * .4) * 6; w.y = w.hy + Math.cos(w.phase * .31) * 6;
+    const d = Math.hypot(w.x - px, w.y - py);
+    if (d < 92) w.seen = true;
+    if (w.guard) { w.x = w.hx; w.y = w.hy + Math.sin(w.phase * .8) * 1.5; continue; }
+    // 平时在原地附近飘；人走近了就慢慢凑过来
+    let tx = w.hx + Math.sin(w.phase * .4) * 6, ty = w.hy + Math.cos(w.phase * .31) * 6, sp = 6;
+    if (d < WISP.aggro && player.grace <= 0) { tx = px; ty = py; sp = WISP.chase; }
+    const dx = tx - w.x, dy = ty - w.y, l = Math.hypot(dx, dy);
+    if (l > .01) { const m = Math.min(l, sp * dt); w.x += dx / l * m; w.y += dy / l * m; }
   }
 }
 // 小鬼火：一小股火、闪得快
@@ -182,4 +259,18 @@ function drawWisp(ctx, p, t, col, scale = 1) {
     ctx.fillRect(Math.round(x), Math.round(y), s, s);
   }
   ctx.globalCompositeOperation = 'source-over';
+}
+
+// ---------- 小地图的迷雾：走过（照亮过）的地方才画出来 ----------
+function exploreAround(F, x, y, rad) {
+  const g = F.mm.getContext('2d'), c0 = Math.floor((x - rad) / MM_CELL), c1 = Math.floor((x + rad) / MM_CELL), r0 = Math.floor((y - rad) / MM_CELL), r1 = Math.floor((y + rad) / MM_CELL);
+  for (let cy = Math.max(0, r0); cy <= Math.min(MM_N - 1, r1); cy++) for (let cx = Math.max(0, c0); cx <= Math.min(MM_N - 1, c1); cx++) {
+    const i = cy * MM_N + cx; if (F.explored[i]) continue;
+    const wx = (cx + .5) * MM_CELL, wy = (cy + .5) * MM_CELL;
+    if (Math.hypot(wx - x, wy - y) > rad) continue;
+    F.explored[i] = 1;
+    const ed = edgeDist(wx, wy);
+    g.fillStyle = ed < 0 ? '#0b0e10' : isWater(wx, wy) ? '#29465a' : (mainPath(wx, wy) || trailAt(wx, wy)) ? '#6a5c4a' : '#34443a';
+    g.fillRect(cx, cy, 1, 1);
+  }
 }

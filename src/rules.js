@@ -77,9 +77,14 @@ const gemNeed = level => R.gemStep * level;
 
 // ---------- 一仗 ----------
 const drawCount = (run, turn) => Math.min(R.drawMax, R.drawFirst + turn - 1);
-function startFight(run, kind, hpMul = 1) {
-  const base = MONSTERS[kind], hp = Math.max(100, Math.round(base.hp * hpMul / 100) * 100);
-  const b = { kind, mon: { ...base, maxHp: hp, hp, countdown: base.cd }, turn: 1,
+// 血量取个整：留三位有效数字（至少到百位），显示出来好看
+const niceHp = v => { const p = 10 ** Math.max(2, Math.floor(Math.log10(Math.max(1, v))) - 2); return Math.max(100, Math.round(v / p) * p); };
+// spec：{ kind, hp?, atk?, cd?, name?, guard? }——鬼火身上带着，见 world.js placeWisps
+function startFight(run, spec) {
+  const base = MONSTERS[spec.kind], hp = niceHp(spec.hp || base.hp);
+  const mon = { ...base, name: spec.name || base.name, atk: spec.atk ?? base.atk, cd: spec.cd ?? base.cd, guard: !!spec.guard, maxHp: hp, hp };
+  mon.countdown = mon.cd;
+  const b = { kind: spec.kind, mon, turn: 1,
     hand: [], line: [], draw: shuffle(run.deck.map(c => ({ ...c })), run.rng), discard: [], gone: [],
     shield: 0, rng: run.rng, gemExp: [0, 0, 0] };
   drawCards(b, drawCount(run, 1));

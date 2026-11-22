@@ -35,13 +35,15 @@ function build(sx, sy, sz, fn) {
   const vox = new Array(sx * sy * sz);
   for (let z = 0; z < sz; z++) for (let y = 0; y < sy; y++) for (let x = 0; x < sx; x++) vox[(z * sy + y) * sx + x] = fn(x, y, z) || null;
   const at = (x, y, z) => x < 0 || y < 0 || z < 0 || x >= sx || y >= sy || z >= sz ? null : vox[(z * sy + y) * sx + x];
-  const slices = [];
+  const slices = [], em = [];   // em：只有自发光体素的切片，画的时候同时画进发光层
+  let anyEm = false;
   for (let z = 0; z < sz; z++) {
     const c = document.createElement('canvas'); c.width = sx; c.height = sy;
-    const g = c.getContext('2d'), im = g.createImageData(sx, sy); let any = false;
+    const g = c.getContext('2d'), im = g.createImageData(sx, sy); let any = false, eim = null;
     for (let y = 0; y < sy; y++) for (let x = 0; x < sx; x++) {
       const v = at(x, y, z); if (!v) continue; any = true;
       let [r, gg, b, e] = v;
+      const i = (y * sx + x) * 4;
       if (!e) {
         let k = .6 + .4 * z / Math.max(1, sz - 1);
         const top = !at(x, y, z + 1);
@@ -49,13 +51,17 @@ function build(sx, sy, sz, fn) {
         else if (!at(x - 1, y, z) || !at(x + 1, y, z) || !at(x, y - 1, z) || !at(x, y + 1, z)) k *= .82;
         r *= k; gg *= k; b *= k;
         if (top && rimLight && z > sz * .3) { r = r * .82 + 20; gg = gg * .82 + 26; b = b * .82 + 40; }   // 朝上的面：冷光边（逆光）
+      } else {
+        if (!eim) eim = new ImageData(sx, sy);
+        eim.data[i] = r; eim.data[i + 1] = gg; eim.data[i + 2] = b; eim.data[i + 3] = 255;
       }
-      const i = (y * sx + x) * 4;
       im.data[i] = r; im.data[i + 1] = gg; im.data[i + 2] = b; im.data[i + 3] = 255;
     }
     g.putImageData(im, 0, 0); slices.push(any ? c : null);
+    if (eim) { const ec = document.createElement('canvas'); ec.width = sx; ec.height = sy; ec.getContext('2d').putImageData(eim, 0, 0); em.push(ec); anyEm = true; }
+    else em.push(null);
   }
-  return { sx, sy, sz, slices };
+  return { sx, sy, sz, slices, em: anyEm ? em : null };
 }
 let segT = 0;
 function segDist(x, y, z, s) {

@@ -5,12 +5,13 @@
 // ---------- 存档：每局从起手牌组重新开始，这里只记跨局的东西（以后加铜板、石碑的好处） ----------
 const PROFILE_KEY = 'card-stack-profile-v2';   // 原型的旧存档（card-stack-profile，里面是跨局牌组）不再用
 const profile = (() => {
-  const blank = { wins: 0, runs: 0, bestHit: 0, bestCast: 0 };
+  const blank = { wins: 0, runs: 0, bestHit: 0, bestCast: 0, bestFloor: 0, clears: 0 };
   try { const p = JSON.parse(localStorage.getItem(PROFILE_KEY)); if (p && typeof p === 'object') return { ...blank, ...p }; } catch (e) { }
   return blank;
 })();
 function saveProfile() { try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch (e) { } }
 // 一局里的最高记录写回存档
+let lobbySummary = null;   // 刚结束的这一趟：回到大厅时弹一张结算（main.js goLobby 填）
 function saveRunRecords(r) { profile.bestHit = Math.max(profile.bestHit, r.bestHit); profile.bestCast = Math.max(profile.bestCast, r.bestCast); saveProfile(); }
 
 // ---------- 场景 ----------
@@ -121,7 +122,7 @@ function drawLobbyUI(ctx, t) {
   txt(ctx, '迷  雾  森  林', 88, 248, 18, '#a9b7b2', 'left', 500);
   ctx.fillStyle = 'rgba(216,187,136,.5)'; ctx.fillRect(88, 276, 220, 1);
   for (const it of MENU) {
-    const r = menuRect(it), hot = !deckOpen && inRect(mouse, r);
+    const r = menuRect(it), hot = !deckOpen && !lobbySummary && inRect(mouse, r);
     if (hot) {
       const gg = ctx.createRadialGradient(r.x + 90, it.y, 0, r.x + 90, it.y, 160);
       gg.addColorStop(0, 'rgba(242,182,96,.22)'); gg.addColorStop(1, 'rgba(242,182,96,0)');
@@ -131,10 +132,25 @@ function drawLobbyUI(ctx, t) {
     txt(ctx, it.label, r.x, it.y, it.key === 'go' ? 30 : 24, hot ? '#ffd79a' : '#e0dccc', 'left', it.key === 'go' ? 700 : 500);
   }
   const rec = [`进过林子 ${profile.runs} 次`, `一共打倒 ${profile.wins} 只`];
+  if (profile.runs) rec.push(profile.clears ? `走穿过 ${profile.clears} 次` : `最远到 ${FLOORS[profile.bestFloor].name}`);
   if (profile.bestHit) rec.push(`最高一击 ${fmt(profile.bestHit)}`, `最高一次施法 ${fmt(profile.bestCast)}`);
   txt(ctx, rec.join('　·　'), 88, 660, 14, 'rgba(200,190,170,.7)', 'left', 500);
   if (deckOpen) drawDeck(ctx);
+  if (lobbySummary) drawSummary(ctx);
 }
+function drawSummary(ctx) {
+  const s = lobbySummary, f = FLOORS[s.floor];
+  ctx.fillStyle = 'rgba(0,0,0,.72)'; ctx.fillRect(0, 0, 1280, 720);
+  ctx.fillStyle = 'rgba(16,16,20,.96)'; ctx.fillRect(440, 170, 400, 360);
+  ctx.strokeStyle = 'rgba(214,180,120,.7)'; ctx.lineWidth = 2; ctx.strokeRect(441, 171, 398, 358);
+  const head = s.reason === 'dead' ? '心打光了' : s.reason === 'clear' ? '走穿了三段林子' : '先回来歇歇';
+  txt(ctx, head, 640, 220, 28, s.reason === 'dead' ? '#ff9a8a' : '#efe2c4', 'center', 800);
+  txt(ctx, s.reason === 'clear' ? '最里头的空场子还没做好（以后的事）' : `走到 ${f.name}（第${NUM_CN[s.floor]}段）`, 640, 262, 15, '#a49c8c', 'center', 500);
+  const rows = [['打倒', `${s.kills} 只`], ['最高一击', fmt(s.bestHit)], ['最高一次施法', fmt(s.bestCast)], ['牌组', `${s.deck} 张`]];
+  rows.forEach(([k, v], i) => { txt(ctx, k, 500, 316 + i * 40, 16, '#a49c8c', 'left', 500); txt(ctx, v, 780, 316 + i * 40, 20, '#efe4cc', 'right', 700); });
+  btn(ctx, SUMMARY_OK, '知道了', true, inRect(mouse, SUMMARY_OK));
+}
+const SUMMARY_OK = { x: 580, y: 470, w: 120, h: 40 };
 function drawDeck(ctx) {
   ctx.fillStyle = 'rgba(0,0,0,.78)'; ctx.fillRect(0, 0, 1280, 720);
   txt(ctx, `起手牌组（${START_DECK.length} 张）`, 640, 70, 26, '#efe2c4', 'center', 800);
@@ -152,6 +168,7 @@ function drawDeck(ctx) {
 }
 const DECK_CLOSE = { x: 580, y: 640, w: 120, h: 40 };
 function lobbyDown(m) {
+  if (lobbySummary) { lobbySummary = null; return; }
   if (deckOpen) { if (inRect(m, DECK_CLOSE) || true) deckOpen = false; return; }
   for (const it of MENU) if (inRect(m, menuRect(it))) {
     if (it.key === 'go') startRunFromLobby();

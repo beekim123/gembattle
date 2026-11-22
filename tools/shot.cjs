@@ -8,6 +8,7 @@
 //   g.click(x, y)       在 1280×720 的界面坐标上点一下
 //   g.drag(x0,y0,x1,y1) 拖
 //   g.log(...)          往终端打印
+//   g.out               输出目录
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -34,6 +35,7 @@ app.whenReady().then(async () => {
   await win.loadURL(url);
   const ui = (x, y) => win.webContents.executeJavaScript(`(()=>{const r=document.getElementById('stage').getBoundingClientRect();return [r.left+${x}/1280*r.width, r.top+${y}/720*r.height];})()`);
   const g = {
+    out: OUT,
     js: code => win.webContents.executeJavaScript(code),
     wait: ms => new Promise(r => setTimeout(r, ms)),
     shot: async name => { const im = await win.webContents.capturePage(); fs.writeFileSync(path.join(OUT, name + '.png'), im.toPNG()); console.log('截图', path.join(OUT, name + '.png')); },
