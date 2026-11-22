@@ -2,16 +2,16 @@
 // 大厅：林子边上一块空地，中间一块刻着暖光符的石碑（第一版试验里那块），主角站在碑前。
 // 镜头绕着石碑慢慢转。左边是菜单：进入迷雾森林 / 牌组 / 退出游戏。
 
-// ---------- 存档：牌组跨趟留着（已定 2：回大厅、心打光，路上拿到的牌都留着） ----------
-const PROFILE_KEY = 'card-stack-profile';
-const cardId = c => c.id === 'gem' ? 'gem' + c.col : c.id;
-const cardFromId = id => id.startsWith('gem') ? gemCard(Number(id.slice(3))) : extraCard(id);
+// ---------- 存档：每局从起手牌组重新开始，这里只记跨局的东西（以后加铜板、石碑的好处） ----------
+const PROFILE_KEY = 'card-stack-profile-v2';   // 原型的旧存档（card-stack-profile，里面是跨局牌组）不再用
 const profile = (() => {
-  try { const p = JSON.parse(localStorage.getItem(PROFILE_KEY)); if (p && Array.isArray(p.deck)) return p; } catch (e) { }
-  return { deck: startDeck().map(cardId), wins: 0, runs: 0 };
+  const blank = { wins: 0, runs: 0, bestHit: 0, bestCast: 0 };
+  try { const p = JSON.parse(localStorage.getItem(PROFILE_KEY)); if (p && typeof p === 'object') return { ...blank, ...p }; } catch (e) { }
+  return blank;
 })();
 function saveProfile() { try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch (e) { } }
-function profileAddCard(c) { profile.deck.push(cardId(c)); saveProfile(); }
+// 一局里的最高记录写回存档
+function saveRunRecords(r) { profile.bestHit = Math.max(profile.bestHit, r.bestHit); profile.bestCast = Math.max(profile.bestCast, r.bestCast); saveProfile(); }
 
 // ---------- 场景 ----------
 const LOBBY_C = 2000, LX = LOBBY_C * CH + CH, LY = LOBBY_C * CH + CH;   // 石碑在四块拼起来的正中
@@ -130,22 +130,24 @@ function drawLobbyUI(ctx, t) {
     }
     txt(ctx, it.label, r.x, it.y, it.key === 'go' ? 30 : 24, hot ? '#ffd79a' : '#e0dccc', 'left', it.key === 'go' ? 700 : 500);
   }
-  txt(ctx, `牌组 ${profile.deck.length} 张　·　进过林子 ${profile.runs} 次　·　一共打倒 ${profile.wins} 只`, 88, 660, 14, 'rgba(200,190,170,.7)', 'left', 500);
+  const rec = [`进过林子 ${profile.runs} 次`, `一共打倒 ${profile.wins} 只`];
+  if (profile.bestHit) rec.push(`最高一击 ${fmt(profile.bestHit)}`, `最高一次施法 ${fmt(profile.bestCast)}`);
+  txt(ctx, rec.join('　·　'), 88, 660, 14, 'rgba(200,190,170,.7)', 'left', 500);
   if (deckOpen) drawDeck(ctx);
 }
 function drawDeck(ctx) {
   ctx.fillStyle = 'rgba(0,0,0,.78)'; ctx.fillRect(0, 0, 1280, 720);
-  txt(ctx, `牌组（${profile.deck.length} 张）`, 640, 70, 26, '#efe2c4', 'center', 800);
-  txt(ctx, '路上拿到的牌会一直留在这里', 640, 104, 14, '#a49c8c', 'center', 500);
+  txt(ctx, `起手牌组（${START_DECK.length} 张）`, 640, 70, 26, '#efe2c4', 'center', 800);
+  txt(ctx, '每次进林子都从这副牌开始，路上再一张张拿', 640, 104, 14, '#a49c8c', 'center', 500);
   const counts = new Map();
-  for (const id of profile.deck) counts.set(id, (counts.get(id) || 0) + 1);
-  const ids = [...counts.keys()].sort((a, b) => (a.startsWith('gem') ? 0 : 1) - (b.startsWith('gem') ? 0 : 1) || a.localeCompare(b));
-  const per = 7, w = 110, h = 155, gx = 140, gy = 200;
+  for (const id of START_DECK) counts.set(id, (counts.get(id) || 0) + 1);
+  const ids = [...counts.keys()], per = 7, w = 110, h = 155, gx = 140, gy = 210;
   ids.forEach((id, i) => {
-    const c = cardFromId(id), x = 640 + ((i % per) - (Math.min(per, ids.length) - 1) / 2) * gx, y = 220 + Math.floor(i / per) * gy;
+    const c = makeCard(id), x = 640 + ((i % per) - (Math.min(per, ids.length) - 1) / 2) * gx, y = 230 + Math.floor(i / per) * gy;
     drawCard(ctx, c, x, y, w, h, {});
     txt(ctx, '× ' + counts.get(id), x, y + h / 2 + 18, 15, '#d8d0c0', 'center', 700);
   });
+  wrap(ctx, '规则：点牌排进链，按施法。跟上一张有同一种宝石就接上，倍率 ×2；红绿蓝凑齐叫合白；都不沾就断。牌攒得越多，一口气打得越狠。', 640, 600, 760, 14);
   btn(ctx, DECK_CLOSE, '关闭', true, inRect(mouse, DECK_CLOSE));
 }
 const DECK_CLOSE = { x: 580, y: 640, w: 120, h: 40 };

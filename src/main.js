@@ -38,10 +38,11 @@ function startRunFromLobby() {
 }
 // 回大厅：这一趟结束，牌留着
 function goLobby() {
+  if (run) saveRunRecords(run);
   trans = { kind: 'out', t: 0, then: () => { mode = 'lobby'; shake(0); exploreConfirm = null; enterLobby(); } };
 }
 function restartRun() {
-  run = newRun((Math.random() * 1e9) | 0, profile.deck.map(cardFromId));
+  run = newRun((Math.random() * 1e9) | 0);
   CAM.ox = 0;
   player = { x: 0, y: 6, h: -Math.PI / 2, walk: 0, moving: false, grace: 0 };
   CAM.x = player.x; CAM.y = player.y; CAM.view = viewT = 0; CAM.oy = 14; setTilt(.6);
@@ -54,7 +55,7 @@ function leaveBattle(how) {
     const bk = BT.back;   // 从空地送回林子里原来的位置
     player.x = bk.x; player.y = bk.y; player.h = bk.h;
     for (const c of BT.arena) chunks.delete(c.cx + ',' + c.cy);
-    if (how === 'win') { const i = wisps.indexOf(w); if (i >= 0) wisps.splice(i, 1); profile.wins++; saveProfile(); }
+    if (how === 'win') { const i = wisps.indexOf(w); if (i >= 0) wisps.splice(i, 1); profile.wins++; saveRunRecords(run); }
     else { player.x -= bk.ux * 22; player.y -= bk.uy * 22; player.grace = 3; }
     mode = 'explore'; setRes('explore'); CAM.oy = 14; setTilt(.6); CAM.view = viewT = bk.view; CAM.x = player.x; CAM.y = player.y; shake(0);
   } };
@@ -65,7 +66,8 @@ const SNAP = Math.PI / 2;
 addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (!e.repeat && mode === 'explore' && !exploreConfirm) { if (k === 'q') viewT -= SNAP; if (k === 'e') viewT += SNAP; }   // 一次转 90 度
-  keys[k] = true; if (e.key === 'Escape' && mode === 'explore' && !trans) exploreConfirm = exploreConfirm ? null : CONFIRM; });
+  keys[k] = true; if (e.key === 'Escape' && mode === 'explore' && !trans) exploreConfirm = exploreConfirm ? null : CONFIRM;
+  if (mode === 'battle' && !trans) { if (e.key === ' ') e.preventDefault(); battleKey(e.key); } });
 const CONFIRM = { yes: { x: 520, y: 380, w: 110, h: 40 }, no: { x: 650, y: 380, w: 110, h: 40 } };
 const EXPLORE_LOBBY = { x: 1136, y: 184, w: 88, h: 30 };
 addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
@@ -182,7 +184,8 @@ function frame(now) {
       btn(uctx, CONFIRM.yes, '回大厅', true, inRect(mouse, CONFIRM.yes)); btn(uctx, CONFIRM.no, '接着走', true, inRect(mouse, CONFIRM.no));
     }
     txt(uctx, 'WASD 走（Shift 跑）· Q E 或拖鼠标 转镜头 · 碰到鬼火就开打 · Esc 回大厅', 24, 700, 13, 'rgba(200,190,170,.6)', 'left', 500);
-    txt(uctx, `心 ${run.hearts}　牌 ${run.deck.length} 张　打倒 ${run.wins} 只`, 24, 26, 14, 'rgba(220,210,190,.75)', 'left', 500);
+    heartRow(uctx, 24, 20, 4, run.hearts, run.maxHearts);
+    txt(uctx, `牌 ${run.deck.length} 张　打倒 ${run.wins} 只`, 24, 56, 14, 'rgba(220,210,190,.75)', 'left', 500);
   } else drawBattleUI(uctx);
   if (fade > 0) { uctx.fillStyle = `rgba(0,0,0,${fade})`; uctx.fillRect(0, 0, 1280, 720); }
   requestAnimationFrame(frame);

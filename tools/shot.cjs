@@ -18,6 +18,8 @@ const W = +(wArg || 1280), H = +(hArg || 720);
 fs.mkdirSync(OUT, { recursive: true });
 
 app.commandLine.appendSwitch('force-device-scale-factor', '1');
+// 每次都用一个新的空存档目录，不碰真正玩的那份（~/Library/Application Support/card-stack）
+app.setPath('userData', fs.mkdtempSync(path.join(require('os').tmpdir(), 'card-stack-test-')));
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ width: W, height: H, show: false, useContentSize: true, paintWhenInitiallyHidden: true,
     webPreferences: { backgroundThrottling: false } });

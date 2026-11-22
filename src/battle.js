@@ -1,15 +1,16 @@
 'use strict';
-// 一仗：俯视角。怪在上、主角在下；牌从手里拖进序列，按施法一张张结算。
+// 一仗：俯视角。怪在上、主角在下；点牌（或拖）排进链，按施法一张张打出去，然后轮到怪。
 const TIKO = {};
 const SPREADS = [1, .55, .12], FLAPS = [-1, 0, 1];
 function tikoModel(si, fi) { const k = si * 3 + fi; if (ART.on && ART.tiko) return ART.tiko[k % ART.tiko.length]; return TIKO[k] || (TIKO[k] = makeTiko(SPREADS[si], FLAPS[fi])); }
 
-const L = {   // UI 布局（按 1280×720 排）
-  cw: 88, ch: 124, handY: 612, stripY: 470, sw: 58, sh: 82,
-  cast: { x: 1086, y: 556, w: 160, h: 50 }, drawPile: { x: 1214, y: 662 }, discard: { x: 292, y: 662 },
-  wheel: { x: 84, y: 636, r: 50 }, escape: { x: 1196, y: 46, w: 68, h: 28 }, lobby: { x: 1112, y: 46, w: 76, h: 28 },
+const L = {   // 界面布局（按 1280×720 排）
+  cw: 88, ch: 124, handY: 620, stripY: 474, sw: 60, sh: 85,
+  cast: { x: 1088, y: 548, w: 164, h: 58 }, drawPile: { x: 1214, y: 668 }, discard: { x: 1136, y: 668 },
+  wheel: { x: 86, y: 636, r: 48 }, escape: { x: 1196, y: 46, w: 68, h: 28 }, lobby: { x: 1112, y: 46, w: 76, h: 28 },
 };
-const ART_COL = { red: [255, 112, 92], green: [124, 240, 144], blue: [124, 172, 255], white: [255, 255, 255], extra: [255, 164, 84], pure: [176, 228, 255] };
+const HIT_COL = [[255, 120, 100], [130, 240, 150], [130, 176, 255]];
+const hitCol = h => h.white ? [255, 255, 255] : h.gem >= 0 ? HIT_COL[h.gem] : [236, 206, 140];
 const BT = {};
 
 // ---------- 战斗用的空地：中间干干净净，树只长在边上沉进黑里 ----------
@@ -27,17 +28,15 @@ function buildArena(seed) {
         if (rr < 22 + 7 * fbm(gx * .08, gy * .08, 4)) col = artCol('trail', col);
       } else {
         col = mix([48, 62, 50], [58, 74, 56], fbm(gx * .03 + seed % 97, gy * .03, 1));
-        col = mix(col, [64, 62, 52], (1 - smooth(clamp((rr - 14) / 26, 0, 1))) * .55);          // 中间一片踩秃的土
-        col = mix(col, [34, 46, 40], smooth(clamp((rr - 52) / 22, 0, 1)) * .8);                  // 边上林下暗
+        col = mix(col, [64, 62, 52], (1 - smooth(clamp((rr - 14) / 26, 0, 1))) * .55);
+        col = mix(col, [34, 46, 40], smooth(clamp((rr - 52) / 22, 0, 1)) * .8);
       }
-      col = col.map(v => v * (1 - smooth(clamp((rr - 96) / 30, 0, 1)) * .9));                 // 再往外沉进黑里
+      col = col.map(v => v * (1 - smooth(clamp((rr - 96) / 30, 0, 1)) * .9));   // 再往外沉进黑里
       const k = (y * CH + x) * 4; im.data[k] = col[0]; im.data[k + 1] = col[1]; im.data[k + 2] = col[2]; im.data[k + 3] = 255;
     }
     gc.putImageData(im, 0, 0);
     const decals = [];
-    if (ART.on) {
-      artDecorate(gc, cx * CH, cy * CH, r, 3, 14, (x, y) => { const d = Math.hypot(x - AX, (y - AY) * 1.15); return d < 34 || d > 84; });   // 外圈沉进黑里的地方不撒
-    }
+    if (ART.on) artDecorate(gc, cx * CH, cy * CH, r, 3, 14, (x, y) => { const d = Math.hypot(x - AX, (y - AY) * 1.15); return d < 34 || d > 84; });
     else for (let i = 0; i < 26; i++) decals.push({ x: cx * CH + r() * CH, y: cy * CH + r() * CH, c: r() < .6 ? '#5e4a3a' : '#4f6a4c' });
     list.push({ cx, cy, ground: g, water: new Uint8Array(CH * CH), objs: [], decals });
   }
@@ -54,55 +53,47 @@ function buildArena(seed) {
 }
 
 function enterBattle(w) {
-  const b = startFight(run, w.kind);
+  const b = startFight(run, w.kind, 1.5 ** run.wins);   // 先按这一趟打倒几只涨血；第 2 步换成按段数和鬼火种类
   const dx = w.x - player.x, dy = w.y - player.y, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d;
   for (const k of Object.keys(BT)) delete BT[k];
-  // 记下在林子里的位置，打完送回来；人挪到空地上
-  const back = { x: player.x, y: player.y, h: player.h, view: CAM.view, ux, uy };
+  const back = { x: player.x, y: player.y, h: player.h, view: CAM.view, ux, uy };   // 记下在林子里的位置，打完送回来
   const arena = buildArena((Math.floor(w.hx * 7 + w.hy * 13) >>> 0) || 1);
   for (const c of arena) chunks.set(c.cx + ',' + c.cy, c);
   player.x = AX; player.y = AY + 20;
   Object.assign(BT, {
-    b, wisp: w, phase: 'plan', plan: null, drag: null, hover: -1, pos: new Map(), nums: [], shots: [], beams: [], slashes: [], parts: [],
-    flying: [], flash: 0, shake: 0, turnDamage: 0, banner: null, t: 0, confirm: false, loot: null, over: null, circle: 0,
-    mon: { x: player.x + ux * 38, y: player.y + uy * 38, ro: Math.atan2(-uy, -ux) - Math.PI / 2, lift: 22, alpha: 0, model: tikoModel(0, 1), hit: 0, lunge: 0, ux, uy, dart: 0 },
-    center: { x: player.x + ux * 4, y: player.y + uy * 4 }, back, arena,
+    b, wisp: w, phase: 'plan', plan: null, press: null, drag: null, hover: -1, pos: new Map(), nums: [], shots: [], beams: [], parts: [],
+    flying: [], flash: 0, shake: 0, cold: 0, castTotal: 0, castShown: 0, multPop: 0, hpShown: b.mon.hp, banner: null, toast: null,
+    t: 0, confirm: null, loot: null, over: null, circle: 0, back, arena,
+    mon: { x: 0, y: 0, ro: 0, lift: 22, alpha: 0, model: tikoModel(0, 1), hit: 0, lunge: 0, ux, uy, dart: 0 },
   });
-  player.h = Math.atan2(uy, ux); player.moving = false;
-  // 镜头转到最近的直角，怪放在主角正上方：切片不斜着采样，画面清楚
+  // 镜头转到正北，怪放在主角正上方：切片不斜着采样，画面清楚
   BT.view = 0; CAM.view = 0;
-  { const vx = -Math.sin(BT.view), vy = -Math.cos(BT.view);
-    BT.mon.ux = vx; BT.mon.uy = vy; BT.mon.ro = Math.atan2(-vy, -vx) - Math.PI / 2;
-    BT.mon.x = player.x + vx * 38; BT.mon.y = player.y + vy * 38;
-    BT.center = { x: player.x + vx * 4, y: player.y + vy * 4 }; player.h = Math.atan2(vy, vx);
-    CAM.x = BT.center.x; CAM.y = BT.center.y; }
-  dealIn(b.hand, 0);
-  b.drawn.length = 0;
+  const vx = -Math.sin(BT.view), vy = -Math.cos(BT.view);
+  Object.assign(BT.mon, { ux: vx, uy: vy, ro: Math.atan2(-vy, -vx) - Math.PI / 2, x: player.x + vx * 38, y: player.y + vy * 38 });
+  BT.center = { x: player.x + vx * 4, y: player.y + vy * 4 }; player.h = Math.atan2(vy, vx); player.moving = false;
+  CAM.x = BT.center.x; CAM.y = BT.center.y;
+  dealIn(b.hand, .3);
+  toast(`第 1 回合 · 摸 ${b.hand.length} 张`);
 }
 function dealIn(cards, delay0) {
-  cards.forEach((c, i) => BT.pos.set(c, { x: L.drawPile.x, y: L.drawPile.y, r: 0, s: .4, a: 0, delay: delay0 + i * .07 }));
+  cards.forEach((c, i) => BT.pos.set(c, { x: L.drawPile.x, y: L.drawPile.y, r: 0, s: .4, a: 0, delay: delay0 + i * .08 }));
 }
 function banner(text, col = [240, 232, 210]) { BT.banner = { text, col, t: 0 }; }
+function toast(text) { BT.toast = { text, t: 0 }; }
 
 // ---------- 布局 ----------
 function handLayout(n) {
-  const out = [], gap = Math.min(80, 720 / Math.max(1, n)), mid = (n - 1) / 2;
-  for (let i = 0; i < n; i++) {
-    const k = i - mid;
-    out.push({ x: 640 + k * gap, y: L.handY + k * k * 1.4, r: k * .04, s: 1 });
-  }
+  const out = [], gap = Math.min(82, 720 / Math.max(1, n)), mid = (n - 1) / 2;
+  for (let i = 0; i < n; i++) { const k = i - mid; out.push({ x: 640 + k * gap, y: L.handY + k * k * 1.3, r: k * .035, s: 1 }); }
   return out;
 }
 function stripLayout(n) {
-  const out = [], gap = Math.min(66, 760 / Math.max(1, n)), x0 = 640 - (n - 1) * gap / 2;
+  const out = [], gap = Math.min(68, 700 / Math.max(1, n)), x0 = 640 - (n - 1) * gap / 2;
   for (let i = 0; i < n; i++) out.push({ x: x0 + i * gap, y: L.stripY });
   return out;
 }
 const inRect = (m, r) => m.x >= r.x && m.x <= r.x + r.w && m.y >= r.y && m.y <= r.y + r.h;
-function undoRects(n) {
-  const sl = stripLayout(Math.max(1, n)), right = (n ? sl[n - 1].x : 640) + L.sw / 2 + 18;
-  return { last: { x: right, y: L.stripY - 34, w: 104, h: 30 }, all: { x: right, y: L.stripY + 4, w: 104, h: 30 } };
-}
+function undoRect(n) { const sl = stripLayout(Math.max(1, n)); return { x: (n ? sl[n - 1].x : 640) + L.sw / 2 + 20, y: L.stripY - 15, w: 96, h: 30 }; }
 function handHit(m) {
   const b = BT.b, lay = handLayout(b.hand.length);
   for (let i = b.hand.length - 1; i >= 0; i--) {
@@ -111,97 +102,151 @@ function handHit(m) {
   }
   return -1;
 }
-function stripVisible() { return BT.drag || BT.b.line.length > 0 || BT.phase === 'cast'; }
+function stripHit(m) {
+  const n = BT.b.line.length, sl = stripLayout(n);
+  for (let i = n - 1; i >= 0; i--) if (Math.abs(m.x - sl[i].x) < L.sw / 2 && Math.abs(m.y - sl[i].y) < L.sh / 2) return i;
+  return -1;
+}
+const stripVisible = () => BT.drag || BT.b.line.length > 0 || BT.phase === 'cast';
+const canFlee = () => run.hearts > .5;
+const overlayOpen = () => BT.over || BT.loot || BT.confirm;
 
 // ---------- 输入 ----------
+const CONFIRM_BTNS = () => ({ yes: { x: 520, y: 380, w: 110, h: 40 }, no: { x: 650, y: 380, w: 110, h: 40 } });
 function battleDown(m) {
   if (BT.over) { if (inRect(m, BT.over.btn)) { BT.over = null; goLobby(); } return; }
   if (BT.loot) {
     const i = BT.loot.rects.findIndex(r => inRect(m, r));
-    if (i >= 0) { run.deck.push(BT.loot.cards[i]); profileAddCard(BT.loot.cards[i]); BT.loot = null; leaveBattle('win'); }
+    if (i >= 0) { run.deck.push(BT.loot.cards[i]); BT.loot = null; leaveBattle('win'); }
     else if (inRect(m, BT.loot.skip)) { BT.loot = null; leaveBattle('win'); }
     return;
   }
   if (BT.confirm) {
-    if (inRect(m, BT.confirm.yes)) { const k = BT.confirm.kind; BT.confirm = false; if (k === 'lobby') goLobby(); else leaveBattle('flee'); }
-    else if (inRect(m, BT.confirm.no)) BT.confirm = false;
+    if (inRect(m, BT.confirm.yes)) { const k = BT.confirm.kind; BT.confirm = null; if (k === 'lobby') goLobby(); else { run.hearts -= .5; leaveBattle('flee'); } }
+    else if (inRect(m, BT.confirm.no)) BT.confirm = null;
     return;
   }
   if (BT.phase !== 'plan') return;
-  if (inRect(m, L.escape)) { BT.confirm = { kind: 'flee', yes: { x: 520, y: 380, w: 110, h: 40 }, no: { x: 650, y: 380, w: 110, h: 40 } }; return; }
-  if (inRect(m, L.lobby)) { BT.confirm = { kind: 'lobby', yes: { x: 520, y: 380, w: 110, h: 40 }, no: { x: 650, y: 380, w: 110, h: 40 } }; return; }
+  const b = BT.b;
+  if (inRect(m, L.escape)) { if (canFlee()) BT.confirm = { kind: 'flee', ...CONFIRM_BTNS() }; return; }
+  if (inRect(m, L.lobby)) { BT.confirm = { kind: 'lobby', ...CONFIRM_BTNS() }; return; }
   if (inRect(m, L.cast)) { castStart(); return; }
-  const u = undoRects(BT.b.line.length);
-  if (BT.b.line.length && inRect(m, u.last)) { const c = BT.b.line.at(-1); undoLast(BT.b); bumpFromStrip(c); return; }
-  if (BT.b.line.length && inRect(m, u.all)) { const cs = [...BT.b.line]; undoAll(BT.b); cs.forEach(bumpFromStrip); return; }
+  if (b.line.length && inRect(m, undoRect(b.line.length))) { const cs = [...b.line]; unqueueAll(b); cs.forEach(bump); return; }
+  const si = stripHit(m);
+  if (si >= 0) { const c = b.line[si]; unqueueCard(b, si); bump(c); return; }
   const i = handHit(m);
-  if (i >= 0) BT.drag = { card: BT.b.hand[i], dx: 0, dy: 0 };
+  if (i >= 0) BT.press = { card: b.hand[i], x: m.x, y: m.y, drag: false };
 }
-function bumpFromStrip(c) { const p = BT.pos.get(c); if (p) p.s = .66; }
+function bump(c) { const p = BT.pos.get(c); if (p) p.s = .7; }
 function battleMove(m) {
-  if (BT.phase === 'plan' && !BT.drag && !BT.loot && !BT.confirm) BT.hover = handHit(m);
+  const p = BT.press;
+  if (p && !p.drag && Math.hypot(m.x - p.x, m.y - p.y) > 10) { p.drag = true; BT.drag = p; }
+  if (BT.phase === 'plan' && !p && !overlayOpen()) BT.hover = handHit(m);
 }
 function battleUp(m) {
-  const d = BT.drag; BT.drag = null;
-  if (!d || BT.phase !== 'plan') return;
-  if (m.y > 560) return;   // 没拖出手牌区，放回去
-  const b = BT.b, i = b.hand.indexOf(d.card); if (i < 0) return;
-  const p = BT.pos.get(d.card); if (p) { p.x = m.x; p.y = m.y; }
-  if (d.card.instant) { playInstant(b, i); flyToDiscard(d.card, m.x, m.y); banner(d.card.name + '：' + d.card.text, [214, 170, 110]); }
-  else { queueCard(b, i); if (p) p.s = 1; }
+  const p = BT.press; BT.press = null; BT.drag = null;
+  if (!p || BT.phase !== 'plan') return;
+  if (p.drag && m.y > 560) return;   // 拖回手牌区 = 放回去
+  useCard(p.card, p.drag ? m : null);
+}
+function battleKey(k) {
+  if (k === ' ' && BT.phase === 'plan' && !overlayOpen()) castStart();
+  if (k === 'Escape' && BT.confirm) BT.confirm = null;
+}
+function useCard(card, at) {
+  const b = BT.b, i = b.hand.indexOf(card); if (i < 0) return;
+  const p = BT.pos.get(card);
+  if (card.instant) {
+    const r = playInstant(run, b, i);
+    flyToDiscard(card, at ? at.x : p?.x, at ? at.y : p?.y);
+    banner(card.name + '：' + card.text, [214, 186, 130]);
+    dealIn(r.drawn, .05);
+  } else {
+    queueCard(b, i);
+    if (p) { if (at) { p.x = at.x; p.y = at.y; } p.s = .9; }
+  }
   BT.hover = -1;
 }
 
 // ---------- 施法 ----------
 function castStart() {
   const b = BT.b;
-  BT.plan = startCast(b); BT.phase = 'cast'; BT.ci = -1; BT.castWait = false; BT.turnDamage = 0;
-  BT.castCards = [...b.line];
+  if (BT.phase !== 'plan') return;
+  BT.hover = -1;
+  if (!b.line.length) { toast('攒着，这回合不出牌'); BT.phase = 'pass'; BT.passT = 0; return; }
+  BT.plan = startCast(run, b); BT.phase = 'cast'; BT.castCards = [...b.line];
   BT.groups = BT.plan.states.map(() => []);
-  for (const s of BT.plan.segments) BT.groups[s.cardIndex].push(s);
-  BT.circle = 0.001;
+  for (const h of BT.plan.hits) BT.groups[h.ci].push(h);
+  BT.ci = -1; BT.castTotal = 0; BT.castShown = 0; BT.circle = .001; BT.flownUpTo = -1; BT.toast = null;
   nextCard();
 }
 function nextCard() {
   BT.ci++;
   if (BT.ci >= BT.plan.states.length) { BT.castWait = true; BT.waitT = 0; return; }
-  const segs = BT.groups[BT.ci];
-  Object.assign(BT, { fire: segs, fi: 0, fdur: clamp(segs.length * .028, .18, .6), ft: 0 });
-  const st = BT.plan.states[BT.ci];
-  if (st.rainbow) { BT.flash = 1; banner('彩虹 ×3', [255, 236, 170]); }
-  else if (st.relation === '补色') banner('合白', [255, 255, 255]);
+  const hits = BT.groups[BT.ci], st = BT.plan.states[BT.ci], speed = Math.max(.45, 1 - BT.ci * .05);
+  Object.assign(BT, { fire: hits, fi: 0, ft: 0, gap: (hits.length > 6 ? .022 : .05) * speed, hold: Math.max(.16, .3 * speed), castWait: false });
+  BT.multPop = 1;
+  if (st.rainbowNow) { BT.flash = 1; banner('彩虹！从此每接一张 ×3', [255, 236, 170]); }
+  else if (st.rel === '合白') banner('合白', [255, 255, 255]);
+  else if (st.rel === '断') banner('断了，倍率回到 ×1', [160, 160, 168]);
 }
-function gemPos(i, t) { return gemOrbit(player, t)[i]; }
-function fire(seg) {
-  const m = BT.mon, white = seg.white;
-  const from = white ? { x: m.x, y: m.y, z: m.lift + 52 } : seg.gemColor >= 0 ? gemPos(seg.gemColor, BT.t) : { x: player.x, y: player.y, z: 12 };
-  const to = { x: m.x + (Math.random() - .5) * 6, y: m.y + (Math.random() - .5) * 4, z: m.lift + 18 + (Math.random() - .5) * 8 };
-  BT.shots.push({ seg, from, to, t: 0, dur: white ? .1 : .17 });
-  if (white) BT.beams.push({ t: 0 });
+function gemPos(i) { return gemOrbit(player, T)[i]; }   // 跟 renderWorld 画宝石用同一个时间
+function fire(h) {
+  const m = BT.mon;
+  const from = h.white ? { x: m.x, y: m.y, z: m.lift + 52 } : h.gem >= 0 ? gemPos(h.gem) : { x: player.x + (Math.random() - .5) * 6, y: player.y, z: 8 };
+  const to = { x: m.x + (Math.random() - .5) * 8, y: m.y + (Math.random() - .5) * 5, z: m.lift + 16 + (Math.random() - .5) * 10 };
+  BT.shots.push({ h, from, to, t: 0, dur: h.white ? .1 : h.bean ? .24 : .17 });
+  if (h.white) BT.beams.push({ t: 0 });
 }
 function hitArrive(s) {
-  const r = applyHit(run, BT.b, BT.plan, s.seg);
-  BT.turnDamage = BT.plan.damage;
-  BT.mon.hit = 1;
-  const p = proj(s.to.x, s.to.y, s.to.z);
-  const { x: ux, y: uy } = w2ui(p);
-  BT.nums.push({ v: r.damage, n: s.seg.count, crit: s.seg.crit, col: ART_COL[s.seg.art] || [255, 255, 255], x: ux + (Math.random() - .5) * 120, y: uy + (Math.random() - .5) * 50, t: 0 });
-  if (BT.nums.length > 90) BT.nums.shift();
-  for (let i = 0; i < 3; i++) BT.parts.push({ x: s.to.x, y: s.to.y, z: s.to.z, vx: (Math.random() - .5) * 30, vy: (Math.random() - .5) * 30, vz: Math.random() * 30, t: 0, c: ART_COL[s.seg.art] || [255, 255, 255] });
+  const h = s.h, killed = applyHit(run, BT.b, BT.plan, h);
+  BT.castTotal = BT.plan.dealt;
+  const { x: ux, y: uy } = w2ui(proj(s.to.x, s.to.y, s.to.z));
+  const spot = numberSpot(ux, uy);
+  BT.nums.push({ text: h.dodge ? '躲开' : fmt(h.dmg), v: h.dmg, crit: h.crit, white: h.white, small: h.small || h.bean, dodge: h.dodge,
+    rainbow: BT.plan.states[h.ci].rainbow, col: hitCol(h), x: spot.x, y: spot.y, t: 0 });
+  if (BT.nums.length > 140) BT.nums.shift();
+  if (!h.dodge) {
+    BT.mon.hit = Math.min(1, BT.mon.hit + (h.crit ? .7 : .35));
+    BT.shake = Math.max(BT.shake, Math.min(.5, .06 + Math.log10(Math.max(1, h.dmg)) * .04) * (h.crit ? 1.6 : 1));
+    for (let i = 0; i < (h.crit ? 6 : 3); i++) BT.parts.push({ x: s.to.x, y: s.to.y, z: s.to.z, vx: (Math.random() - .5) * 34, vy: (Math.random() - .5) * 34, vz: Math.random() * 30, t: 0, life: .6, g: 40, c: hitCol(h) });
+  }
+  if (killed) { BT.shake = 1; BT.flash = Math.max(BT.flash, .25); }
+}
+// 数字落点：在怪周围试几个位置，挑离还没散的数字最远的（横向挤一点没关系，数字是扁的）
+function numberSpot(ux, uy) {
+  let best = null, bestD = -1;
+  for (let k = 0; k < 10; k++) {
+    const x = ux + (Math.random() - .5) * 250, y = uy + (Math.random() - .5) * 120 - 10;
+    let d = 1e9;
+    for (const q of BT.nums) if (q.t < .8) d = Math.min(d, Math.hypot((q.x - x) * .55, q.y - y));
+    if (d > bestD) { bestD = d; best = { x, y }; }
+  }
+  return best;
 }
 function flyToDiscard(card, x, y) {
   const p = BT.pos.get(card) || { x, y };
   BT.flying.push({ card, x: x ?? p.x, y: y ?? p.y, t: 0 });
   BT.pos.delete(card);
 }
-function finishTurnUI() {
-  const b = BT.b, res = finishTurn(run, b);
+// 施法打完：宝石升级、怪死了就收尾，没死轮到怪
+function afterCast() {
+  const ups = endCast(run, BT.b, BT.plan);
+  if (ups.length) banner(ups.map(u => GEM_NAMES[u.gem] + '宝石升到 Lv' + u.to).join('　'), [255, 230, 160]);
   BT.circle = 0;
-  if (b.levelUps.length) banner(b.levelUps.map(u => ['红', '绿', '蓝'][u.color] + '宝石升到 Lv ' + u.to).join('　'), [255, 230, 160]);
-  if (res === 'next') { BT.phase = 'plan'; dealIn(b.drawn, .1); b.drawn.length = 0; }
-  else if (res === 'win') { BT.phase = 'dying'; BT.dieT = 0; }
-  else if (res === 'dead') { BT.phase = 'done'; BT.over = { btn: { x: 560, y: 400, w: 160, h: 44 } }; }
-  else { BT.phase = 'done'; banner('提可飞走了'); setTimeout(() => leaveBattle('flee'), 1200); }
+  if (BT.b.mon.hp <= 0) { run.wins++; BT.phase = 'dying'; BT.dieT = 0; return; }
+  monsterPhase();
+}
+function monsterPhase() {
+  const res = monsterTurn(run, BT.b);
+  if (res) { BT.phase = 'attack'; BT.atkT = 0; BT.atkRes = res; BT.struck = false; }
+  else endOfRound();
+}
+function endOfRound() {
+  if (run.hearts <= 0) { BT.phase = 'done'; BT.over = { btn: { x: 560, y: 400, w: 160, h: 44 } }; return; }
+  const got = nextTurn(run, BT.b);
+  BT.phase = 'plan'; dealIn(got, .15);
+  toast(`第 ${BT.b.turn} 回合 · 摸 ${got.length} 张` + (BT.b.hand.length >= R.handMax ? '（手满了）' : ''));
 }
 
 // ---------- 每帧 ----------
@@ -210,24 +255,24 @@ function updateBattle(dt) {
   BT.t += dt;
   CAM.x = lerp(CAM.x, BT.center.x, Math.min(1, dt * 4)); CAM.y = lerp(CAM.y, BT.center.y, Math.min(1, dt * 4));
   let dv = BT.view - CAM.view; dv = Math.atan2(Math.sin(dv), Math.cos(dv)); CAM.view += dv * Math.min(1, dt * 4);
-  // 怪：悬着、扇翅；灯越多翅膀裹得越紧；偶尔忽左忽右闪一下
-  const n = lampCount(b.lamps), si = n <= 1 ? 0 : n <= 3 ? 1 : 2, fi = [0, 1, 2, 1][Math.floor(BT.t * 9) % 4];
+  // 怪：悬着、扇翅；越到要出手翅膀裹得越紧；偶尔忽左忽右闪一下
+  const cd = b.mon.countdown, si = cd >= 3 ? 0 : cd === 2 ? 1 : 2, fi = [0, 1, 2, 1][Math.floor(BT.t * 9) % 4];
   if (BT.phase !== 'dying' && BT.phase !== 'done') m.alpha = Math.min(1, m.alpha + dt * 2.5);
   m.model = tikoModel(si, fi);
   m.dart = Math.max(0, m.dart - dt); if (Math.random() < dt * .25) { m.dart = .25; m.dartDir = Math.random() < .5 ? -1 : 1; }
-  const side = Math.sin(m.dart / .25 * Math.PI) * 5 * (m.dartDir || 1);
+  const side = Math.sin(m.dart / .25 * Math.PI) * 5 * (m.dartDir || 1) + (Math.random() - .5) * m.hit * 2.4;
   m.lift = 14 + Math.sin(BT.t * 2.4) * 2;
   const baseX = player.x + m.ux * 38, baseY = player.y + m.uy * 38;
   m.x = baseX - m.ux * 30 * m.lunge + (-m.uy) * side; m.y = baseY - m.uy * 30 * m.lunge + m.ux * side;
-  m.hit = Math.max(0, m.hit - dt * 5);
+  m.hit = Math.max(0, m.hit - dt * 4);
+  BT.hpShown = Math.max(b.mon.hp, BT.hpShown - Math.max(dt * b.mon.maxHp * .6, (BT.hpShown - b.mon.hp) * dt * 3));
   // 牌的位置
-  const k = 1 - Math.exp(-dt * 14);
-  const lay = handLayout(b.hand.length);
+  const k = 1 - Math.exp(-dt * 14), lay = handLayout(b.hand.length);
   b.hand.forEach((c, i) => {
     let p = BT.pos.get(c); if (!p) { p = { x: lay[i].x, y: lay[i].y, r: 0, s: 1, a: 1, delay: 0 }; BT.pos.set(c, p); }
     if (p.delay > 0) { p.delay -= dt; return; }
-    const tg = lay[i], lift = i === BT.hover ? 30 : 0, sc = i === BT.hover ? 1.1 : 1;
     if (BT.drag && BT.drag.card === c) { p.x = mouse.x; p.y = mouse.y; p.r = 0; p.s = 1; p.a = 1; return; }
+    const tg = lay[i], lift = i === BT.hover ? 30 : 0, sc = i === BT.hover ? 1.1 : 1;
     p.x = lerp(p.x, tg.x, k); p.y = lerp(p.y, tg.y - lift, k); p.r = lerp(p.r, tg.r, k); p.s = lerp(p.s, sc, k); p.a = Math.min(1, p.a + dt * 4);
   });
   const sl = stripLayout(b.line.length);
@@ -241,58 +286,44 @@ function updateBattle(dt) {
     BT.circle = Math.min(1, BT.circle + dt * 3);
     if (!BT.castWait) {
       BT.ft += dt;
-      const due = BT.fire.length ? Math.min(BT.fire.length, Math.ceil(BT.ft / BT.fdur * BT.fire.length)) : 0;
-      while (BT.fi < due) fire(BT.fire[BT.fi++]);
-      if (BT.fi >= BT.fire.length && BT.ft >= Math.max(BT.fdur, .22) + .12) {
-        const c = BT.castCards[BT.ci]; flyToDiscard(c); BT.flownUpTo = BT.ci;
-        nextCard();
-      }
+      while (BT.fi < BT.fire.length && BT.ft >= BT.fi * BT.gap) fire(BT.fire[BT.fi++]);
+      if (BT.fi >= BT.fire.length && BT.ft >= BT.fire.length * BT.gap + BT.hold) { flyToDiscard(BT.castCards[BT.ci]); BT.flownUpTo = BT.ci; nextCard(); }
     } else if (!BT.shots.length) {
       BT.waitT += dt;
-      if (BT.waitT > .35) {
-        const atk = endCast(run, b, BT.plan);
-        BT.flownUpTo = -1;
-        if (atk) { BT.phase = 'attack'; BT.atkT = 0; BT.struck = false; }
-        else finishTurnUI();
-      }
+      if (BT.waitT > .5) afterCast();
     }
   }
+  if (BT.phase === 'pass') { BT.passT += dt; if (BT.passT > .45) monsterPhase(); }
   if (BT.phase === 'attack') {
     BT.atkT += dt; const a = BT.atkT;
     m.lunge = a < .32 ? smooth(a / .32) : a < .7 ? 1 - smooth((a - .32) / .38) : 0;
     if (!BT.struck && a >= .3) {
       BT.struck = true;
-      const before = run.hearts, r = attack(run, b);
-      if (r.blocked) banner('坚盾术挡住了提可的攻击', [214, 170, 110]);
-      else {
-        BT.shake = 1;
-        for (let i = 0; i < 3; i++) BT.slashes.push({ x: 520 + i * 90 + Math.random() * 40, y: 200 + Math.random() * 80, t: 0 });
-        BT.heartBreak = { i: Math.ceil(before) - 1, t: 0 };
-      }
+      if (BT.atkRes.blocked) banner('挡住了', [214, 186, 130]);
+      else { BT.shake = 1; BT.cold = 1; BT.heartBreak = { i: Math.ceil(run.hearts + BT.atkRes.dmg) - 1, t: 0 }; }
     }
-    if (a > 1.1) { m.lunge = 0; finishTurnUI(); }
+    if (a > 1.1) { m.lunge = 0; endOfRound(); }
   }
-  if (BT.phase === 'dying') {
+  if (BT.phase === 'dying') {   // 散成光点，往上飘
     BT.dieT += dt; m.alpha = Math.max(0, 1 - BT.dieT / .9);
-    if (Math.random() < .8) BT.parts.push({ x: m.x + (Math.random() - .5) * 30, y: m.y + (Math.random() - .5) * 10, z: m.lift + Math.random() * 30, vx: 0, vy: 0, vz: 12 + Math.random() * 20, t: 0, c: [120, 40, 50] });
-    if (BT.dieT > 1.3) { BT.phase = 'done'; const cs = lootChoices(run); BT.loot = { cards: cs, rects: cs.map((c, i) => ({ x: 640 + (i - 1) * 190 - 66, y: 250, w: 132, h: 186 })), skip: { x: 580, y: 520, w: 120, h: 38 } }; }
+    for (let i = 0; i < 2; i++) if (Math.random() < .9) BT.parts.push({ x: m.x + (Math.random() - .5) * 30, y: m.y + (Math.random() - .5) * 10, z: m.lift + Math.random() * 30, vx: (Math.random() - .5) * 6, vy: (Math.random() - .5) * 6, vz: 14 + Math.random() * 22, t: 0, life: 1.1, g: 0, c: [196, 228, 255] });
+    if (BT.dieT > 1.4) { BT.phase = 'done'; const cs = lootChoices(run); BT.loot = { cards: cs, rects: cs.map((c, i) => ({ x: 640 + (i - 1) * 200 - 66, y: 240, w: 132, h: 186 })), skip: { x: 580, y: 540, w: 120, h: 38 } }; }
   }
   // 弹道、粒子、数字
   for (let i = BT.shots.length - 1; i >= 0; i--) { const s = BT.shots[i]; s.t += dt / s.dur; if (s.t >= 1) { hitArrive(s); BT.shots.splice(i, 1); } }
-  for (let i = BT.parts.length - 1; i >= 0; i--) { const p = BT.parts[i]; p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; p.vz -= 40 * dt; if (p.t > .6) BT.parts.splice(i, 1); }
-  for (let i = BT.nums.length - 1; i >= 0; i--) { const q = BT.nums[i]; q.t += dt; q.y -= 40 * dt; if (q.t > .9) BT.nums.splice(i, 1); }
+  for (let i = BT.parts.length - 1; i >= 0; i--) { const p = BT.parts[i]; p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; p.vz -= p.g * dt; if (p.t > p.life) BT.parts.splice(i, 1); }
+  for (let i = BT.nums.length - 1; i >= 0; i--) { const q = BT.nums[i]; q.t += dt; q.y -= 34 * dt; if (q.t > 1.1) BT.nums.splice(i, 1); }
   for (let i = BT.beams.length - 1; i >= 0; i--) { BT.beams[i].t += dt * 4; if (BT.beams[i].t > 1) BT.beams.splice(i, 1); }
-  for (let i = BT.slashes.length - 1; i >= 0; i--) { BT.slashes[i].t += dt * 1.6; if (BT.slashes[i].t > 1) BT.slashes.splice(i, 1); }
   if (BT.heartBreak) { BT.heartBreak.t += dt; if (BT.heartBreak.t > .8) BT.heartBreak = null; }
-  BT.flash = Math.max(0, BT.flash - dt * 2); BT.shake = Math.max(0, BT.shake - dt * 3);
+  const gap = BT.castTotal - BT.castShown;
+  BT.castShown = gap > 0 ? (gap < 1 ? BT.castTotal : BT.castShown + gap * Math.min(1, dt * 9)) : BT.castTotal;
+  BT.flash = Math.max(0, BT.flash - dt * 2); BT.shake = Math.max(0, BT.shake - dt * 3); BT.cold = Math.max(0, BT.cold - dt * 1.6);
+  BT.multPop = Math.max(0, BT.multPop - dt * 4);
   if (BT.banner) { BT.banner.t += dt; if (BT.banner.t > 2) BT.banner = null; }
+  if (BT.toast) { BT.toast.t += dt; if (BT.toast.t > 2.2) BT.toast = null; }
 }
 
-// 世界层里的战斗特效：魔法阵（平放在怪头顶）、弹道、白光、粒子
-function battleGroundFx(ctx) {
-  const m = BT.mon;
-  // 怪脚下一圈冷光影
-}
+// 世界层里的战斗特效：魔法阵（平放在怪头顶）、白光、弹道、粒子
 function battleFx(ctx) {
   const m = BT.mon;
   if (BT.circle > 0) {
@@ -310,18 +341,17 @@ function battleFx(ctx) {
     ctx.fillStyle = `rgba(255,255,255,${(1 - bm.t) * .8})`; ctx.fillRect(Math.round(top.x) - 1, top.y, 3, bot.y - top.y);
   }
   for (const s of BT.shots) {
-    const c = ART_COL[s.seg.art] || [255, 255, 255];
+    const c = hitCol(s.h);
     for (let k = 0; k < 3; k++) {
       const tt = Math.max(0, s.t - k * .12);
       const x = lerp(s.from.x, s.to.x, tt), y = lerp(s.from.y, s.to.y, tt), z = lerp(s.from.z, s.to.z, tt) + Math.sin(tt * Math.PI) * 6;
-      const p = proj(x, y, z);
+      const p = proj(x, y, z), big = !k && !s.h.small && !s.h.bean;
       ctx.fillStyle = rgba(k ? c : mix(c, [255, 255, 255], .6), k ? .5 / k : 1);
-      ctx.fillRect(Math.round(p.x), Math.round(p.y), k ? 1 : 2, k ? 1 : 2);
+      ctx.fillRect(Math.round(p.x), Math.round(p.y), big ? 2 : 1, big ? 2 : 1);
     }
   }
-  for (const p of BT.parts) { const q = proj(p.x, p.y, p.z); ctx.fillStyle = rgba(p.c, 1 - p.t / .6); ctx.fillRect(Math.round(q.x), Math.round(q.y), 1, 1); }
-  // 尾巴上的光点
-  if (m.alpha > 0) {
+  for (const p of BT.parts) { const q = proj(p.x, p.y, p.z); ctx.fillStyle = rgba(p.c, 1 - p.t / p.life); ctx.fillRect(Math.round(q.x), Math.round(q.y), 1, 1); }
+  if (m.alpha > 0) {   // 尾巴上的光点
     const p = proj(m.x, m.y, m.lift + 2);
     const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, 8);
     g.addColorStop(0, `rgba(255,200,110,${.5 * m.alpha})`); g.addColorStop(1, 'rgba(255,200,110,0)');
@@ -330,16 +360,19 @@ function battleFx(ctx) {
   ctx.globalCompositeOperation = 'source-over';
 }
 
-// ---------- UI ----------
+// ---------- 界面小件 ----------
 function txt(ctx, s, x, y, size, col = '#e8e2d4', align = 'center', weight = 600) {
   ctx.font = `${weight} ${size}px "PingFang SC",sans-serif`; ctx.textAlign = align; ctx.textBaseline = 'middle';
   ctx.fillStyle = col; ctx.fillText(s, x, y);
 }
-function btn(ctx, r, label, on = true, hot = false) {
+function btn(ctx, r, label, on = true, hot = false, sub = '') {
   ctx.fillStyle = on ? (hot ? 'rgba(70,64,52,.95)' : 'rgba(34,32,30,.92)') : 'rgba(30,30,30,.5)';
   ctx.fillRect(r.x, r.y, r.w, r.h);
   ctx.strokeStyle = on ? 'rgba(214,180,120,.9)' : 'rgba(120,120,120,.4)'; ctx.lineWidth = 2; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
-  txt(ctx, label, r.x + r.w / 2, r.y + r.h / 2 + 1, Math.min(20, r.h * .48), on ? '#efe4cc' : '#888');
+  if (sub) {
+    txt(ctx, label, r.x + r.w / 2, r.y + r.h * .4, Math.min(22, r.h * .4), on ? '#efe4cc' : '#888');
+    txt(ctx, sub, r.x + r.w / 2, r.y + r.h * .76, 11, on ? '#a49c8c' : '#666', 'center', 500);
+  } else txt(ctx, label, r.x + r.w / 2, r.y + r.h / 2 + 1, Math.min(20, r.h * .48), on ? '#efe4cc' : '#888');
 }
 const HEART = ['011011', '111111', '111111', '011110', '001100'];
 function pixHeart(ctx, x, y, s, fill) {   // fill: 0 空、.5 半颗、1 满
@@ -350,26 +383,34 @@ function pixHeart(ctx, x, y, s, fill) {   // fill: 0 空、.5 半颗、1 满
     ctx.fillRect(x + c * s, y + r * s, s, s);
   }
 }
+function heartRow(ctx, x, y, s, hearts, max, breakAt) {
+  for (let i = 0; i < Math.ceil(max); i++) {
+    let hx = x + i * (s * 7 + 2);
+    if (breakAt && breakAt.i === i) hx += Math.sin(breakAt.t * 60) * 4 * (1 - breakAt.t);
+    pixHeart(ctx, Math.round(hx), y, s, clamp(hearts - i, 0, 1));
+  }
+}
 function drawWheel(ctx, prev) {
-  const { x, y, r } = L.wheel, lamps = prev.lamps, cur = prev.cursor;
+  const { x, y, r } = L.wheel, lamps = prev.lamps;
   ctx.fillStyle = 'rgba(14,14,18,.85)'; ctx.beginPath(); ctx.arc(x, y, r + 8, 0, TAU); ctx.fill();
+  if (prev.rainbow) {
+    for (let i = 0; i < 24; i++) { ctx.strokeStyle = rgba(LAMP_COL[Math.floor(i / 4 + BT.t * 6) % 6], .8); ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, r + 6, i / 24 * TAU, (i + 1) / 24 * TAU); ctx.stroke(); }
+  }
   for (let i = 0; i < 6; i++) {
     const a0 = -Math.PI / 2 + (i - .5) * TAU / 6 + .05, a1 = a0 + TAU / 6 - .1, on = lamps & (1 << i);
     ctx.beginPath(); ctx.arc(x, y, r, a0, a1); ctx.arc(x, y, r - 14, a1, a0, true); ctx.closePath();
     ctx.fillStyle = on ? rgba(LAMP_COL[i]) : rgba(mix(LAMP_COL[i], [10, 10, 14], .78)); ctx.fill();
     if (on) { ctx.shadowColor = rgba(LAMP_COL[i]); ctx.shadowBlur = 10; ctx.fill(); ctx.shadowBlur = 0; }
-    if (cur === i) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke(); }
   }
-  if (cur === 6) { ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.beginPath(); ctx.arc(x, y, r - 16, 0, TAU); ctx.fill(); }
-  txt(ctx, '×' + formatCN(prev.multiplier), x, y + 1, 22, '#fff4dc', 'center', 700);
-  // 三颗宝石的环形经验
+  const pop = 1 + BT.multPop * .45;
+  txt(ctx, '×' + fmt(prev.mult), x, y + 1, Math.round(22 * pop), prev.rainbow ? '#ffe9a8' : '#fff4dc', 'center', 800);
+  // 三颗宝石：等级和经验
   for (let j = 0; j < 3; j++) {
-    const gx = 168, gy = 596 + j * 40, g = run.gems[j], pend = BT.b.pendingGemExp[j];
-    const f = clamp((g.exp + pend) / gemThreshold(g.level), 0, 1);
+    const gx = 168, gy = 596 + j * 40, g = run.gems[j], f = clamp(g.exp / gemNeed(g.level), 0, 1);
     ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.beginPath(); ctx.arc(gx, gy, 13, 0, TAU); ctx.stroke();
     ctx.strokeStyle = rgba(GEM_COLORS[j]); ctx.beginPath(); ctx.arc(gx, gy, 13, -Math.PI / 2, -Math.PI / 2 + f * TAU); ctx.stroke();
     ctx.fillStyle = rgba(GEM_COLORS[j]); ctx.beginPath(); ctx.moveTo(gx, gy - 6); ctx.lineTo(gx + 5, gy); ctx.lineTo(gx, gy + 6); ctx.lineTo(gx - 5, gy); ctx.fill();
-    txt(ctx, 'Lv ' + g.level, gx + 22, gy + 1, 14, '#d8d0c0', 'left');
+    txt(ctx, 'Lv' + g.level, gx + 21, gy + 1, 14, '#d8d0c0', 'left');
   }
 }
 function drawPileIcon(ctx, p, n, label) {
@@ -379,151 +420,63 @@ function drawPileIcon(ctx, p, n, label) {
   }
   if (!n) { ctx.strokeStyle = 'rgba(190,160,110,.3)'; ctx.strokeRect(p.x - 21, p.y - 29, 42, 58); }
   txt(ctx, String(n), p.x, p.y, 18, '#efe4cc', 'center', 700);
-  txt(ctx, label, p.x, p.y + 44, 12, '#a49c8c');
+  txt(ctx, label, p.x, p.y + 42, 12, '#a49c8c');
 }
-function drawBattleUI(ctx) {
-  const b = BT.b, mon = b.monster, planning = BT.phase === 'plan';
-  const prev = BT.phase === 'cast' && BT.plan ? BT.plan : preview(b);
-  // 心
-  for (let i = 0; i < R.hearts; i++) {
-    let x = 24 + i * 44, y = 22;
-    if (BT.heartBreak && BT.heartBreak.i === i) x += Math.sin(BT.heartBreak.t * 60) * 4 * (1 - BT.heartBreak.t);
-    pixHeart(ctx, x, y, 6, clamp(run.hearts - i, 0, 1));
-  }
-  if (b.shield) { ctx.fillStyle = '#c69a62'; ctx.fillRect(24 + R.hearts * 44, 22, 22, 26); txt(ctx, '盾', 35 + R.hearts * 44, 36, 13, '#2a1e12'); }
-  // 本回合总伤害
-  txt(ctx, '本回合伤害', 640, 22, 13, '#a49c8c');
-  const dmg = BT.turnDamage;
-  txt(ctx, BT.phase === 'cast' ? String(Math.round(dmg)) : formatCN(dmg), 640, 52, 34, '#fff1d0', 'center', 800);
-  // 回合、逃跑
-  txt(ctx, `第 ${b.turn} 回合`, 1264, 24, 16, '#d8d0c0', 'right');
-  btn(ctx, L.escape, '逃跑', planning, inRect(mouse, L.escape));
-  btn(ctx, L.lobby, '回大厅', planning, inRect(mouse, L.lobby));
-  // 怪头上：名字、血条、倒计时（不加大框）
-  const m = BT.mon;
-  if (m.alpha > .05) {
-    const hp = w2ui(proj(m.x, m.y, m.lift + m.model.sz + 2)), ux = hp.x, uy = hp.y - 18;
-    txt(ctx, mon.name, ux - 58, uy - 14, 15, '#efe4cc', 'left', 700);
-    txt(ctx, mon.traitName, ux + 58, uy - 14, 12, '#9fb8e8', 'right');
-    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(ux - 60, uy - 3, 120, 8);
-    ctx.fillStyle = '#c84a42'; ctx.fillRect(ux - 59, uy - 2, 118 * mon.hp / mon.maxHp, 6);
-    const cd = mon.countdown, red = cd <= 1, pulse = red ? 1 + Math.sin(BT.t * 10) * .12 : 1;
-    ctx.fillStyle = red ? '#b02a24' : 'rgba(30,30,36,.9)'; ctx.beginPath(); ctx.arc(ux + 76, uy + 1, 11 * pulse, 0, TAU); ctx.fill();
-    ctx.strokeStyle = red ? '#ffb0a0' : '#8c8478'; ctx.lineWidth = 1.5; ctx.stroke();
-    txt(ctx, String(cd), ux + 76, uy + 2, 13, '#fff', 'center', 700);
-    BT.monRect = { x: ux - 70, y: uy - 20, w: 160, h: 130 };
-  }
-  drawWheel(ctx, prev);
-  drawPileIcon(ctx, L.discard, b.discard.length, '弃牌堆');
-  drawPileIcon(ctx, L.drawPile, b.draw.length, '牌堆');
-  // 序列
-  if (stripVisible()) {
-    const base = BT.phase === 'cast' ? BT.plan : preview(b);
-    let head = `保底 ${formatCN(base.total)}　暴击最高 ${formatCN(base.max)}`;
-    if (planning && BT.hover >= 0 && b.hand[BT.hover] && !b.hand[BT.hover].instant) {
-      const pv = preview(b, [...b.line, b.hand[BT.hover]]);
-      head = `保底 ${formatCN(base.total)} → ${formatCN(pv.total)}　暴击最高 ${formatCN(pv.max)}`;
-    }
-    ctx.fillStyle = 'rgba(10,10,14,.55)'; ctx.fillRect(250, L.stripY - 74, 780, 140);
-    txt(ctx, head, 640, L.stripY - 60, 15, '#efe4cc');
-    if (!b.line.length) txt(ctx, '把牌拖到这里排进序列', 640, L.stripY, 15, 'rgba(230,220,200,.5)');
-    b.line.forEach((c, i) => {
-      if (BT.phase === 'cast' && i <= (BT.flownUpTo ?? -1)) return;
-      const p = BT.pos.get(c); if (!p) return;
-      const st = base.states[i], hi = BT.phase === 'cast' && i === BT.ci;
-      drawCard(ctx, c, p.x, p.y - (hi ? 8 : 0), L.cw * p.s, L.ch * p.s, { hi, glow: hi ? [255, 240, 200] : null });
-      if (st) txt(ctx, formatCN(st.total), p.x, p.y + L.sh / 2 + 12, 12, '#d8d0c0');
-    });
-    if (planning && b.line.length) {
-      const u = undoRects(b.line.length);
-      btn(ctx, u.last, '撤销上一步', true, inRect(mouse, u.last)); btn(ctx, u.all, '撤销全部', true, inRect(mouse, u.all));
-    }
-  }
-  // 手牌 + 接链提示
-  b.hand.forEach((c, i) => {
-    if (BT.drag && BT.drag.card === c) return;
-    const p = BT.pos.get(c); if (!p || p.delay > 0) return;
-    let o = { rot: p.r, alpha: p.a };
-    if (planning) {
-      const pv = preview(b, [...b.line, c]), st = pv.states.at(-1);
-      o = { ...o, ...hintStyle(c, st) };
-      if (o.label) txt(ctx, o.label, p.x, p.y + L.ch / 2 * p.s + 12, 13, o.labelCol || '#efe4cc', 'center', 700);
-    }
-    drawCard(ctx, c, p.x, p.y, L.cw * p.s, L.ch * p.s, o);
-  });
-  btn(ctx, L.cast, BT.phase === 'cast' ? '施法中…' : '施法', planning, inRect(mouse, L.cast));
-  for (const f of BT.flying) {
-    const t = smooth(f.t);
-    drawCard(ctx, f.card, lerp(f.x, L.discard.x, t), lerp(f.y, L.discard.y, t) - Math.sin(t * Math.PI) * 60, L.cw * lerp(.66, .45, t), L.ch * lerp(.66, .45, t), { alpha: 1 - t * .6, rot: t * 2 });
-  }
-  if (BT.drag) drawCard(ctx, BT.drag.card, mouse.x, mouse.y, L.cw * 1.08, L.ch * 1.08, { rot: 0 });
-  // 伤害数字（一发一发写完整）
-  for (const q of BT.nums) {
-    const a = q.t < .7 ? 1 : 1 - (q.t - .7) / .2, sz = q.crit ? 30 : 21;
-    ctx.globalAlpha = a;
-    ctx.font = `900 ${sz}px "PingFang SC",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.85)';
-    const s = q.n > 1 ? `${q.v}×${q.n}` : String(q.v);
-    ctx.strokeText(s, q.x, q.y); ctx.fillStyle = q.crit ? '#ffcc4a' : rgba(q.col); ctx.fillText(s, q.x, q.y);
-    ctx.globalAlpha = 1;
-  }
-  for (const s of BT.slashes) {
-    ctx.strokeStyle = `rgba(150,20,30,${(1 - s.t) * .8})`; ctx.lineWidth = 7;
-    ctx.beginPath(); ctx.moveTo(s.x - 90, s.y - 70); ctx.lineTo(s.x + 90, s.y + 110); ctx.stroke();
-  }
-  if (BT.flash > 0) {
-    const g = ctx.createLinearGradient(0, 0, 1280, 720);
-    LAMP_COL.forEach((c, i) => g.addColorStop(i / 5, rgba(c, BT.flash * .35)));
-    ctx.fillStyle = g; ctx.fillRect(0, 0, 1280, 720);
-  }
-  if (BT.banner) {
-    const a = Math.min(1, BT.banner.t * 5, (2 - BT.banner.t) * 2);
-    ctx.globalAlpha = a; txt(ctx, BT.banner.text, 640, 150, 26, rgba(BT.banner.col), 'center', 800); ctx.globalAlpha = 1;
-  }
-  // 鼠标提示
-  if (planning && !BT.drag && !BT.loot && !BT.confirm) {
-    if (BT.monRect && inRect(mouse, BT.monRect)) tip(ctx, [`${mon.name}　血量 ${Math.round(mon.hp)} / ${mon.maxHp}`, `特性 躲光：${mon.rule}`, `这回合少受 ${lampCount(b.lamps)} 成伤害`, `倒计时 ${mon.countdown}：到 0 时攻击，打掉半颗心`]);
-    else if (Math.hypot(mouse.x - L.drawPile.x, mouse.y - L.drawPile.y) < 34) tip(ctx, [`牌堆：还剩 ${b.draw.length} 张`]);
-    else if (Math.hypot(mouse.x - L.discard.x, mouse.y - L.discard.y) < 34) tip(ctx, ['弃牌堆：打出去的牌放这里', '牌堆抽空了就洗回去接着抽']);
-    else if (BT.hover >= 0 && b.hand[BT.hover]) tip(ctx, [b.hand[BT.hover].name + '：' + b.hand[BT.hover].text]);
-  }
-  if (BT.confirm) {
-    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, 1280, 720);
-    const lob = BT.confirm.kind === 'lobby';
-    txt(ctx, lob ? '回大厅吗？' : '要逃跑吗？', 640, 300, 26, '#efe4cc', 'center', 800);
-    txt(ctx, lob ? '这一趟结束，路上拿到的牌留着' : '提可会留在原地，血回满', 640, 338, 15, '#a49c8c');
-    btn(ctx, BT.confirm.yes, lob ? '回大厅' : '逃跑', true, inRect(mouse, BT.confirm.yes)); btn(ctx, BT.confirm.no, '接着打', true, inRect(mouse, BT.confirm.no));
-  }
-  if (BT.loot) {
-    ctx.fillStyle = 'rgba(0,0,0,.65)'; ctx.fillRect(0, 0, 1280, 720);
-    txt(ctx, '打倒了提可　选一张牌带走', 640, 200, 26, '#ffe6b0', 'center', 800);
-    BT.loot.cards.forEach((c, i) => {
-      const r = BT.loot.rects[i], hot = inRect(mouse, r);
-      drawCard(ctx, c, r.x + r.w / 2, r.y + r.h / 2 - (hot ? 8 : 0), r.w, r.h, { glow: hot ? [255, 230, 170] : null });
-      wrap(ctx, c.text, r.x + r.w / 2, r.y + r.h + 22, 170, 13);
-    });
-    btn(ctx, BT.loot.skip, '都不要', true, inRect(mouse, BT.loot.skip));
-  }
-  if (BT.over) {
-    ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(0, 0, 1280, 720);
-    txt(ctx, '心打光了', 640, 320, 34, '#ff9a8a', 'center', 800);
-    txt(ctx, '这一趟结束，路上拿到的牌留着', 640, 360, 15, '#a49c8c');
-    btn(ctx, BT.over.btn, '回大厅', true, inRect(mouse, BT.over.btn));
-  }
+// 伤害数字：越大字越大；暴击金色、合白白色、彩虹里七彩
+function drawNumber(ctx, q) {
+  const a = q.t < .85 ? 1 : Math.max(0, (1.1 - q.t) / .25);
+  let sz = q.dodge ? 18 : clamp(13 + 4.6 * Math.log10(Math.max(1, q.v)), 15, 70);
+  if (q.small) sz *= .72; if (q.crit) sz *= 1.25; if (q.white) sz *= 1.1;
+  const pop = q.t < .12 ? 1 + (1 - q.t / .12) * .7 : 1, size = Math.round(sz * pop);
+  ctx.globalAlpha = a;
+  ctx.font = `900 ${size}px "PingFang SC",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = Math.max(3, size * .16); ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(0,0,0,.88)';
+  ctx.strokeText(q.text, q.x, q.y);
+  if (q.dodge) ctx.fillStyle = '#9aa4ac';
+  else if (q.rainbow) {
+    const w = ctx.measureText(q.text).width, g = ctx.createLinearGradient(q.x - w / 2, 0, q.x + w / 2, 0);
+    LAMP_COL.forEach((c, i) => g.addColorStop(i / 5, rgba(mix(c, [255, 255, 255], .25))));
+    ctx.fillStyle = g;
+  } else ctx.fillStyle = q.crit ? '#ffcf4a' : rgba(q.col);
+  ctx.fillText(q.text, q.x, q.y);
+  if (q.crit && q.t < .7) txt(ctx, '暴击', q.x, q.y - size * .72, Math.round(size * .36), '#ffe9a0', 'center', 800);
+  ctx.globalAlpha = 1;
+}
+// 怪头上：名字、特性、血条（带数字）、倒计时和这一下打多少
+function drawMonsterHead(ctx, b) {
+  const m = BT.mon, mon = b.mon;
+  if (m.alpha < .05) return;
+  const hp = w2ui(proj(m.x, m.y, m.lift + m.model.sz + 2)), cx = hp.x, y = Math.max(96, hp.y - 26);
+  ctx.globalAlpha = Math.min(1, m.alpha * 1.5);
+  txt(ctx, mon.name, cx - 100, y - 18, 17, '#efe4cc', 'left', 800);
+  txt(ctx, mon.traitName, cx + 100, y - 18, 13, '#9fb8e8', 'right', 600);
+  ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(cx - 102, y - 6, 204, 16);
+  ctx.fillStyle = '#3a1418'; ctx.fillRect(cx - 100, y - 4, 200, 12);
+  ctx.fillStyle = '#e8d8c0'; ctx.fillRect(cx - 100, y - 4, 200 * BT.hpShown / mon.maxHp, 12);
+  ctx.fillStyle = '#c84a42'; ctx.fillRect(cx - 100, y - 4, 200 * mon.hp / mon.maxHp, 12);
+  txt(ctx, `${fmt(mon.hp)} / ${fmt(mon.maxHp)}`, cx, y + 2, 11, '#fff', 'center', 700);
+  const cd = mon.countdown, red = cd <= 1 && BT.phase !== 'dying', pulse = red ? 1 + Math.sin(BT.t * 10) * .1 : 1, bx = cx + 126;
+  ctx.fillStyle = red ? '#9a2a24' : 'rgba(30,30,36,.92)'; ctx.beginPath(); ctx.arc(bx, y + 2, 14 * pulse, 0, TAU); ctx.fill();
+  ctx.strokeStyle = red ? '#ffb0a0' : '#8c8478'; ctx.lineWidth = 1.5; ctx.stroke();
+  txt(ctx, String(cd), bx, y + 3, 15, '#fff', 'center', 800);
+  for (let i = 0; i < Math.ceil(mon.atk); i++) pixHeart(ctx, bx + 21 + i * 24, y - 7, 3.4, clamp(mon.atk - i, 0, 1));
+  BT.monRect = { x: cx - 110, y: y - 30, w: 270, h: 150 };
+  ctx.globalAlpha = 1;
 }
 function hintStyle(card, st) {
   if (!st) return {};
-  if (card.instant) return { glow: [214, 160, 96], label: '立即释放', labelCol: '#e0b47a' };
-  const col = CARD_COL[card.col] || CARD_COL[8];
-  const rel = st.relation, mul = '×' + formatCN(st.multiplier);
-  if (st.rainbow || st.hint === '差一盏彩虹') return { rainbow: true, label: st.rainbow ? '彩虹 ×3' : mul + ' 差一盏彩虹', labelCol: '#ffe6a0' };
-  if (rel === '补色') return { glow: [255, 255, 255], strong: true, label: mul + ' 补色', labelCol: '#ffffff' };
-  if (rel === '同色') return { glow: col, label: mul + ' 同色', labelCol: rgba(col) };
-  if (rel === '邻色') return { glow: col, label: mul + ' 邻色 ›', labelCol: rgba(col) };
-  if (rel === '百搭') return { glow: [230, 230, 240], label: mul + ' 百搭' };
-  if (rel === '断色') return { dim: true, label: '断色', labelCol: '#777' };
-  if (rel === '起色') return { label: '起色' };
-  return { label: st.hint };
+  if (card.instant) return { glow: [214, 170, 110], label: '马上用', labelCol: '#e0b47a' };
+  if (card.junk) return { dim: true, label: '没用', labelCol: '#777' };
+  const col = CARD_COL[st.as.col] || CARD_COL[7], mul = '×' + fmt(st.mult);
+  if (st.rainbowNow) return { rainbow: true, label: mul + ' 彩虹', labelCol: '#ffe6a0' };
+  switch (st.rel) {
+    case '合白': return { glow: [255, 255, 255], strong: true, label: mul + ' 合白', labelCol: '#ffffff' };
+    case '接上': return { glow: col, label: mul + ' 接上', labelCol: rgba(col) };
+    case '断': return { dim: true, label: '断 ×1', labelCol: '#777' };
+    case '起手': return { label: '起手' };
+    case '放大': return { glow: [230, 230, 240], label: mul };
+    default: return { label: st.rel };
+  }
 }
 function tip(ctx, lines) {
   ctx.font = '500 14px "PingFang SC",sans-serif';
@@ -538,4 +491,128 @@ function wrap(ctx, s, x, y, w, size) {
   let line = '', yy = y;
   for (const ch of s) { if (ctx.measureText(line + ch).width > w) { txt(ctx, line, x, yy, size, '#d8d0c0', 'center', 500); line = ''; yy += size + 6; } line += ch; }
   if (line) txt(ctx, line, x, yy, size, '#d8d0c0', 'center', 500);
+}
+
+// ---------- 界面 ----------
+function drawBattleUI(ctx) {
+  const b = BT.b, mon = b.mon, planning = BT.phase === 'plan';
+  const prev = BT.phase === 'cast' && BT.plan ? BT.plan : plan(run, b);
+  // 心、挡一下
+  heartRow(ctx, 24, 22, 6, run.hearts, run.maxHearts, BT.heartBreak);
+  if (b.shield) {
+    const sx = 24 + Math.ceil(run.maxHearts) * 44 + 4;
+    ctx.fillStyle = '#c69a62'; ctx.fillRect(sx, 20, 34, 28); ctx.fillStyle = '#2a1e12'; ctx.fillRect(sx + 2, 22, 30, 24);
+    txt(ctx, '挡' + (b.shield > 1 ? '×' + b.shield : ''), sx + 17, 35, 13, '#e8c890', 'center', 700);
+  }
+  // 这一次施法的总伤害
+  if (BT.castTotal > 0 || BT.phase === 'cast') {
+    const done = BT.phase !== 'cast';
+    txt(ctx, '这次施法', 640, 20, 13, done ? 'rgba(164,156,140,.6)' : '#a49c8c');
+    ctx.font = `900 ${done ? 40 : 48}px "PingFang SC",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 6; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(0,0,0,.8)'; ctx.strokeText(fmt(BT.castShown), 640, 54);
+    ctx.fillStyle = done ? 'rgba(255,241,208,.7)' : '#fff1d0'; ctx.fillText(fmt(BT.castShown), 640, 54);
+  }
+  txt(ctx, `第 ${b.turn} 回合`, 1264, 24, 16, '#d8d0c0', 'right');
+  btn(ctx, L.escape, '逃跑', planning && canFlee(), inRect(mouse, L.escape));
+  btn(ctx, L.lobby, '回大厅', planning, inRect(mouse, L.lobby));
+  drawMonsterHead(ctx, b);
+  drawWheel(ctx, prev);
+  drawPileIcon(ctx, L.discard, b.discard.length, '弃牌堆');
+  drawPileIcon(ctx, L.drawPile, b.draw.length, `下回合摸 ${drawCount(run, b.turn + 1)}`);
+  // 链
+  if (stripVisible()) {
+    const base = BT.phase === 'cast' ? BT.plan : prev;
+    let head = `预计 ${fmt(base.total)}`;
+    if (planning && BT.hover >= 0 && b.hand[BT.hover] && !b.hand[BT.hover].instant) head += `  →  ${fmt(plan(run, b, [...b.line, b.hand[BT.hover]]).total)}`;
+    ctx.fillStyle = 'rgba(10,10,14,.55)'; ctx.fillRect(250, L.stripY - 102, 780, 172);
+    txt(ctx, head, 640, L.stripY - 86, 15, '#efe4cc', 'center', 700);
+    if (planning) txt(ctx, '暴击另算 · 点链里的牌放回去', 1020, L.stripY - 86, 11, 'rgba(200,190,170,.5)', 'right', 500);
+    if (!b.line.length) txt(ctx, '点手里的牌排进这里（也能拖）', 640, L.stripY, 15, 'rgba(230,220,200,.5)');
+    b.line.forEach((c, i) => {
+      if (BT.phase === 'cast' && i <= (BT.flownUpTo ?? -1)) return;
+      const p = BT.pos.get(c); if (!p) return;
+      const st = base.states[i], hi = BT.phase === 'cast' && i === BT.ci;
+      drawCard(ctx, c, p.x, p.y - (hi ? 8 : 0), L.cw * p.s, L.ch * p.s, { hi, glow: hi ? [255, 240, 200] : null, dim: st && st.rel === '断' && !hi });
+      if (st) {
+        const mc = st.rel === '断' ? '#888' : st.rel === '合白' ? '#fff' : st.rainbow ? '#ffe6a0' : '#d8d0c0';
+        txt(ctx, '×' + fmt(st.mult), p.x, p.y - L.sh / 2 - 12, 13, mc, 'center', 800);
+        txt(ctx, fmt(st.total), p.x, p.y + L.sh / 2 + 12, 12, '#d8d0c0', 'center', 600);
+      }
+    });
+    if (planning && b.line.length) { const u = undoRect(b.line.length); btn(ctx, u, '全放回去', true, inRect(mouse, u)); }
+  }
+  if (planning && !stripVisible()) txt(ctx, '点手里的牌排进链 · 牌攒得越多，一口气打得越狠 · 空格施法', 640, L.stripY + 6, 14, 'rgba(220,210,190,.42)', 'center', 500);
+  // 手牌 + 接链提示
+  b.hand.forEach((c, i) => {
+    if (BT.drag && BT.drag.card === c) return;
+    const p = BT.pos.get(c); if (!p || p.delay > 0) return;
+    let o = { rot: p.r, alpha: p.a };
+    if (planning) {
+      const st = c.instant ? null : plan(run, b, [...b.line, c]).states.at(-1);
+      o = { ...o, ...hintStyle(c, c.instant ? {} : st) };
+      if (o.label && (b.line.length || c.instant || c.junk)) txt(ctx, o.label, p.x, p.y + L.ch / 2 * p.s + 12, 13, o.labelCol || '#efe4cc', 'center', 700);
+    }
+    drawCard(ctx, c, p.x, p.y, L.cw * p.s, L.ch * p.s, o);
+  });
+  const empty = !b.line.length;
+  btn(ctx, L.cast, BT.phase === 'cast' ? '施法中…' : empty ? '攒着' : '施法', planning, inRect(mouse, L.cast), planning ? (empty ? '不出牌，结束回合' : '空格') : '');
+  for (const f of BT.flying) {
+    const t = smooth(f.t);
+    drawCard(ctx, f.card, lerp(f.x, L.discard.x, t), lerp(f.y, L.discard.y, t) - Math.sin(t * Math.PI) * 60, L.cw * lerp(.66, .45, t), L.ch * lerp(.66, .45, t), { alpha: 1 - t * .6, rot: t * 2 });
+  }
+  if (BT.drag) drawCard(ctx, BT.drag.card, mouse.x, mouse.y, L.cw * 1.08, L.ch * 1.08, { rot: 0 });
+  for (const q of BT.nums) drawNumber(ctx, q);
+  if (BT.cold > 0) {   // 挨打：四周冷色一闪
+    const g = ctx.createRadialGradient(640, 360, 200, 640, 360, 760);
+    g.addColorStop(0, 'rgba(150,190,255,0)'); g.addColorStop(1, `rgba(170,205,255,${BT.cold * .45})`);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 1280, 720);
+  }
+  if (BT.flash > 0) {
+    const g = ctx.createLinearGradient(0, 0, 1280, 720);
+    LAMP_COL.forEach((c, i) => g.addColorStop(i / 5, rgba(c, BT.flash * .3)));
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 1280, 720);
+  }
+  if (BT.banner) {
+    const a = Math.min(1, BT.banner.t * 5, (2 - BT.banner.t) * 2);
+    ctx.globalAlpha = a; txt(ctx, BT.banner.text, 640, 352, 26, rgba(BT.banner.col), 'center', 800); ctx.globalAlpha = 1;   // 在怪和链中间，不压着怪
+  }
+  if (BT.toast && (planning || BT.phase === 'pass')) {
+    const a = Math.min(1, BT.toast.t * 4, (2.2 - BT.toast.t) * 2);
+    ctx.globalAlpha = a; txt(ctx, BT.toast.text, 640, 392, 18, '#d8d0c0', 'center', 600); ctx.globalAlpha = 1;
+  }
+  // 鼠标提示
+  if (planning && !BT.drag && !overlayOpen()) {
+    if (BT.monRect && inRect(mouse, BT.monRect)) tip(ctx, [`${mon.name}　血 ${fmt(mon.hp)} / ${fmt(mon.maxHp)}`, `${mon.traitName}：${mon.traitText}`, `倒计时 ${mon.countdown}：每回合结束减一，到 0 出手，打掉${mon.atk === .5 ? '半颗' : mon.atk + ' 颗'}心`]);
+    else if (Math.hypot(mouse.x - L.drawPile.x, mouse.y - L.drawPile.y) < 34) tip(ctx, [`牌堆：还剩 ${b.draw.length} 张`, `下回合摸 ${drawCount(run, b.turn + 1)} 张（手牌最多 ${R.handMax} 张）`]);
+    else if (Math.hypot(mouse.x - L.discard.x, mouse.y - L.discard.y) < 34) tip(ctx, ['弃牌堆：打出去的牌放这里', '牌堆摸空了就洗回去接着摸']);
+    else if (Math.hypot(mouse.x - L.wheel.x, mouse.y - L.wheel.y) < 58) tip(ctx, ['色环：链里打过的颜色会亮', '跟上一张有同一种宝石 → 接上 ×2', '合起来红绿蓝齐全 → 合白 ×2，再补一发白光', '都不沾 → 断，倍率回 ×1', '一条链凑齐六色 → 彩虹，之后每接一张 ×3']);
+    else if (mouse.x > 150 && mouse.x < 220 && mouse.y > 580 && mouse.y < 700) {
+      const j = clamp(Math.floor((mouse.y - 576) / 40), 0, 2), g = run.gems[j];
+      tip(ctx, [`${GEM_NAMES[j]}宝石 Lv${g.level}：${GEM_NAMES[j]}色每发 ×${+gemPow(run, j).toFixed(2)}`, `再打出 ${gemNeed(g.level) - g.exp} 发${GEM_NAMES[j]}色升一级`]);
+    } else if (BT.hover >= 0 && b.hand[BT.hover]) tip(ctx, [b.hand[BT.hover].name + '：' + b.hand[BT.hover].text]);
+    else if (inRect(mouse, L.escape) && !canFlee()) tip(ctx, ['只剩半颗心，逃不动了']);
+  }
+  if (BT.confirm) {
+    ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, 1280, 720);
+    const lob = BT.confirm.kind === 'lobby';
+    txt(ctx, lob ? '回大厅吗？' : '要逃跑吗？', 640, 300, 26, '#efe4cc', 'center', 800);
+    txt(ctx, lob ? '这一趟就到这儿' : `丢半颗心，${mon.name}留在原地`, 640, 338, 15, '#a49c8c');
+    btn(ctx, BT.confirm.yes, lob ? '回大厅' : '逃跑', true, inRect(mouse, BT.confirm.yes)); btn(ctx, BT.confirm.no, '接着打', true, inRect(mouse, BT.confirm.no));
+  }
+  if (BT.loot) {
+    ctx.fillStyle = 'rgba(0,0,0,.68)'; ctx.fillRect(0, 0, 1280, 720);
+    txt(ctx, `打倒了${mon.name}　选一张牌带走`, 640, 190, 26, '#ffe6b0', 'center', 800);
+    BT.loot.cards.forEach((c, i) => {
+      const r = BT.loot.rects[i], hot = inRect(mouse, r);
+      drawCard(ctx, c, r.x + r.w / 2, r.y + r.h / 2 - (hot ? 8 : 0), r.w, r.h, { glow: hot ? [255, 230, 170] : null });
+      wrap(ctx, c.text, r.x + r.w / 2, r.y + r.h + 22, 192, 13);
+    });
+    btn(ctx, BT.loot.skip, '都不要', true, inRect(mouse, BT.loot.skip));
+  }
+  if (BT.over) {
+    ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(0, 0, 1280, 720);
+    txt(ctx, '心打光了', 640, 320, 34, '#ff9a8a', 'center', 800);
+    txt(ctx, '这一趟就到这儿', 640, 360, 15, '#a49c8c');
+    btn(ctx, BT.over.btn, '回大厅', true, inRect(mouse, BT.over.btn));
+  }
 }

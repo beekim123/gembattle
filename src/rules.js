@@ -1,213 +1,233 @@
 'use strict';
-// 一仗的规则：照搬 card-web/src/rules.js 和 config.js（已定 3.x），只留一只怪（提可）用得上的部分。
-// 色环索引：红、黄、绿、青、蓝、紫；6 白（圆心），7 变色，8 无色。
+// 一仗的规则（见 设计.md「战斗」）：摸牌由少到多、没打的牌留着；按色环接链，倍率每次施法从 ×1 起。
+// 色环序号：0 红 1 黄 2 绿 3 青 4 蓝 5 紫 6 白；宝石位：1 红 2 绿 4 蓝（黄 = 红+绿，青 = 绿+蓝，紫 = 红+蓝，白 = 全有）。
 const R = {
-  hearts: 3, handSize: 8, maxHandSize: 12, turnLimit: 10,
-  baseDamage: 5, gemLevelStep: 10, gemLevelGrowth: 1.2,
-  multiplier: 2, critChance: 0.1, critFactor: 1.5, rainbowFactor: 3,
-  hpNormal: 3000, countdown: 4, dimPerLamp: 0.1, attacksBeforeRage: 2,
-  lootCount: 3, colors: ['红', '黄', '绿', '青', '蓝', '紫', '白', '变色', '无色'],
-  masks: [1, 3, 2, 6, 4, 5, 7],
-  deckCounts: [5, 4, 5, 4, 5, 4, 2],
-  loot: ['lens', 'rain', 'light', 'mirror', 'ice', 'shield'],
-  extras: {
-    lens: { name: '增幅法阵', col: 4, vals: [0, 0, 1], text: '倍率 ×2' },
-    rain: { name: '烈焰弹幕', col: 0, vals: [1, 0, 0], text: '再打 4 × 倍率 发，每发 3' },
-    light: { name: '引灯咒', col: 8, vals: [0, 0, 0], text: '点亮当前色两边没亮的灯（最多 2 盏）' },
-    mirror: { name: '逆色术', col: 7, vals: [0, 0, 0], text: '变成当前色的补色' },
-    ice: { name: '破甲冰矛', col: 8, vals: [0, 0, 0], text: '固定伤害 60（不吃倍率，不怕特性）' },
-    shield: { name: '坚盾术', col: 8, vals: [0, 0, 0], instant: true, text: '挡掉怪的下一次攻击' },
-  },
-  rainHits: 4, rainPoints: 3, iceDamage: 60, relight: 2,
+  hearts: 4, handMax: 10, drawFirst: 2, drawMax: 6,   // 第 1 回合摸 2 张，之后每回合 +1，封顶 6
+  points: 100, upPoints: 2.5,                          // 宝石牌每发的点数；强化后 ×2.5
+  link: 2, rainbowLink: 3, boostLink: 2,               // 接上 / 合白 ×2；彩虹后 ×3；垫脚让下一次再 ×2
+  critChance: .1, critMul: 2,
+  gemGrowth: 1.5, gemStep: 8,                          // 宝石每级该色 ×1.5；Lv n → n+1 要打出 8n 发
+  beans: 8, beansUp: 12, beanPts: 25, bloom: 3, bloomPart: .3,
+  lootCount: 3,
 };
-const MONSTERS = {
-  tiko: { name: '提可', trait: 'hide', traitName: '躲光', attackDamage: .5, color: [110, 150, 255],
-    rule: '回合开始时你每亮着一盏色灯，它这回合少受一成伤害' },
-};
-const GEM_ARTS = ['red', 'green', 'blue'];
-const CN_UNITS = ['', '万', '亿', '兆', '京', '垓', '秭', '穰', '沟', '涧', '正', '载'];
-function formatCN(value) {
-  const n = Math.max(0, Math.round(Number(value) || 0));
-  if (n < 100000) return String(n);
-  let v = n, unit = 0;
-  while (v >= 100000 && unit < CN_UNITS.length - 1) { v /= 10000; unit++; }
-  return Math.floor(v) + ' ' + CN_UNITS[unit];
-}
-const maskVals = col => { const m = R.masks[col] || 0; return [m & 1 ? 1 : 0, m & 2 ? 1 : 0, m & 4 ? 1 : 0]; };
-const gemCard = col => ({ id: 'gem', name: R.colors[col] + '宝石', col, vals: maskVals(col), text: '每颗宝石打倍率发' });
-const extraCard = id => ({ id, ...R.extras[id] });
-function startDeck() {
-  const d = [];
-  R.deckCounts.forEach((n, col) => { for (let i = 0; i < n; i++) d.push(gemCard(col)); });
-  return d;
-}
-const gemThreshold = level => Math.max(1, level) * R.gemLevelStep;
-const gemPower = (gems, j) => R.gemLevelGrowth ** Math.max(0, (gems?.[j]?.level ?? 1) - 1);
+const MASKS = [1, 3, 2, 6, 4, 5, 7];
+const HUES = ['红', '黄', '绿', '青', '蓝', '紫', '白'];
+const GEM_NAMES = ['红', '绿', '蓝'];
+const hueOfMask = m => MASKS.indexOf(m);
+const bits = m => (m & 1) + (m >> 1 & 1) + (m >> 2 & 1);
 
-function newRun(seed, deck) {
-  return { seed, rng: rngFrom(seed), deck: deck || startDeck(), hearts: R.hearts,
-    gems: [{ level: 1, exp: 0 }, { level: 1, exp: 0 }, { level: 1, exp: 0 }], wins: 0, maxTurn: 0 };
-}
-function addCardToHand(b, card) {
-  if (b.hand.length >= R.maxHandSize) { b.discard.push(card); return false; }
-  b.hand.push(card); b.drawn.push(card); return true;
-}
-function refill(b, target) {
-  while (b.hand.length < target) {
-    if (!b.draw.length) { if (!b.discard.length) break; b.draw = shuffle(b.discard.splice(0), b.rng); }
-    if (!addCardToHand(b, b.draw.pop())) break;
+// ---------- 牌 ----------
+// 牌的 id：宝石牌 'g<色>[:<词>]'（如 'g3:垫脚'），无色牌就是名字键（如 'lens'）；强化过的末尾加 '+'。
+const SPELLS = {
+  block: { name: '挡一下', instant: true, text: u => u ? '挡下怪的下一次攻击，再摸 1 张' : '挡下怪的下一次攻击' },
+  lens: { name: '放大镜', text: u => `倍率 ×${u ? 4 : 3}` },
+  parrot: { name: '学舌', text: u => u ? '把上一张宝石牌再打两遍' : '把上一张宝石牌再打一遍' },
+  contra: { name: '唱反调', text: u => '变成上一张的补色，一定合白' + (u ? '；点数 ×2.5' : '') },
+  beans: { name: '撒豆', text: u => `打 ${u ? R.beansUp : R.beans} 发豆子，每发 ${R.beanPts} 点 × 倍率` },
+  draw: { name: '摸牌', instant: true, text: u => `马上摸 ${u ? 3 : 2} 张` },
+  stall: { name: '打岔', instant: true, text: u => `怪的倒计时 +${u ? 2 : 1}` },
+  family: { name: '全家福', rare: true, text: u => '马上凑齐六色：从此每接一张 ×3' + (u ? '；倍率再 ×2' : '') },
+  spore: { name: '孢子', junk: true, text: () => '没用，打出去就没了' },
+};
+const TAGS = { 双响: '打两遍', 垫脚: '下一张接上时 ×4', 开花: '每发再炸出 3 发小的', 稳: '断链时不回 ×1，只减半' };
+
+function makeCard(id) {
+  const up = id.endsWith('+'), base = up ? id.slice(0, -1) : id;
+  if (base[0] === 'g') {
+    const [h, tag = null] = base.slice(1).split(':'), col = +h, mask = MASKS[col];
+    const pts = R.points * (up ? R.upPoints : 1);
+    const gems = [0, 1, 2].filter(j => mask >> j & 1).map(j => GEM_NAMES[j]).join('');
+    let text = `打出 ${bits(mask)} 发（${gems}），每发 ${pts} 点`;
+    if (col === 6) text += '，跟谁都接';
+    if (tag) text += '；' + TAGS[tag];
+    return { id, key: 'gem', kind: 'gem', col, mask, tag, up, pts, name: HUES[col] + (tag ? '·' + tag : '') + (up ? '+' : ''), text };
   }
+  const s = SPELLS[base];
+  return { id, key: base, kind: 'spell', col: -1, mask: 0, tag: null, up, pts: 0, instant: !!s.instant, junk: !!s.junk, rare: !!s.rare, name: s.name + (up ? '+' : ''), text: s.text(up) };
 }
-function startFight(run, kind) {
-  const base = MONSTERS[kind];
-  const b = {
-    monster: { ...base, kind, maxHp: R.hpNormal, hp: R.hpNormal, countdown: R.countdown, attacks: 0 },
-    turn: 1, hand: [], line: [], draw: shuffle([...run.deck], run.rng), discard: [], drawn: [],
-    lamps: 0, cursor: -1, multiplier: 1, rng: run.rng, shield: 0, gems: run.gems, pendingGemExp: [0, 0, 0],
-  };
-  refill(b, R.handSize);
+const START_DECK = ['g0', 'g0', 'g2', 'g2', 'g4', 'g4', 'g1', 'g3', 'g5', 'g6', 'block', 'block'];
+const startDeck = () => START_DECK.map(makeCard);
+
+// ---------- 怪 ----------
+// cd：倒计时（每回合结束减一，到 0 出手后回满）；atk：打掉几颗心（半颗为单位）
+const MONSTERS = {
+  tiko: { name: '提可', hp: 2000, cd: 3, atk: .5, trait: 'flutter', traitName: '扑闪', traitText: '每次施法的第一发躲开', color: [110, 150, 255] },
+};
+
+// ---------- 数字 ----------
+const CN_UNITS = ['', '万', '亿', '兆', '京', '垓', '秭', '穰', '沟', '涧', '正', '载'];
+// 一万以下写全；以上留三位有效数字：1.28万、12.8万、128万、1280万、1.28亿……
+function fmt(value) {
+  const n = Math.max(0, Math.round(Number(value) || 0));
+  if (n < 10000) return String(n);
+  let x = n, u = 0;
+  while (x >= 10000 && u < CN_UNITS.length - 1) { x /= 10000; u++; }
+  let s = x < 10 ? x.toFixed(2) : x < 100 ? x.toFixed(1) : String(Math.floor(x));
+  if (s.includes('.')) s = s.replace(/0+$/, '').replace(/\.$/, '');
+  return s + CN_UNITS[u];
+}
+
+// ---------- 一局 ----------
+function newRun(seed) {
+  return { seed, rng: rngFrom(seed), deck: startDeck(), hearts: R.hearts, maxHearts: R.hearts,
+    gems: [0, 1, 2].map(() => ({ level: 1, exp: 0 })), wins: 0, bestHit: 0, bestCast: 0 };
+}
+const gemPow = (run, j) => j < 0 ? 1 : R.gemGrowth ** (run.gems[j].level - 1);
+const gemNeed = level => R.gemStep * level;
+
+// ---------- 一仗 ----------
+const drawCount = (run, turn) => Math.min(R.drawMax, R.drawFirst + turn - 1);
+function startFight(run, kind, hpMul = 1) {
+  const base = MONSTERS[kind], hp = Math.max(100, Math.round(base.hp * hpMul / 100) * 100);
+  const b = { kind, mon: { ...base, maxHp: hp, hp, countdown: base.cd }, turn: 1,
+    hand: [], line: [], draw: shuffle(run.deck.map(c => ({ ...c })), run.rng), discard: [], gone: [],
+    shield: 0, rng: run.rng, gemExp: [0, 0, 0] };
+  drawCards(b, drawCount(run, 1));
   return b;
 }
-function playInstant(b, i) {
-  const card = b.hand[i]; if (!card || !card.instant) return null;
-  b.hand.splice(i, 1); b.discard.push(card);
-  if (card.id === 'shield') b.shield++;
-  return card;
+// 摸牌：手满了就不摸（留在牌堆里）；牌堆空了把弃牌洗回去
+function drawCards(b, n) {
+  const got = [];
+  for (let i = 0; i < n && b.hand.length < R.handMax; i++) {
+    if (!b.draw.length) { if (!b.discard.length) break; b.draw = shuffle(b.discard.splice(0), b.rng); }
+    const c = b.draw.pop(); b.hand.push(c); got.push(c);
+  }
+  return got;
 }
 function queueCard(b, i) { const c = b.hand[i]; if (!c || c.instant) return false; b.line.push(b.hand.splice(i, 1)[0]); return true; }
-function undoLast(b) { if (!b.line.length) return false; b.hand.push(b.line.pop()); return true; }
-function undoAll(b) { if (!b.line.length) return false; b.hand.push(...b.line.splice(0)); return true; }
+function unqueueCard(b, i) { const c = b.line[i]; if (!c) return false; b.line.splice(i, 1); b.hand.push(c); return true; }
+function unqueueAll(b) { if (!b.line.length) return false; b.hand.push(...b.line.splice(0)); return true; }
+// 马上用的牌（挡一下、摸牌、打岔）
+function playInstant(run, b, i) {
+  const c = b.hand[i]; if (!c || !c.instant) return null;
+  b.hand.splice(i, 1); b.discard.push(c);
+  const drawn = [];
+  if (c.key === 'block') { b.shield++; if (c.up) drawn.push(...drawCards(b, 1)); }
+  if (c.key === 'draw') drawn.push(...drawCards(b, c.up ? 3 : 2));
+  if (c.key === 'stall') b.mon.countdown += c.up ? 2 : 1;
+  return { card: c, drawn };
+}
 
-function resolved(card, cursor) {
-  if (card.id !== 'mirror') return card;
-  const col = cursor >= 0 && cursor < 6 ? (cursor + 3) % 6 : 6;
-  return { ...card, col, vals: maskVals(col) };
+function relationOf(mask, last) {
+  if (!last) return '起手';
+  if (mask & last) return '接上';
+  if ((mask | last) === 7) return '合白';
+  return '断';
 }
-function relation(col, cursor) {
-  if (col === 8) return '无色';
-  if (cursor < 0) return '起色';
-  if (cursor === 6 || col === 6) return '百搭';
-  const d = Math.abs(cursor - col);
-  return ['同色', '邻色', '断色', '补色'][Math.min(d, 6 - d)];
-}
-function lampCount(l) { let n = 0; for (let i = 0; i < 6; i++) n += (l >> i) & 1; return n; }
-function lightNeighbors(lamps, cursor) {
-  const pos = cursor >= 0 && cursor < 6 ? [(cursor + 1) % 6, (cursor + 5) % 6] : [0, 1, 2, 3, 4, 5];
-  let n = 0;
-  for (const p of pos) { if (lamps & (1 << p)) continue; lamps |= 1 << p; if (++n === R.relight) break; }
-  return lamps;
-}
-function hintText(rel, before, lamps, rainbow, card) {
-  if (card.instant) return '立即释放';
-  if (rainbow) return '彩虹 ×' + R.rainbowFactor;
-  if (rel === '补色') return '合白·灭灯';
-  if (rel === '断色') return '断色·灭灯';
-  if (lampCount(lamps) === 5) return '差一盏彩虹';
-  if (lamps !== before) return rel === '无色' ? '点灯' : rel + '·亮灯';
-  return rel === '无色' ? card.name : rel;
-}
-function segmentDamage(seg, mon, lamps) {
-  const reduction = !seg.pure && mon?.trait === 'hide' ? R.dimPerLamp * 10 * lampCount(lamps) : 0;
-  return Math.max(1, Math.round(seg.value * (10 - reduction) / 10));
-}
-function preview(b, cards = b.line) {
-  let cursor = b.cursor, lamps = b.lamps, multiplier = 1, rainbow = false;
-  const batches = [], states = [];
-  const add = (i, count, base, power, art, o = {}) => { if (count > 0) batches.push({ cardIndex: i, count, base, power, art, white: !!o.white, pure: !!o.pure, gemColor: o.gemColor ?? -1 }); };
-  for (let i = 0; i < cards.length; i++) {
-    const raw = cards[i];
-    if (raw.instant) { states.push({ card: raw, relation: '无色', hint: '立即释放', lamps, cursor, multiplier, rainbow: false, total: 0, max: 0, shots: 0 }); continue; }
-    const card = resolved(raw, cursor), { col, vals, id } = card, rel = relation(col, cursor), before = lamps;
-    let triggered = false;
-    if (col !== 8) {
-      if (rel !== '起色' && rel !== '断色') multiplier *= R.multiplier;
-      const bit = col < 6 ? 1 << col : 0;
-      lamps = rel === '补色' || rel === '断色' ? bit : lamps | bit;
-      for (let j = 0; j < 3; j++) if (vals[j]) add(i, multiplier, R.baseDamage, gemPower(b.gems, j), GEM_ARTS[j], { gemColor: j });
-      if (rel === '补色') for (let j = 0; j < 3; j++) add(i, multiplier, R.baseDamage, gemPower(b.gems, j), 'white', { white: true, gemColor: j });
-      cursor = col;
+// 排好的链 → 每张牌的结果：跟上一张的关系、打完这张时的倍率、打出去的每一发（不含暴击）。
+function plan(run, b, cards = b.line) {
+  let mult = 1, last = 0, lastGem = null, lamps = 0, rainbow = false, boost = 1, total = 0;
+  const states = [];
+  for (const raw of cards) {
+    let c = raw;
+    if (raw.key === 'contra') {   // 唱反调：变成上一张的补色（没有上一张就当白）
+      const m = last ? 7 & ~last : 7;
+      c = { ...raw, kind: 'gem', mask: m, col: hueOfMask(m), pts: R.points * (raw.up ? R.upPoints : 1) };
     }
-    if (id === 'lens') multiplier *= R.multiplier;
-    if (id === 'rain') add(i, R.rainHits * multiplier, R.rainPoints, 1, 'extra');
-    if (id === 'light') lamps = lightNeighbors(lamps, cursor);
-    if (id === 'ice') add(i, 1, R.iceDamage, 1, 'pure', { pure: true });
-    if (col !== 8 && !rainbow && lamps === 0b111111) { triggered = rainbow = true; lamps = col < 6 ? 1 << col : 0; }
-    states.push({ card, relation: rel, hint: hintText(rel, before, lamps, triggered, card), lamps, cursor, multiplier, rainbow: triggered, total: 0, max: 0, shots: 0 });
-  }
-  const rm = rainbow ? R.rainbowFactor : 1;
-  let total = 0, max = 0;
-  for (const bt of batches) {
-    bt.cardCol = states[bt.cardIndex].card.col;
-    bt.raw = bt.base * bt.power * rm;
-    bt.perShot = segmentDamage({ ...bt, value: bt.raw }, b.monster, b.lamps);
-    const crit = segmentDamage({ ...bt, value: bt.raw * R.critFactor }, b.monster, b.lamps);
-    const st = states[bt.cardIndex];
-    st.total += bt.perShot * bt.count; st.max += crit * bt.count; st.shots += bt.count;
-    total += bt.perShot * bt.count; max += crit * bt.count;
-  }
-  return { states, batches, cursor, lamps, multiplier, rainbow, total, max };
-}
-// 展开成一发一发；同一张牌的发打乱顺序。发数太多时按包合并（每包显示单发伤害）。
-function startCast(b) {
-  const plan = preview(b);
-  plan.damage = 0; plan.startLamps = b.lamps; plan.segments = [];
-  const byCard = plan.states.map(() => []);
-  for (const bt of plan.batches) {
-    const list = byCard[bt.cardIndex];
-    const pushSeg = (crit, count) => list.push({ cardIndex: bt.cardIndex, value: bt.raw * (crit ? R.critFactor : 1), art: bt.art, white: bt.white, pure: bt.pure, gemColor: bt.gemColor, crit, count });
-    if (bt.count <= 400) { for (let i = 0; i < bt.count; i++) pushSeg(b.rng() < R.critChance, 1); }
-    else {
-      const crits = Math.round(bt.count * R.critChance), normals = bt.count - crits;
-      for (const [n, crit] of [[normals, false], [crits, true]]) {
-        const parts = Math.min(n, crit ? 12 : 60), each = Math.floor(n / parts); let rem = n - each * parts;
-        for (let i = 0; i < parts; i++) pushSeg(crit, each + (rem-- > 0 ? 1 : 0));
+    const st = { card: raw, as: c, rel: '', mult: 1, shots: [], total: 0, rainbowNow: false };
+    if (c.kind === 'gem') {
+      const m = c.mask, rel = relationOf(m, last);
+      if (rel === '接上' || rel === '合白') { mult *= (rainbow ? R.rainbowLink : R.link) * boost; boost = 1; }
+      else if (rel === '断') { mult = c.tag === '稳' ? Math.max(1, mult / 2) : 1; lamps = 0; rainbow = false; boost = 1; }
+      st.rel = rel;
+      if (c.col >= 0 && c.col < 6) lamps |= 1 << c.col;
+      const rep = c.tag === '双响' ? 2 : 1;
+      for (let k = 0; k < rep; k++) for (let j = 0; j < 3; j++) if (m >> j & 1) st.shots.push({ gem: j, pts: c.pts });
+      if (rel === '合白') for (let j = 0; j < 3; j++) st.shots.push({ gem: j, pts: c.pts, white: true });
+      if (c.tag === '开花') {
+        const extra = [];
+        for (const s of st.shots) for (let k = 0; k < R.bloom; k++) extra.push({ gem: s.gem, pts: s.pts * R.bloomPart, small: true });
+        st.shots.push(...extra);
       }
-    }
+      if (!rainbow && lamps === 63) { rainbow = true; st.rainbowNow = true; }
+      if (c.tag === '垫脚') boost = R.boostLink;
+      last = m; lastGem = st;
+    } else if (c.key === 'lens') { mult *= c.up ? 4 : 3; st.rel = '放大'; }
+    else if (c.key === 'parrot') {
+      st.rel = '学舌';
+      if (lastGem) for (let k = 0; k < (c.up ? 2 : 1); k++) for (const s of lastGem.shots) st.shots.push({ gem: s.gem, pts: s.pts, white: s.white, small: s.small });
+    } else if (c.key === 'beans') {
+      st.rel = '撒豆';
+      for (let k = 0; k < (c.up ? R.beansUp : R.beans); k++) st.shots.push({ gem: -1, pts: R.beanPts, bean: true });
+    } else if (c.key === 'family') {
+      st.rel = '全家福'; lamps = 63;
+      if (!rainbow) { rainbow = true; st.rainbowNow = true; }
+      if (c.up) mult *= 2;
+    } else st.rel = c.junk ? '没用' : '';
+    st.mult = mult; st.lamps = lamps; st.rainbow = rainbow; st.boost = boost;
+    for (const s of st.shots) { s.dmg = Math.round(s.pts * mult * gemPow(run, s.gem)); st.total += s.dmg; }
+    total += st.total;
+    states.push(st);
   }
-  for (const list of byCard) { shuffle(list, b.rng); plan.segments.push(...list); }
-  return plan;
+  if (b.mon.trait === 'flutter') {   // 提可：每次施法第一发躲开
+    for (const st of states) if (st.shots.length) { const s = st.shots[0]; s.dodge = true; st.total -= s.dmg; total -= s.dmg; break; }
+  }
+  return { states, mult, lamps, rainbow, total };
 }
-function applyHit(run, b, plan, seg) {
-  const mon = b.monster, per = segmentDamage(seg, mon, plan.startLamps), dealt = per * seg.count;
-  const before = mon.hp;
-  mon.hp = Math.max(0, mon.hp - dealt);
-  plan.damage += dealt;
-  return { damage: per, total: dealt, killed: before > 0 && mon.hp === 0 };
+// 施法：展开成一发一发，掷暴击
+function startCast(run, b) {
+  const p = plan(run, b);
+  p.dealt = 0; p.hits = [];
+  p.states.forEach((st, i) => {
+    for (const s of st.shots) {
+      let dmg = s.dodge ? 0 : s.dmg, crit = false;
+      if (!s.dodge && b.rng() < R.critChance) { crit = true; dmg *= R.critMul; }
+      p.hits.push({ ci: i, gem: s.gem, white: !!s.white, bean: !!s.bean, small: !!s.small, dodge: !!s.dodge, crit, dmg });
+    }
+  });
+  return p;
 }
-function endCast(run, b, plan) {
-  b.lamps = plan.lamps; b.cursor = plan.cursor; b.multiplier = plan.multiplier;
-  run.maxTurn = Math.max(run.maxTurn, plan.damage);
-  for (const st of plan.states) { const v = st.card?.vals; if (v) for (let j = 0; j < 3; j++) if (v[j]) b.pendingGemExp[j]++; }
-  b.discard.push(...b.line.splice(0));
-  const mon = b.monster;
-  if (mon.hp > 0) { mon.countdown--; if (mon.countdown <= 0) { mon.countdown = 0; return true; } }
-  return false;
+// 一发打中；返回这一发是不是把怪打死了
+function applyHit(run, b, p, h) {
+  const m = b.mon, before = m.hp;
+  m.hp = Math.max(0, m.hp - h.dmg);
+  p.dealt += h.dmg;
+  if (h.dmg > run.bestHit) run.bestHit = h.dmg;
+  return before > 0 && m.hp === 0;
 }
-function attack(run, b) {
-  const mon = b.monster, blocked = b.shield > 0;
-  if (blocked) b.shield--;
-  else run.hearts = Math.max(0, Math.round((run.hearts - mon.attackDamage) * 2) / 2);
-  mon.attacks++;
-  mon.countdown = mon.attacks >= R.attacksBeforeRage ? 1 : Math.max(1, R.countdown - mon.attacks);
-  return { blocked, damage: blocked ? 0 : mon.attackDamage };
+// 施法结束：牌进弃牌堆（孢子直接没了），宝石按打出去的发数涨经验
+function endCast(run, b, p) {
+  for (const c of b.line) (c.junk ? b.gone : b.discard).push(c);
+  b.line.length = 0;
+  for (const h of p.hits) if (h.gem >= 0 && !h.small) b.gemExp[h.gem]++;
+  run.bestCast = Math.max(run.bestCast, p.dealt);
+  return settleGems(run, b);
 }
 function settleGems(run, b) {
   const ups = [];
   for (let j = 0; j < 3; j++) {
-    const got = b.pendingGemExp[j]; b.pendingGemExp[j] = 0; if (!got) continue;
+    const got = b.gemExp[j]; b.gemExp[j] = 0; if (!got) continue;
     const g = run.gems[j], from = g.level; g.exp += got;
-    while (g.exp >= gemThreshold(g.level)) { g.exp -= gemThreshold(g.level); g.level++; }
-    if (g.level > from) ups.push({ color: j, to: g.level });
+    while (g.exp >= gemNeed(g.level)) { g.exp -= gemNeed(g.level); g.level++; }
+    if (g.level > from) ups.push({ gem: j, to: g.level });
   }
   return ups;
 }
-function finishTurn(run, b) {
-  b.levelUps = settleGems(run, b);
-  if (b.monster.hp <= 0) { run.wins++; return 'win'; }
-  if (run.hearts <= 0) return 'dead';
-  if (b.turn >= R.turnLimit) return 'limit';
-  b.turn++; b.shield = 0; b.multiplier = 1;
-  refill(b, R.handSize);
-  return 'next';
+// 回合结束：怪的倒计时减一，到 0 出手（有挡一下就挡掉）。返回 null 或 { blocked, dmg }
+function monsterTurn(run, b) {
+  const m = b.mon; if (m.hp <= 0) return null;
+  m.countdown--;
+  if (m.countdown > 0) return null;
+  m.countdown = m.cd;
+  if (b.shield > 0) { b.shield--; return { blocked: true, dmg: 0 }; }
+  run.hearts = Math.max(0, run.hearts - m.atk);
+  return { blocked: false, dmg: m.atk };
 }
-function lootChoices(run) { return shuffle([...R.loot], run.rng).slice(0, R.lootCount).map(extraCard); }
+function nextTurn(run, b) { b.turn++; return drawCards(b, drawCount(run, b.turn)); }
+
+// ---------- 奖励 ----------
+const LOOT_SPELLS = ['block', 'lens', 'parrot', 'contra', 'beans', 'draw', 'stall', 'family'];
+const LOOT_TAGS = Object.keys(TAGS);
+function lootChoices(run) {
+  const r = run.rng, out = [], seen = new Set();
+  for (let tries = 0; out.length < R.lootCount && tries < 60; tries++) {
+    let id;
+    const k = r();
+    if (k < .5) id = 'g' + (r() < .1 ? 6 : (r() * 6) | 0) + ':' + LOOT_TAGS[(r() * LOOT_TAGS.length) | 0];
+    else if (k < .62) id = 'g' + ((r() * 6) | 0);
+    else { id = LOOT_SPELLS[(r() * LOOT_SPELLS.length) | 0]; if (SPELLS[id].rare && r() < .6) continue; }
+    if (seen.has(id)) continue;
+    seen.add(id); out.push(makeCard(id));
+  }
+  return out;
+}
