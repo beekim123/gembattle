@@ -1,11 +1,11 @@
 'use strict';
 // 大厅：林子边上一块空地，中间一块刻着暖光符的石碑（第一版试验里那块），主角站在碑前。
-// 镜头绕着石碑慢慢转。左边是菜单：进入迷雾森林 / 牌组 / 退出游戏。
+// 镜头绕着石碑慢慢转。左边是菜单：进入迷雾森林 / 牌组 / 卡册（怪物图鉴，见 album.js）/ 退出游戏。
 
 // ---------- 存档：每局从起手牌组重新开始，这里只记跨局的东西（以后加铜板、石碑的好处） ----------
 const PROFILE_KEY = 'card-stack-profile-v2';   // 原型的旧存档（card-stack-profile，里面是跨局牌组）不再用
 const profile = (() => {
-  const blank = { wins: 0, runs: 0, bestHit: 0, bestCast: 0, bestFloor: 0, clears: 0 };
+  const blank = { wins: 0, runs: 0, bestHit: 0, bestCast: 0, bestFloor: 0, clears: 0, dex: {} };   // dex：卡册里每种怪碰到过、打倒过几次
   try { const p = JSON.parse(localStorage.getItem(PROFILE_KEY)); if (p && typeof p === 'object') return { ...blank, ...p }; } catch (e) { }
   return blank;
 })();
@@ -95,7 +95,7 @@ function enterLobby() {
   for (const c of lobbyChunks) chunks.set(c.cx + ',' + c.cy, c);
   lobbyPlayer = { x: LX + 13, y: LY + 11, h: Math.PI, walk: 0, moving: false };   // 站在碑的斜前方，镜头转到哪边都挡不住
   setRes('lobby'); setTilt(.6); CAM.oy = 6; CAM.ox = 46; CAM.x = LX; CAM.y = LY + 6; CAM.view = lobbyView = 0; lobbyTurnT = 0;
-  deckOpen = false;
+  deckOpen = false; albumOpen = false;
 }
 // 镜头每隔一会儿绕石碑转 90 度，停着的时候切片正好对齐像素
 function updateLobby(dt) {
@@ -111,7 +111,8 @@ function renderLobby(ctx, t, dt) {
 const MENU = [
   { key: 'go', label: '进入迷雾森林', y: 330 },
   { key: 'deck', label: '牌组', y: 392 },
-  { key: 'quit', label: '退出游戏', y: 454 },
+  { key: 'album', label: '卡册', y: 454 },
+  { key: 'quit', label: '退出游戏', y: 516 },
 ];
 const menuRect = it => ({ x: 84, y: it.y - 24, w: 300, h: 48 });
 function drawLobbyUI(ctx, t) {
@@ -122,7 +123,7 @@ function drawLobbyUI(ctx, t) {
   txt(ctx, '迷  雾  森  林', 88, 248, 18, '#a9b7b2', 'left', 500);
   ctx.fillStyle = 'rgba(216,187,136,.5)'; ctx.fillRect(88, 276, 220, 1);
   for (const it of MENU) {
-    const r = menuRect(it), hot = !deckOpen && !lobbySummary && inRect(mouse, r);
+    const r = menuRect(it), hot = !deckOpen && !albumOpen && !lobbySummary && inRect(mouse, r);
     if (hot) {
       const gg = ctx.createRadialGradient(r.x + 90, it.y, 0, r.x + 90, it.y, 160);
       gg.addColorStop(0, 'rgba(242,182,96,.22)'); gg.addColorStop(1, 'rgba(242,182,96,0)');
@@ -136,6 +137,7 @@ function drawLobbyUI(ctx, t) {
   if (profile.bestHit) rec.push(`最高一击 ${fmt(profile.bestHit)}`, `最高一次施法 ${fmt(profile.bestCast)}`);
   txt(ctx, rec.join('　·　'), 88, 660, 14, 'rgba(200,190,170,.7)', 'left', 500);
   if (deckOpen) drawDeck(ctx);
+  if (albumOpen) drawAlbum(ctx, t);
   if (lobbySummary) drawSummary(ctx);
 }
 function drawSummary(ctx) {
@@ -169,10 +171,12 @@ function drawDeck(ctx) {
 const DECK_CLOSE = { x: 580, y: 640, w: 120, h: 40 };
 function lobbyDown(m) {
   if (lobbySummary) { lobbySummary = null; return; }
-  if (deckOpen) { if (inRect(m, DECK_CLOSE) || true) deckOpen = false; return; }
+  if (deckOpen) { deckOpen = false; return; }
+  if (albumOpen) { albumDown(m); return; }
   for (const it of MENU) if (inRect(m, menuRect(it))) {
     if (it.key === 'go') startRunFromLobby();
     if (it.key === 'deck') deckOpen = true;
+    if (it.key === 'album') { albumOpen = true; albumSel = 0; albumElite = false; }
     if (it.key === 'quit') window.close();
   }
 }

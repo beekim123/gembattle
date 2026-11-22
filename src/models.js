@@ -312,3 +312,17 @@ function makeLog(sd) {
   rimLight = keep; m.len = L;
   return m;
 }
+
+// 路边的木桩：一根削尖的木头，顶上拴一条褪了色的红布条。主路拐弯的地方插一根，远远看得见往哪拐。
+function makeStake(sd) {
+  const r = rngFrom(sd * 37 + 3), lean = (r() - .5) * .5, keep = rimLight; rimLight = true;
+  const m = build(7, 7, 14, (x, y, z) => {
+    const X = x + .5 - 3.5 - lean * z * .12, Y = y + .5 - 3.5, Zz = z + .5;
+    if (Zz < 11.5 - Math.max(0, Math.abs(X) + Math.abs(Y) - 1.4) * 2 && Math.abs(X) < 1.1 && Math.abs(Y) < 1.1) return Zz > 10.5 ? [150, 124, 92] : mix([96, 76, 56], [70, 56, 44], hash(x, y, z, 41));
+    // 布条：从桩顶往下垂，一头被风吹起来一点
+    if (Y > 1 && Y < 2.2 && X > -1.2 && X < 1.4 + (Zz - 6) * .25 && Zz > 6 && Zz < 10.5) return Zz > 9.5 ? [214, 96, 80] : [176, 58, 48];
+  });
+  rimLight = keep;
+  return m;
+}
+

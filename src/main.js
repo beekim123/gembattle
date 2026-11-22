@@ -63,6 +63,15 @@ function enterFloor(i) {
   titleCard = { name: FLOOR.def.name, sub: `第${NUM_CN[i]}段`, t: 0 };
   exploreToast = null;
 }
+// 主角附近的主路：每 6 格取一个点（离主角 80 格以内），画林子时挡住这些点的树冠会变淡
+function pathNearPlayer() {
+  const out = [], pts = FLOOR.path;
+  for (let k = 0; k < pts.length - 1; k++) {
+    const [ax, ay] = pts[k], [bx, by] = pts[k + 1], len = Math.hypot(bx - ax, by - ay);
+    for (let d = 0; d < len; d += 6) { const x = ax + (bx - ax) * d / len, y = ay + (by - ay) * d / len; if (Math.hypot(x - player.x, y - player.y) < 80) out.push([x, y]); }
+  }
+  return out;
+}
 // 走进开着的石门
 function nextFloor() {
   const i = FLOOR.i + 1;
@@ -92,6 +101,7 @@ addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (!e.repeat && mode === 'explore' && !exploreConfirm && !spotMenu) { if (k === 'q') viewT -= SNAP; if (k === 'e') viewT += SNAP; }   // 一次转 90 度
   keys[k] = true;
+  if (e.key === 'Escape' && mode === 'lobby' && albumOpen) albumKey('Escape');
   if (e.key === 'Escape' && mode === 'explore' && !trans) { if (spotMenu) spotKey('Escape'); else exploreConfirm = exploreConfirm ? null : CONFIRM; }
   if (mode === 'battle' && !trans) { if (e.key === ' ') e.preventDefault(); battleKey(e.key); } });
 const CONFIRM = { yes: { x: 520, y: 380, w: 110, h: 40 }, no: { x: 650, y: 380, w: 110, h: 40 } };
@@ -152,18 +162,34 @@ function drawWisps(ctx, t) {
   for (const w of wisps) {
     const d = Math.hypot(w.x - player.x, w.y - player.y);
     if (d > 260) continue;
-    const p = proj(w.x, w.y, (w.guard ? 18 : 12) + Math.sin(t * 2 + w.phase) * 2);
+    const ba = bodyAlpha(w), core = lookOf(w.kind).core || 16;   // 露出真身以后，鬼火缩进它身上（胸口、眼睛里）
+    const p = proj(w.x, w.y, lerp(w.guard ? 18 : 12, core, ba) + Math.sin(t * 2 + w.phase) * 2 * (1 - ba));
     if (p.x < -30 || p.x > CAM.W + 30 || p.y < -30 || p.y > CAM.H + 30) continue;
     const flare = trans && trans.wisp === w ? 1 + trans.t * 3 : 1;
-    drawWisp(ctx, p, t + w.phase, w.color, (w.guard ? 2 : w.elite ? 1.4 : 1) * flare);
+    drawWisp(ctx, p, t + w.phase, w.color, (w.guard ? 2 : w.elite ? 1.4 : 1) * flare * (1 - ba * .55));
   }
+}
+// 走近了，鬼火底下慢慢显出它的真身（一直朝着镜头）；远处只看得见一团鬼火。看门的离得远一点就看得见
+const bodyAlpha = w => clamp(((w.guard ? 150 : 104) - Math.hypot(w.x - player.x, w.y - player.y)) / 40, 0, 1);
+function wispBodies() {
+  const out = [];
+  for (const w of wisps) {
+    const a = bodyAlpha(w); if (a <= 0) continue;
+    const look = lookOf(w.kind), t = T + w.phase, lift = look.lift + (look.bob ? Math.sin(t * 2.4) * look.bob : 0);
+    out.push({ m: look.model({ t, cd: 3, elite: w.elite, shake: 0 }), x: w.x, y: w.y, ro: -CAM.view, alpha: a * .92, lift, shadow: look.heavy ? 11 : 7 });
+    if (w.kind === 'yanzhu' && t % 5.3 < 5.1) out.push({ m: yanzhuIris(Math.floor(t / 2) % 3), x: w.x, y: w.y, ro: -CAM.view, alpha: a, lift, bias: .5 });
+  }
+  return out;
 }
 // 鬼火和看门的也照亮一点脚下：看门的那团从老远就能看见
 function wispLights() {
   const out = [];
   for (const w of wisps) {
     if (Math.hypot(w.x - player.x, w.y - player.y) > 300) continue;
-    out.push(w.guard ? { x: w.x, y: w.y, z: 18, r: 46, a: .7, c: w.color } : { x: w.x, y: w.y, z: 12, r: w.elite ? 24 : 16, a: w.elite ? .6 : .45, c: w.color });
+    const L = w.guard ? { x: w.x, y: w.y, z: 18, r: 46, a: .7, c: w.color } : { x: w.x, y: w.y, z: 12, r: w.elite ? 24 : 16, a: w.elite ? .6 : .45, c: w.color };
+    const ba = bodyAlpha(w);   // 露出真身时，这团光挪到它身上、照亮一圈，看得清它长什么样
+    if (ba > 0) { L.z = lerp(L.z, lookOf(w.kind).core || 16, ba); L.r = lerp(L.r, Math.max(L.r, 40), ba); L.a = lerp(L.a, .8, ba); }
+    out.push(L);
   }
   return out;
 }
@@ -268,7 +294,7 @@ function frame(now) {
     updateLobby(dt); renderLobby(wctx, T, dt);
   } else if (mode === 'explore') {
     updateExplore(dt);
-    renderWorld(wctx, { player, t: T, dt, dark: FLOOR.def.dark, shade: FLOOR.def.look.shade, fog: FLOOR.def.look.fog, lights: wispLights(), overFx: ctx => { drawSpotFx(ctx, T); drawWisps(ctx, T); } });
+    renderWorld(wctx, { player, t: T, dt, dark: FLOOR.def.dark, shade: FLOOR.def.look.shade, fog: FLOOR.def.look.fog, lights: wispLights(), pathPts: pathNearPlayer(), props: wispBodies(), overFx: ctx => { drawSpotFx(ctx, T); drawWisps(ctx, T); } });
   } else {
     updateBattle(dt);
     const sh = BT.shake;

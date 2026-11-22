@@ -19,8 +19,8 @@ module.exports = async g => {
   fs.writeFileSync(require('path').join(g.out, 'f0-overview.png'), Buffer.from(url.split(',')[1], 'base64'));
   await g.key('W', 1500); await g.wait(300);
   await g.shot('f2-walk');
-  // 挪到看门的南边一点
-  await g.js(`(()=>{ const gd = wisps.find(w => w.guard); player.x = gd.x; player.y = gd.y + 60; CAM.x = player.x; CAM.y = player.y; })()`);
+  // 挪到看门的南边一点（看门的旁边要是刚好有别的怪，先请走，免得半路被它撞上）
+  await g.js(`(()=>{ const gd = wisps.find(w => w.guard); wisps = wisps.filter(w => w === gd || Math.hypot(w.x - gd.x, w.y - gd.y - 50) > 110); player.x = gd.x; player.y = gd.y + 60; CAM.x = player.x; CAM.y = player.y; })()`);
   await g.wait(800);
   await g.shot('f3-guard');
   await g.js(`(()=>{ const gd = wisps.find(w => w.guard); player.x = gd.x; player.y = gd.y + 40; })()`);   // 挪进碰撞距离（直接走过去偶尔会被树挡住）

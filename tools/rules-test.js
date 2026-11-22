@@ -1,4 +1,4 @@
-// 规则单测（第 3 步：零碎、根须、孢子、精英、石碑；第 4 步：扑粉、盯着、哨子、万花筒、大口袋、跟屁虫、叠罗汉）。用法：node tools/rules-test.js
+// 规则单测（第 3 步：零碎、根须、孢子、精英、石碑；第 4 步：撕页（内部叫 dust）、盯着、哨子、万花筒、大口袋、跟屁虫、叠罗汉）。用法：node tools/rules-test.js
 // 把 rules.js 前面拼上 rngFrom / shuffle 在 node 里跑
 const fs = require('fs');
 const eng = fs.readFileSync('src/engine.js', 'utf8');
@@ -54,20 +54,20 @@ let r4 = newRun(21);
 // 扑棱：盖住一张还看得见的手牌；手里全盖住了就不扑
 let b4 = startFight(r4, { kind: 'pulang', hp: 6e4 });
 const hid0 = b4.hand.filter(c => c.hidden).length, ev4 = monsterTrait(r4, b4);
-eq('扑粉 盖住一张', [b4.hand.filter(c => c.hidden).length, !!(ev4 && ev4.dust && ev4.dust.hidden)], [hid0 + 1, true]);
+eq('撕页 糊住一张', [b4.hand.filter(c => c.hidden).length, !!(ev4 && ev4.dust && ev4.dust.hidden)], [hid0 + 1, true]);
 b4.hand.forEach(c => { c.hidden = true; }); eq('全盖住了不再扑', monsterTrait(r4, b4), null);
 b4.hand = []; eq('空手不扑', monsterTrait(r4, b4), null);
 // 木木：倒计时 2
 b4 = startFight(r4, { kind: 'mumu', hp: 5e4 }); eq('木木 倒计时 2', [b4.mon.cd, b4.mon.countdown], [2, 2]);
-// 老猫头：盯着的颜色减半，每回合换一种（不会换成同一种）
-b4 = startFight(r4, { kind: 'maotou', hp: 5e6 });
+// 大眼珠：盯着的颜色减半，每回合换一种（不会换成同一种）
+b4 = startFight(r4, { kind: 'yanzhu', hp: 5e6 });
 b4.mon.stare = 0; b4.line = ['g0', 'g2'].map(makeCard);   // 红 → 绿（断）
 let p4 = plan(r4, b4); eq('盯着红：红一发 50，绿一发 100', p4.states.map(s => s.total), [50, 100]);
 eq('盯着的那发做了记号', p4.states[0].shots[0].stared, true);
 b4.line = ['g0', 'g3'].map(makeCard); p4 = plan(r4, b4);   // 红 → 青 合白：青 2 发 ×2 = 400，白光红 100 绿 200 蓝 200
 eq('合白的白光也按颜色减半', p4.states[1].shots.map(s => s.dmg), [200, 200, 100, 200, 200]);
 let changed = 0; for (let i = 0; i < 30; i++) { const before = b4.mon.stare, e = monsterTrait(r4, b4); if (e.stare !== before && e.stare >= 0 && e.stare < 3) changed++; }
-eq('老猫头每回合都换颜色', changed, 30);
+eq('大眼珠每回合都换颜色', changed, 30);
 // 哨子：起手 ×3，断了回到 ×3
 let r5 = newRun(5); b4 = startFight(r5, { kind: 'mumu', hp: 1e9 });
 b4.line = ['g0', 'g0', 'g2'].map(makeCard); eq('没哨子', plan(r5, b4).states.map(s => s.mult), [1, 2, 1]);

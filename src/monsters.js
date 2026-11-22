@@ -169,155 +169,151 @@ function makeRootRing(stage, half) {
 const ROOTS = {};
 const rootModel = (stage, half) => { const k = stage + ':' + half; return ROOTS[k] || (ROOTS[k] = makeRootRing(stage, half)); };
 
-// ---------- 扑棱：大蛾子，翅膀上长满眼纹 ----------
-// flap：翅膀抬起的角度（几帧轮着换就是扑腾）
+// ---------- 扑棱：一本自己会飞的旧书。两片书皮当翅膀扑腾，书页上一圈符文发青光，书缝里鼓出一只竖瞳的眼；底下吊着一根红书签 ----------
 function makePulang(flap, elite) {
-  const S = 74, SY = 48, Z = 40, cx = 37, cy = 22, zr = 17, ta = Math.tan(flap);
-  const iris = elite ? RED_EYE : [214, 168, 92];
-  const spots = [[20, 3.5, 4.4], [29, 7, 2.3], [12.5, -9, 3.6], [6, -4.5, 1.9], [22, -12, 2]];   // 翅膀上的眼纹：[离身子多远, 前后, 大小]
-  const wing = (u, v) => {   // 前翅 + 后翅，两个斜着的椭圆
-    const a = .18, fu = (u - 17) * Math.cos(a) + (v - 2.5) * Math.sin(a), fv = -(u - 17) * Math.sin(a) + (v - 2.5) * Math.cos(a);
-    if ((fu / 16.5) ** 2 + (fv / 7.6) ** 2 < 1) return 1;
-    const b = -.36, hu = (u - 13) * Math.cos(b) + (v + 8) * Math.sin(b), hv = -(u - 13) * Math.sin(b) + (v + 8) * Math.cos(b);
-    return (hu / 12.5) ** 2 + (hv / 8) ** 2 < 1 ? 2 : 0;
-  };
-  const ant = [-1, 1].map(k => [[k * 1.2, 11.5, zr + 2], [k * 5.5, 18.5, zr + 7], [k * 9, 21, zr + 4.5]]);
+  const S = 58, SY = 32, Z = 36, cx = 29, cy = 16, zs = 13, ca = Math.cos(flap), sa = Math.sin(flap);
+  const iris = elite ? RED_EYE : [255, 196, 92];
+  const leather = elite ? [70, 30, 40] : [104, 40, 52], leather2 = [62, 22, 32], gold = [206, 168, 88];
+  const paper = [218, 204, 166], paper2 = [172, 154, 116], ink = [74, 60, 50], rune = [120, 232, 214];
   return buildLit(S, SY, Z, (x, y, z) => {
     const X = x + .5 - cx, Y = y + .5 - cy, Zz = z + .5;
-    // 身子：毛茸茸的胸、一节节的肚子、小脑袋、两只黑亮的复眼
-    const fuzz = .5 * hash(x, y, z, 71);
-    if ((X / 4.3) ** 2 + ((Y - 4) / 4.6) ** 2 + ((Zz - zr) / 4.3) ** 2 < 1 + fuzz * .4) return mix([150, 136, 112], [104, 94, 80], fuzz * 2);
-    if ((X / 3.4) ** 2 + ((Y + 6) / 9) ** 2 + ((Zz - zr + .5) / 3.6) ** 2 < 1) return Math.floor((Y + 20) / 2.2) % 2 ? [122, 108, 88] : [78, 68, 58];
-    if ((X / 2.9) ** 2 + ((Y - 9.6) / 2.6) ** 2 + ((Zz - zr) / 2.7) ** 2 < 1) return Math.abs(Math.abs(X) - 1.8) < .9 && Y > 9.6 ? (Zz > zr + .8 ? [120, 130, 140] : [14, 14, 18]) : [140, 126, 104];
-    for (const p of ant) if (polyDist(X, Y, Zz, p) < .75) return [168, 152, 122];
-    // 翅膀：两层厚的薄板，从身子往外，扑腾时绕着身子翻
-    const u = Math.abs(X) - 2.6; if (u < 0) return null;
-    if (Math.abs(Zz - (zr + .5 + u * ta)) > 1.05) return null;
-    const wv = wing(u, Y); if (!wv) return null;
-    for (const [su, sv, sr] of spots) {
-      const d = Math.hypot(u - su, Y - sv) / sr;
-      if (d < 1) return d < .3 ? [14, 12, 12] : d < .56 ? [...iris, d < .45 && elite ? 1 : 0] : d < .74 ? [30, 26, 24] : [206, 194, 160];
+    // 书脊：一根圆滚滚的皮筒，前后两道金箍
+    if (Math.abs(Y) < 11.5 && Math.hypot(X, Zz - zs) < 2.4) return Math.abs(Math.abs(Y) - 7) < .8 ? gold : leather2;
+    // 眼睛：从书缝里鼓出来，正对着镜头（视线 (0, .69, .72)）
+    const ex = X / 6, ey = (Y - 1) / 5, ez = (Zz - zs - 3) / 4, ed = ex * ex + ey * ey + ez * ez;
+    if (ed < 1) {
+      const f = (ey * .69 + ez * .72) / (Math.sqrt(ed) || 1);
+      if (f > .78) return Math.abs(X) < .8 && f > .85 ? [16, 10, 12, 0, 1] : [...iris, 1];
+      return f > .55 ? [236, 226, 204] : [190, 166, 148];
     }
-    const vein = Math.abs(Math.sin(Math.atan2(Y - 1, u + 3) * 7)) < .12;
-    const edge = wv === 1 ? Math.hypot((u - 17) / 16.5, (Y - 2.5) / 7.6) > .86 : false;
-    if (edge) return [62, 54, 48];
-    return vein ? [64, 56, 50] : mix([112, 100, 84], [74, 66, 58], clamp(vnoise(u * .25, Y * .25, 73) * 1.3 - .15, 0, 1));
+    // 两半：书皮 + 书页，绕书脊转 flap 角（往上翘成 V 字）
+    const side = X < 0 ? -1 : 1, dx = Math.abs(X), dz = Zz - zs, u = dx * ca + dz * sa, w = -dx * sa + dz * ca;   // u 离书脊多远；w 厚度方向（正 = 书页那面）
+    if (u < 1.6 || u > 25 || Math.abs(Y) > 12) {
+      // 红书签：从书脊底下垂下来，一路飘
+      if (Zz < zs - 1.5 && Math.abs(Y + 11 - Math.sin(Zz * .45) * 1.2) < .8 && Math.abs(X - .6 - Math.sin(Zz * .3) * 1.5) < 1.1) return Zz < 1.5 ? [226, 86, 84] : [176, 38, 48];
+      return null;
+    }
+    if (w >= -1.6 && w < 0) return u > 21.5 && Math.abs(Y) > 8.5 ? gold : Math.abs(Y) > 11 || u > 24 ? leather2 : leather;   // 书皮，四角包铜
+    const rough = hash(Math.round(u), Math.round(Y), side, 77) * 1.2;   // 书页的边毛毛糙糙
+    if (w >= 0 && w < 2.6 && u < 23.4 - rough && Math.abs(Y) < 10.6 - rough * .5) {
+      if (w < 1.6) return mix(paper2, [140, 122, 90], .3);   // 页边：一层层的
+      const ru = u - 13, rv = Y - side * 2.5, rd = Math.hypot(ru, rv);
+      if (Math.abs(rd - 3.6) < .55 || (rd < 3 && (Math.abs(ru) < .5 || Math.abs(rv) < .5))) return [...rune, 1];   // 符文圈
+      if (Math.round(Y + 20) % 3 === 0 && u > 4 && u < 21 && hash(Math.floor(u / 2), Math.round(Y), side, 78) < .75) return ink;   // 一行行墨字
+      return mix(paper, paper2, clamp(u / 26 + hash(x, y, z, 79) * .2, 0, 1));
+    }
+    return null;
   });
 }
 const PULANG = {};
-const pulangModel = (f, elite) => { const k = f + (elite ? 'e' : ''); return PULANG[k] || (PULANG[k] = makePulang([-.12, .22, .55][f], elite)); };
+const pulangModel = (f, elite) => { const k = f + (elite ? 'e' : ''); return PULANG[k] || (PULANG[k] = makePulang([-.1, .4, .85][f], elite)); };
 
-// ---------- 木木：像鹿，侧着身子，一张没有五官的白脸转过来对着你；角像枯枝 ----------
-function makeMumu(tilt, elite) {
-  const S = 64, SY = 48, Z = 72, cx = 32, cy = 22, r = rngFrom(919), segs = [];
-  const A = .45, ca = Math.cos(A), sa = Math.sin(A);
-  const W = (u, v) => [u * ca + v * sa, -u * sa + v * ca];   // 身子坐标（u 顺着身子，头在 u<0）→ 世界坐标：头那头往镜头这边转一点
-  const hu = -16 + tilt * .8, [hx, hy0] = W(hu, 0), hy = hy0 + 1, hz = 47 + tilt * .7;   // 脸
-  // 角：两根主枝往上往外分叉，再长几根小杈
-  function br(p, a, up, len, rad, d) {
-    const q = [p[0] + Math.cos(a) * Math.cos(up) * len, p[1] + Math.sin(a) * Math.cos(up) * len * .5, p[2] + Math.sin(up) * len];
-    segs.push([...p, ...q, rad, rad * .62]);
-    if (d > 0) { br(q, a + (r() - .5) * .5, up + .15 + r() * .25, len * .72, rad * .62, d - 1); if (r() < .75) br(q, a + (r() < .5 ? -.7 : .7), up + .5, len * .5, rad * .5, d - 1); }
-  }
-  for (const k of [-1, 1]) br([hx + k * 1.8, hy - 1.5, hz + 3], k < 0 ? Math.PI - .3 : .3, .8, 9.5, 1.5, 3);
-  // 腿：大腿粗、小腿细，后腿往后弯
-  const legs = [[-9, 3.2], [-9, -3.2], [10, 3.2], [10, -3.2]].map(([lu, lv], i) => [[lu, lv, 27], [lu + (i < 2 ? -1 : 2.2), lv, 12], [lu + (i < 2 ? 0 : 1), lv, 0]]);
-  const neck = [[-10, 0, 31], [-14, 0, 39], [hu, 0, hz - 3]];
-  const fur = [100, 88, 76], fur2 = [62, 54, 48], belly = [140, 128, 110], face = elite ? [224, 180, 170] : [210, 202, 186];
+// ---------- 木木：一个提线木偶。没有脸的木头蛋脑袋，褪了色的红褂子，胸口烙着一个发光的符，手里攥一把锈镰刀；
+// 几根发白的线从头顶、手腕、膝盖一直通到上头的雾里（看不见另一头攥着线的是谁） ----------
+function makeMumu(pose, elite) {
+  const S = 44, SY = 32, Z = 74, cx = 22, cy = 15;
+  const [tilt, ra, la, rl, ll] = [[0, .12, .08, .1, 0], [.35, 1, .2, .5, .05], [-.3, .25, .9, 0, .45]][pose];   // 头歪、右手抬、左手抬、右腿抬、左腿抬
+  const wood = [176, 140, 96], wood2 = [128, 98, 66], joint = [92, 70, 50], cloth = [140, 52, 46], cloth2 = [96, 34, 34];
+  const head = [Math.sin(tilt) * 2, 0, 46], shoulder = [[-5.4, 0, 36], [5.4, 0, 36]], hip = [[-2.4, 0, 23], [2.4, 0, 23]];
+  const arm = (sh, k, a) => { const el = [sh[0] + k * (1.5 + a * 3.5), sh[1] + a * 2.5, sh[2] - 6.5 + a * 3.5]; return [sh, el, [el[0] + k * (.8 + a * 2), el[1] + a * 3.5, el[2] - 6 + a * 5.5]]; };
+  const leg = (hp, k, a) => { const kn = [hp[0] + k * .6, hp[1] + a * 4, hp[2] - 8 + a * 3]; return [hp, kn, [kn[0], kn[1] + 1.2 - a, kn[2] - 8.5 + a * 1.5]]; };
+  const armR = arm(shoulder[1], 1, ra), armL = arm(shoulder[0], -1, la), legR = leg(hip[1], 1, rl), legL = leg(hip[0], -1, ll);
+  const strings = [[head[0], 0, head[2] + 5.2], armR[2], armL[2], legR[1], legL[1]].map(p => [p, [p[0] * .35, -3, Z - 1]]);
+  // 镰刀：顺着右小臂往外伸一截把，把头一弯刀刃往前勾
+  const [el, wr] = [armR[1], armR[2]], dl = Math.hypot(wr[0] - el[0], wr[1] - el[1], wr[2] - el[2]), dir = [0, 1, 2].map(i => (wr[i] - el[i]) / dl);
+  const h1 = wr.map((v, i) => v + dir[i] * 7), blade = [h1, [h1[0] + dir[0] * 2, h1[1] + 2.6 + dir[1] * 2, h1[2] + dir[2] * 2], [h1[0] + 1, h1[1] + 5, h1[2] - dir[2] * .5], [h1[0] + 1.5, h1[1] + 4.6, h1[2] - dir[2] * 4]];
+  const joints = [...shoulder, armR[1], armL[1], armR[2], armL[2], ...hip, legR[1], legL[1], legR[2], legL[2]];
   return buildLit(S, SY, Z, (x, y, z) => {
-    const X = x + .5 - cx, Y = y + .5 - cy, Zz = z + .5, u = X * ca - Y * sa, v = X * sa + Y * ca;
-    // 脸：一个朝着镜头的浅色蛋，什么都没有（凶的那只多两个红点）
-    if (((X - hx) / 3.8) ** 2 + ((Y - hy) / 5.6) ** 2 + ((Zz - hz) / 4.4) ** 2 < 1) {
-      if (elite && Y > hy + 3.4 && Math.abs(Zz - hz - .8) < 1 && Math.abs(Math.abs(X - hx) - 1.6) < .8) return [...RED_EYE, 1];
-      return Y > hy ? face : mix(face, fur, .45);
+    const X = x + .5 - cx, Y = y + .5 - cy, Zz = z + .5;
+    const hx = (X - head[0]) / 4.3, hy = Y / 4, hz = (Zz - head[2]) / 5.3;
+    if (hx * hx + hy * hy + hz * hz < 1) {   // 头：光溜溜的木头蛋，一道裂纹；凶的那只，裂纹边上透出两点红光
+      if (Y > 2.6) {
+        if (elite && Math.abs(Zz - head[2] - .4) < .9 && Math.abs(Math.abs(X - head[0]) - 1.7) < .8) return [...RED_EYE, 1];
+        if (Math.abs((X - head[0]) * .7 - (Zz - head[2]) + 1) < .45 && Math.abs(X - head[0]) < 3) return [70, 50, 36];
+      }
+      return Math.floor(Zz * .9 + X * .3) % 3 === 0 ? mix(wood, wood2, .35) : mix(wood, [226, 200, 160], .25);
     }
-    for (const k of [-1, 1]) if (((X - hx - k * 4.6) / 2.6) ** 2 + ((Y - hy + 1.5) / 1.2) ** 2 + ((Zz - hz - 2.2) / 1.3) ** 2 < 1) return mix(fur, face, .3);   // 耳朵
-    for (const sg of segs) { const d = segDist(X, Y, Zz, sg); if (d < sg[6] + (sg[7] - sg[6]) * segT) return segT > .7 && sg[6] < .9 ? [200, 188, 164] : [150, 138, 118]; }   // 角：发白的枯枝
-    if (polyDist(u, v, Zz, neck) < 3.4 - .8 * clamp((Zz - 31) / 14, 0, 1)) return mix(fur, fur2, hash(x, y, z, 75) * .5);
-    // 身子：一截圆桶，前面肩膀拱起来，后面是屁股
-    if (((u - 1) / 13) ** 2 + (v / 6.2) ** 2 + ((Zz - 28) / 7) ** 2 < 1 || ((u + 8) / 6) ** 2 + (v / 5.6) ** 2 + ((Zz - 31) / 6) ** 2 < 1 || ((u - 9) / 6.5) ** 2 + (v / 6) ** 2 + ((Zz - 29) / 6.5) ** 2 < 1) {
-      if (Zz < 24.5) return mix(belly, fur, .3);
-      if (Math.abs(v) < 1.3 && Zz > 32) return fur2;   // 脊背一道深色
-      return mix(fur, fur2, clamp(vnoise(u * .25, Zz * .3, 77) * .9, 0, 1));
+    if (segDist(X, Y, Zz, [0, 0, 38.5, head[0] * .5, 0, head[2] - 4.6]) < 1.2) return joint;
+    if (Math.abs(X) < 4.6 && Math.abs(Y) < 2.9 && Zz > 26 && Zz < 38 && !(Math.abs(X) > 3.8 && Math.abs(Y) > 2.2)) {   // 身子：褂子 + 木头腰，胸口一个发光的符
+      const cd = Math.hypot(X, Zz - 32.5);
+      if (Y > 2.2 && cd < 2.2 && (Math.abs(cd - 1.7) < .5 || Math.abs(X) < .45)) return [255, 170, 90, 1];
+      return Zz > 29 ? (Math.abs(X) < .6 ? cloth2 : cloth) : wood2;
     }
-    // 腿不描光边：细细的深色剪影
-    for (const l of legs) if (polyDist(u, v, Zz, l) < (Zz > 14 ? 1.2 + (Zz - 14) * .09 : 1.1)) return Zz < 2.2 ? [28, 24, 24, 0, 1] : [...fur2, 0, 1];
-    if (Math.hypot(u - 14.5, v, Zz - 31) < 2) return [178, 168, 150];   // 白尾巴尖
+    if (Math.abs(X) < 3.6 && Math.abs(Y) < 2.5 && Zz > 21.5 && Zz <= 26) return wood2;
+    for (const p of joints) if (Math.hypot(X - p[0], Y - p[1], Zz - p[2]) < 1.45) return joint;   // 关节：小木球
+    if (polyDist(X, Y, Zz, armR) < 1.05 || polyDist(X, Y, Zz, armL) < 1.05) return wood;
+    if (polyDist(X, Y, Zz, legR) < 1.25 || polyDist(X, Y, Zz, legL) < 1.25) return wood;
+    for (const an of [legR[2], legL[2]]) if (Math.abs(X - an[0]) < 1.2 && Y > an[1] - 1 && Y < an[1] + 2.4 && Zz > an[2] - 2.2 && Zz < an[2] - .4) return wood2;   // 脚尖往下耷拉
+    if (segDist(X, Y, Zz, [...wr, ...h1]) < .75) return [110, 82, 56];
+    if (polyDist(X, Y, Zz, blade) < 1.05) return hash(x, y, z, 87) < .3 ? [146, 94, 62] : [186, 188, 194];
+    for (const [a, b] of strings) if (Zz > a[2] && segDist(X, Y, Zz, [...a, ...b]) < .5) return [132, 164, 192, 1];   // 线：发白，微微发光
   });
 }
 const MUMU = {};
-const mumuModel = (f, elite) => { const k = f + (elite ? 'e' : ''); return MUMU[k] || (MUMU[k] = makeMumu([0, 1, 2][f], elite)); };
+const mumuModel = (f, elite) => { const k = f + (elite ? 'e' : ''); return MUMU[k] || (MUMU[k] = makeMumu(f, elite)); };
 
-// ---------- 老猫头：站在断树桩上的大猫头鹰，胸口羽毛里一圈圈小眼睛 ----------
-// 两只大眼睛单独做成一层（owlEyes），颜色就是它正盯着的那种宝石色，换颜色不用重做整只
-function makeMaotou() {
-  const S = 58, SY = 46, Z = 64, cx = 29, cy = 21;
-  const eyes = [];   // 胸口的小眼睛：两圈，隔开一点，一只只看得清
-  for (let ring = 0; ring < 2; ring++) { const n = 4 + ring * 3, rr = 3.8 + ring * 4.6; for (let i = 0; i < n; i++) { const a = i / n * TAU + ring * .45 + .4; eyes.push([Math.cos(a) * rr * 1.15, 27 + Math.sin(a) * rr]); } }
-  const feather = [118, 106, 92], feather2 = [72, 64, 58], chest = [150, 138, 118];
+// ---------- 大眼珠：老林子最里头。一颗磨盘大的眼珠子，嵌在一窝扭来扭去的老树根里，树根垂到地上；
+// 眼仁是它正盯着的那种宝石色（单独一层 yanzhuIris，换颜色不用重做）；身边绕着三块刻符的小石头（battleProps 里转着画） ----------
+const YZ = { S: 60, SY: 46, Z: 50, cx: 30, cy: 21, cz: 30, R: 12 };
+function makeYanzhu(open) {
+  const { S, SY, Z, cx, cy, cz, R } = YZ, r = rngFrom(733), roots = [];
+  for (let i = 0; i < 7; i++) { const a = i / 7 * TAU + r() * .4, d = 15 + r() * 8; roots.push([[Math.cos(a) * 6, Math.sin(a) * 5 - 2, cz - 9], [Math.cos(a) * d * .6, Math.sin(a) * d * .5 - 2, cz - 16 - r() * 4], [Math.cos(a) * d, Math.sin(a) * d * .7 - 2, 0]]); }
+  for (let i = 0; i < 4; i++) { const a = Math.PI * (1.15 + i * .23), d = 15 + r() * 3; roots.push([[Math.cos(a) * 9, -6, cz + 2], [Math.cos(a) * d, -9 - r() * 3, cz + 10 + r() * 6], [Math.cos(a) * (d + 3), -12, cz + 4 + r() * 6]]); }
+  const bark = [72, 58, 48], bark2 = [44, 36, 30];
   return buildLit(S, SY, Z, (x, y, z) => {
-    const X = x + .5 - cx, Y = y + .5 - cy, Zz = z + .5;
-    // 树桩
-    if (Zz < 8 && Math.hypot(X, Y + 1) < 10 + 2 * Math.max(0, 1 - Zz / 3) + .8 * vnoise(Math.atan2(Y, X) * 3, 1, 79)) return Zz > 7 ? [120, 102, 82] : mix([86, 74, 64], [56, 48, 42], vnoise(Math.atan2(Y, X) * 6, Zz * .3, 81));
-    // 爪子
-    for (const k of [-1, 1]) if (Math.hypot(X - k * 4, Y - 6.5, Zz - 8.6) < 1.4 || Math.hypot(X - k * 5.4, Y - 7.5, Zz - 8) < 1) return [52, 44, 34];
-    // 头：大圆脑袋，正面一张平平的脸盘，两撮耳毛
-    const hd = Math.hypot(X / 11.5, (Y - 1.5) / 10, (Zz - 47) / 9.5);
-    for (const k of [-1, 1]) { const t = (Zz - 53) / 8; if (t > 0 && t < 1 && Math.hypot(X - k * (6 + t * 3), Y + 1) < 2.6 * (1 - t)) return feather2; }
-    if (hd < 1) {
-      if (Y > 6.5) {   // 脸盘
-        const ex = Math.abs(Math.abs(X) - 4.7), ed = Math.hypot(ex, Zz - 48);
-        if (ed < 3.6 && Y > 8) return [10, 10, 12, 0, 1];   // 眼窝（大眼睛另画）
-        if (Math.abs(X) < 1.3 && Zz > 42.5 && Zz < 45.5) return [196, 160, 76];   // 喙
-        const disc = Math.hypot(X / 10, (Zz - 47) / 8);
-        return disc > .86 ? [74, 62, 52] : mix([186, 176, 156], chest, disc);
-      }
-      return Math.floor(Zz / 2.2 + Math.abs(X) * .3) % 2 ? feather : mix(feather, feather2, .5);
+    const X = x + .5 - cx, Y = y + .5 - cy, Zz = z + .5, dy = Y - 1, dz = Zz - cz, d = Math.hypot(X, dy, dz), f = d > 0 ? (dy * .69 + dz * .72) / d : 0;   // f：这一点朝镜头多少
+    if (d < R) {
+      if (!open && f > .3) return Math.abs(dz + dy * .3) < .6 ? [30, 24, 20] : mix(bark, [100, 84, 66], .5);   // 闭眼：两片树皮眼皮合上
+      if (f > .84) return null;   // 眼仁那一块留给 yanzhuIris
+      if (d < R - 1.5) return [180, 168, 150];
+      return Math.abs(Math.sin(Math.atan2(dz, X) * 5 + f * 6)) < .1 && f < .55 ? [196, 110, 104] : mix([238, 232, 216], [196, 184, 164], clamp(1 - f, 0, 1) * .6);   // 眼白，几道淡红的血丝
     }
-    // 两边收着的翅膀
-    for (const k of [-1, 1]) if (((X - k * 12.5) / 3.4) ** 2 + ((Y + 1.5) / 9) ** 2 + ((Zz - 26) / 12) ** 2 < 1) return Math.floor((Zz + Y) / 2.5) % 2 ? feather2 : [94, 84, 74];
-    // 身子：蛋形；胸口浅色，羽毛一排排，里面长着两圈小眼睛（不发光，睁着）
-    const bd = Math.hypot(X / 13, Y / 10.5, (Zz - 26) / 16);
-    if (bd < 1) {
-      if (Y > 5) {
-        for (const [ex, ez] of eyes) { const d = Math.hypot(X - ex, Zz - ez); if (d < 1.6) return d < .7 ? [14, 10, 10, 0, 1] : d < 1.1 ? [196, 168, 92] : [222, 214, 186]; }
-        return Math.floor(Zz / 2) % 2 && Math.abs(Math.sin(X * .9)) < .3 ? feather2 : chest;
-      }
-      return Math.floor(Zz / 2.4 + Math.abs(X) * .25) % 2 ? feather : mix(feather, feather2, .55);
-    }
+    if (d < R + 3 && f < (open ? .5 : 1.1)) return Math.abs(Math.sin(Math.atan2(dz, X) * 7 + d)) < .3 ? bark2 : mix(bark, [100, 84, 66], hash(x, y, z, 83) * .5);   // 树皮窝，前面敞着
+    for (const p of roots) { const rd = polyDist(X, Y, Zz, p); if (rd < 1.9 - Zz * .016) return rd < .9 && hash(x, y, z, 84) < .04 ? [232, 220, 170, 1] : mix(bark, bark2, hash(x, y, z, 85) * .6); }   // 树根，偶尔睁着一粒小眼睛
   });
 }
-// 大眼睛那一层：只有两只眼睛的虹膜和瞳孔
-function makeOwlEyes(col) {
-  const S = 58, SY = 46, Z = 64, cx = 29, cy = 21;
+function makeYanzhuIris(col) {
+  const { S, SY, Z, cx, cy, cz, R } = YZ;
   return build(S, SY, Z, (x, y, z) => {
-    const X = x + .5 - cx, Y = y + .5 - cy, Zz = z + .5;
-    if (Y < 8.2 || Y > 10.6) return null;
-    const ed = Math.hypot(Math.abs(Math.abs(X) - 4.7), Zz - 48);
-    if (ed < 1.3) return [6, 6, 8];
-    if (ed < 3.3) return [...mix(col, [255, 255, 255], ed < 2 ? .35 : 0), 1];
+    const X = x + .5 - cx, Y = y + .5 - cy, Zz = z + .5, dy = Y - 1, dz = Zz - cz, d = Math.hypot(X, dy, dz);
+    if (d > R + .2 || d < R - 2.5) return null;
+    const f = (dy * .69 + dz * .72) / d;
+    if (f <= .84) return null;
+    if (f > .975) return [6, 6, 8];   // 瞳孔
+    const a = Math.atan2(X, -.72 * dy + .69 * dz);
+    return [...mix(col, f > .94 ? [255, 255, 255] : [0, 0, 0], f > .94 ? .25 : Math.sin(a * 9) > .4 ? .3 : 0), 1];   // 眼仁一道道纹，发光
   }, true);
 }
-let MAOTOU = null; const OWL_EYES = {};
-const maotouModel = () => MAOTOU || (MAOTOU = makeMaotou());
-const owlEyes = j => OWL_EYES[j] || (OWL_EYES[j] = makeOwlEyes(GEM_COLORS[j]));
+function makeRuneStone(col) {
+  return buildLit(8, 8, 9, (x, y, z) => {
+    const X = x + .5 - 4, Y = y + .5 - 4, Zz = z + .5, n = vnoise(x * .6, y * .6 + z * .4, 43);
+    if (Math.abs(X) > 2.8 + n * .6 - Zz * .05 || Math.abs(Y) > 2.4 + n * .5 || Zz > 8 - Math.abs(X) * .4) return null;
+    if (Y > 1.6 && ((Math.abs(X) < .5 && Zz > 2 && Zz < 7.2) || (Math.abs(Math.abs(X) - (Zz - 4)) < .5 && Zz > 4 && Zz < 6.5))) return [...col, 1];   // 正面刻一个符
+    return mix([100, 106, 116], [66, 72, 82], n);
+  });
+}
+const YANZHU = {}, YZ_IRIS = {}, RUNE_STONES = {};
+const yanzhuModel = open => YANZHU[open] || (YANZHU[open] = makeYanzhu(open));
+const yanzhuIris = j => YZ_IRIS[j] || (YZ_IRIS[j] = makeYanzhuIris(GEM_COLORS[j]));
+const runeStone = j => RUNE_STONES[j] || (RUNE_STONES[j] = makeRuneStone(GEM_COLORS[j]));
 
 // ---------- 战斗里每种怪怎么画 ----------
 // lift：离地多高；bob：上下浮多少；dart：偶尔左右闪一下（提可）；tail：尾巴上吊一颗光点（提可）；
 // heavy：出手只往前挪一点；dist：离主角多远（默认 38，大个子站远一点，免得压住下面的字）；head：血条再往上抬多少（翅膀往后伸的）
+// core：林子里走近了露出真身时，那团鬼火缩到它身上哪个高度（胸口、眼睛里）
 // model(s)：s = { t 战斗里的时间, cd 倒计时, elite, shake 抖伞还剩几秒 }
 const LOOKS = {
-  tiko: { lift: 14, bob: 2, dart: true, tail: true,
+  tiko: { lift: 14, bob: 2, dart: true, tail: true, core: 12,
     model: s => { const si = s.cd >= 3 ? 0 : s.cd === 2 ? 1 : 2, m = tikoModel(si, [0, 1, 2, 1][Math.floor(s.t * 9) % 4]); return s.elite ? redEyes(m) : m; } },
-  dasan: { lift: 0, bob: 0, sway: 1.2,
+  dasan: { lift: 0, bob: 0, sway: 1.2, core: 34,
     model: s => dasanModel(s.shake > 0 ? Math.floor(s.t * 16) % 3 : [0, 1, 2, 1][Math.floor(s.t * 1.7) % 4], s.elite) },
-  laodun: { lift: 0, bob: 0, heavy: true, dist: 48,
+  laodun: { lift: 0, bob: 0, heavy: true, dist: 48, core: 12,
     model: s => laodunModel(s.t % 4.6 < 4.42) },
-  pulang: { lift: 12, bob: 2.5, head: 14,
+  pulang: { lift: 12, bob: 2.5, head: 8, core: 28,
     model: s => pulangModel([0, 1, 2, 1][Math.floor(s.t * (s.shake > 0 ? 16 : 6)) % 4], s.elite) },
-  mumu: { lift: 0, bob: 0, sway: .6,
-    model: s => mumuModel(s.t % 5 < 3.6 ? 0 : s.t % 5 < 3.9 ? 1 : 2, s.elite) },
-  maotou: { lift: 0, bob: 0, heavy: true, dist: 46,
-    model: () => maotouModel() },
+  mumu: { lift: 3, bob: 1.2, sway: .8, core: 36,   // 吊在线上晃；急性子：隔一会儿猛地抽一下胳膊腿
+    model: s => { const k = s.t % 3.4; return mumuModel(k < 2.5 ? 0 : k < 2.75 ? 1 : k < 2.95 ? 0 : k < 3.2 ? 2 : 0, s.elite); } },
+  yanzhu: { lift: 0, bob: 0, heavy: true, dist: 46, core: 30,
+    model: s => yanzhuModel(s.t % 5.3 < 5.1) },
 };
 const lookOf = kind => LOOKS[kind] || LOOKS.tiko;

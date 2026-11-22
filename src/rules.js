@@ -54,13 +54,26 @@ const startDeck = () => START_DECK.map(makeCard);
 // cd：倒计时（每回合结束减一，到 0 出手后回满）；atk：打掉几颗心（半颗为单位）；hpMul：同一段里比提可血厚多少；
 // wisp：林子里那团鬼火的颜色。模型和动作见 monsters.js 的 LOOKS。
 const MONSTERS = {
-  tiko: { name: '提可', hp: 2000, hpMul: 1, cd: 3, atk: .5, trait: 'flutter', traitName: '扑闪', traitText: '每次施法的第一发躲开', wisp: [110, 150, 255] },
-  dasan: { name: '打伞的', hp: 2400, hpMul: 1.2, cd: 3, atk: .5, trait: 'spore', traitName: '抖伞', traitText: '每回合往你的牌堆里抖一张「孢子」（没用，还占手牌）', wisp: [178, 214, 150] },
-  laodun: { name: '老墩', hp: 15e4, hpMul: 1, cd: 3, atk: 1, trait: 'roots', roots: .06, traitName: '扎根', traitText: '每回合长满一圈根须，先替它挡伤害；一次施法打不穿根须，就伤不到它', wisp: [255, 120, 84] },
-  pulang: { name: '扑棱', hp: 6e4, hpMul: 1.1, cd: 3, atk: .5, trait: 'dust', traitName: '扑粉', traitText: '每回合往你手里扑一下粉，盖住一张牌（打出去才知道是什么）', wisp: [214, 196, 150] },
-  mumu: { name: '木木', hp: 5e4, hpMul: .9, cd: 2, atk: .5, trait: 'hasty', traitName: '急性子', traitText: '倒计时只有 2，没工夫让你慢慢攒', wisp: [200, 204, 220] },
-  maotou: { name: '老猫头', hp: 5e6, hpMul: 1, cd: 3, atk: 1, trait: 'stare', traitName: '盯着', traitText: '它盯着的那种颜色只打出一半伤害；每回合换着盯', wisp: [255, 120, 84] },
+  tiko: { name: '提可', hp: 2000, hpMul: 1, cd: 3, atk: .5, trait: 'flutter', traitName: '扑闪', traitText: '每次施法的第一发躲开', wisp: [110, 150, 255],
+    lore: '四片暗红翅膀的小飞虫，飞起来像一片烧着的树叶。小孩子说，数清它有几片翅膀的人，才找得着回家的路。' },
+  dasan: { name: '打伞的', hp: 2400, hpMul: 1.2, cd: 3, atk: .5, trait: 'spore', traitName: '抖伞', traitText: '每回合往你的牌堆里抖一张「孢子」（没用，还占手牌）', wisp: [178, 214, 150],
+    lore: '远看是个扛着伞的人，走近了才看见伞沿上一圈白眼睛，一齐眨。下雨天它最高兴。' },
+  laodun: { name: '老墩', hp: 15e4, hpMul: 1, cd: 3, atk: 1, trait: 'roots', roots: .06, traitName: '扎根', traitText: '每回合长满一圈根须，先替它挡伤害；一次施法打不穿根须，就伤不到它', wisp: [255, 120, 84],
+    lore: '砍柴的锯了一半就跑了的那棵老树。树洞里亮着两点光，它一直记着那把锯。' },
+  pulang: { name: '扑棱', hp: 6e4, hpMul: 1.1, cd: 3, atk: .5, trait: 'dust', traitName: '撕页', traitText: '每回合撕下一页纸，糊住你一张手牌（照样能打，打出去才知道是什么）', wisp: [214, 196, 150],
+    lore: '一本自己会飞的旧书，书缝里有只眼睛。翻到哪页就撕哪页。林子里捡到的纸，别念上面的字。' },
+  mumu: { name: '木木', hp: 5e4, hpMul: .9, cd: 2, atk: .5, trait: 'hasty', traitName: '急性子', traitText: '倒计时只有 2，没工夫让你慢慢攒', wisp: [200, 204, 220],
+    lore: '不知道是谁家的木偶，脸还没刻就跑出来了。几根线一直通到雾里头，没人见过另一头攥着线的是谁。' },
+  yanzhu: { name: '大眼珠', hp: 5e6, hpMul: 1, cd: 3, atk: 1, trait: 'stare', traitName: '盯着', traitText: '它盯着的那种颜色只打出一半伤害；每回合换着盯', wisp: [255, 120, 84],
+    lore: '老林子最里头那窝老树根上长出来的一颗眼珠子，磨盘那么大。它盯着谁，谁的手就发软。' },
 };
+// 后面几段才有的（卡册里先占个位，第 5、6 步做）
+const MONSTERS_LATER = [
+  { name: '泥娃娃', where: '蛤蟆塘', lore: '塘泥捏的小人，头上插着一根芦苇。捏坏了，它自己会再捏回去。' },
+  { name: '钓鱼的', where: '蛤蟆塘', lore: '水草缠成的驼背东西，一根手指长得像钓竿，竿头吊着一颗亮晶晶的饵。' },
+  { name: '蛤蟆娘娘', where: '蛤蟆塘', guard: true, lore: '塘底的老东西，背上一片会亮的卵。听说塘上的雾都是它吐出来的。' },
+  { name: '高个儿', where: '空场子', guard: true, lore: '戴斗笠的高个子，胳膊腿长得过分，站着不动时像一棵树。林子里走丢的人，都是它领走的。' },
+];
 const ELITE = { hp: 3, atk: .5 };   // 精英「凶·××」：血 ×3（world.js 摆鬼火时乘好），攻击多半颗心
 
 // ---------- 零碎：以前走丢的人落下的东西，捡到了这一趟一直有用 ----------
@@ -124,7 +137,7 @@ function startFight(run, spec) {
   if (mon.elite) { mon.name = '凶·' + mon.name; mon.atk += ELITE.atk; }
   mon.countdown = mon.cd + (hasRelic(run, 'watch') ? 1 : 0);
   mon.rootMax = base.roots ? niceHp(hp * base.roots) : 0; mon.roots = mon.rootMax;   // 老墩的根须
-  if (mon.trait === 'stare') mon.stare = Math.floor(run.rng() * 3);   // 老猫头先盯着哪种颜色
+  if (mon.trait === 'stare') mon.stare = Math.floor(run.rng() * 3);   // 大眼珠先盯着哪种颜色
   const b = { kind: spec.kind, mon, turn: 1, handMax: handMaxOf(run),
     hand: [], line: [], draw: shuffle(run.deck.map(c => ({ ...c })), run.rng), discard: [], gone: [],
     shield: 0, rng: run.rng, gemExp: [0, 0, 0] };
@@ -258,11 +271,11 @@ function settleGems(run, b) {
 function monsterTrait(run, b) {
   const m = b.mon; if (m.hp <= 0) return null;
   if (m.trait === 'spore') { const c = makeCard('spore'); b.draw.splice(Math.floor(b.rng() * (b.draw.length + 1)), 0, c); return { spore: c }; }
-  if (m.trait === 'dust') {   // 扑棱：盖住一张还看得见的手牌
+  if (m.trait === 'dust') {   // 扑棱：撕一页糊住一张还看得见的手牌
     const open = b.hand.filter(c => !c.hidden); if (!open.length) return null;
     const c = open[Math.floor(b.rng() * open.length)]; c.hidden = true; return { dust: c };
   }
-  if (m.trait === 'stare') { m.stare = (m.stare + 1 + Math.floor(b.rng() * 2)) % 3; return { stare: m.stare }; }   // 老猫头：换一种颜色盯
+  if (m.trait === 'stare') { m.stare = (m.stare + 1 + Math.floor(b.rng() * 2)) % 3; return { stare: m.stare }; }   // 大眼珠：换一种颜色盯
   return null;
 }
 // 回合结束：怪的倒计时减一，到 0 出手（有挡一下就挡掉）。返回 null 或 { blocked, dmg }

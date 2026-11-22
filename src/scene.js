@@ -87,7 +87,7 @@ function drawFog(dens, t, k) {
   }
   sctx.setTransform(1, 0, 0, 1, 0, 0);
 }
-// view: {player, t, dt, monster?, props?, battle?, chunks?, lightR?, dark?, shade?, fog?, calm?, groundFx?, fx?(ectx), overFx?(ectx)}
+// view: {player, t, dt, monster?, props?, battle?, chunks?, lightR?, dark?, shade?, fog?, pathPts?（主角附近主路上的点，挡住它们的树冠变淡）, calm?, groundFx?, fx?(ectx), overFx?(ectx)}
 function renderWorld(ctx, view) {
   const { player: pl, t } = view, W = CAM.W, H = CAM.H, dt = view.dt || 0;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
@@ -123,6 +123,7 @@ function renderWorld(ctx, view) {
   drawShadow(ctx, pl.x, pl.y, 3.6, .38);
   const mon = view.monster;
   if (mon && mon.alpha > 0) drawShadow(ctx, mon.x, mon.y, 8, .32 * mon.alpha);
+  if (view.props) for (const pr of view.props) if (pr.shadow) drawShadow(ctx, pr.x, pr.y, pr.shadow, .32 * (pr.alpha ?? 1));
   list.push({ player: true, p: pp, ry: pp.ry });
   if (mon) { const p = proj(mon.x, mon.y); list.push({ mon, p, ry: p.ry }); }
   if (view.props) for (const pr of view.props) { const p = proj(pr.x, pr.y); list.push({ prop: pr, p, ry: p.ry + (pr.bias || 0) }); }   // 另外画的模型（老墩的根须圈）
@@ -132,6 +133,7 @@ function renderWorld(ctx, view) {
   ectx.setTransform(1, 0, 0, 1, 0, 0); ectx.globalCompositeOperation = 'source-over'; ectx.globalAlpha = 1;
   ectx.clearRect(0, 0, W, H);
   EMIT = ART.on ? ectx : null;   // 画师画的发光像素跟着物件一起画进发光层
+  const pathQ = view.pathPts ? view.pathPts.map(([x, y]) => proj(x, y)) : null;
   for (const it of list) {
     if (it.player) { drawStack(ctx, heroModel(pl.moving, pl.walk), it.p, face); continue; }
     if (it.mon) { if (mon.alpha > 0) drawStack(ctx, mon.model, it.p, mon.ro, mon.alpha, mon.lift); continue; }
@@ -140,7 +142,9 @@ function renderWorld(ctx, view) {
     let a = 1;
     if (o.tall) {   // 树在主角前面、树冠盖住了主角的身子：慢慢变透明，永远看得见自己
       const cover = it.ry > pp.ry && Math.abs(it.p.x - pp.x) < o.m.sx * .5 + 5 && it.p.y - o.m.sz * CAM.hs < pp.y - 2 && it.p.y > pp.y - 2;
-      o.fade = lerp(o.fade ?? 1, cover ? .28 : 1, Math.min(1, dt * 8));
+      // 树冠挡住了跟前的主路：也淡一些（没主角那么透），路一直看得见
+      const onPath = !cover && pathQ && pathQ.some(q => it.ry > q.ry + 2 && Math.abs(it.p.x - q.x) < o.m.sx * .42 && it.p.y - o.m.sz * CAM.hs < q.y && it.p.y > q.y);
+      o.fade = lerp(o.fade ?? 1, cover ? .28 : onPath ? .5 : 1, Math.min(1, dt * 8));
       a = o.fade > .99 ? 1 : o.fade;
     }
     if (view.battle && o.r && mon && it.ry > proj(mon.x, mon.y).ry - 6 && Math.abs(it.p.x - CAM.W / 2) < 70) a = Math.min(a, .22);

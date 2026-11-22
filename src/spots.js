@@ -42,7 +42,7 @@ const restOn = k => k === 'heal' ? run.hearts < run.maxHearts : k === 'up' ? run
 
 // 挑牌的格子：牌多了就排密一点
 function deckGrid() {
-  const n = run.deck.length, per = n > 24 ? 10 : 8, w = n > 24 ? 64 : 76, h = Math.round(w * 1.4), gx = w + 14, gy = h + 22;
+  const n = run.deck.length, per = n > 24 ? 10 : 8, w = n > 24 ? 66 : 88, h = Math.round(w * 62 / 44), gx = w + 14, gy = h + 20;   // 牌面 44×62 的 1.5 / 2 倍
   const rows = Math.ceil(n / per), y0 = 360 - (rows - 1) * gy / 2 + 10;
   return run.deck.map((c, i) => { const row = Math.floor(i / per), inRow = Math.min(per, n - row * per); return { x: 640 + (i % per - (inRow - 1) / 2) * gx, y: y0 + row * gy, w, h }; });
 }

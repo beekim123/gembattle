@@ -18,6 +18,7 @@ function initModels() {
   MODELS.gate = [makeGate(false), makeGate(true)];
   MODELS.hollow = [makeHollow(true), makeHollow(false)];
   MODELS.logs = [1, 2, 3].map(makeLog);
+  MODELS.stakes = [1, 2].map(makeStake);
 }
 // 用过的石碑：同一个模型，刻痕不再发光
 const DIM = new Map();
@@ -34,7 +35,7 @@ const FLOOR_N = 7, FLOOR_W = FLOOR_N * CH, EDGE = 12;   // 离边 12 体素以�
 const FLOORS = [
   { name: '砍柴坡', dark: .74, kinds: ['tiko', 'dasan'], wisps: 4, elites: 1, hollows: [1, 2], normal: 1500, guard: { kind: 'laodun', hp: 15e4 },
     look: { shade: [6, 10, 22], fog: .05, trees: 1, dead: 0, pond: .655, stumps: .7, logs: .08, tint: null } },
-  { name: '老林子', dark: .8, kinds: ['pulang', 'mumu'], wisps: 5, elites: 1, hollows: [1, 2], normal: 5e4, guard: { kind: 'maotou', hp: 5e6 },
+  { name: '老林子', dark: .8, kinds: ['pulang', 'mumu'], wisps: 5, elites: 1, hollows: [1, 2], normal: 5e4, guard: { kind: 'yanzhu', hp: 5e6 },
     look: { shade: [4, 12, 11], fog: .2, trees: 1.7, dead: .08, pond: .7, stumps: .12, logs: .6, tint: [[20, 38, 30], .32] } },
   { name: '蛤蟆塘', dark: .84, kinds: ['tiko'], wisps: 5, elites: 1, hollows: [1, 2], normal: 1.6e6, guard: { kind: 'tiko', hp: 1.6e8, atk: 1.5 },
     look: { shade: [8, 12, 16], fog: .24, trees: .7, dead: .35, pond: .6, stumps: .1, logs: .2, tint: [[44, 46, 34], .22] } },
@@ -56,6 +57,7 @@ function makeFloor(i, seed) {
   for (let k = 1; k <= 3; k++) pts.push([70 + r() * (FLOOR_W - 140), F.entry.y - k * (F.entry.y - F.gate.y) / 4]);
   pts.push([F.gate.x, F.gate.y]);
   F.path = pts;
+  F.markers = pathMarkers(F, r);
   // 石碑（歇脚）：半路上、离主路不远；树洞：躲在离路远的地方，走岔路才碰得到
   F.spots = [];
   const okSpot = (x, y, near) => inFloor(x, y, 34) && Math.hypot(x - F.entry.x, y - F.entry.y) > 90 && Math.hypot(x - F.guardPos.x, y - F.guardPos.y) > 90 && F.spots.every(s => Math.hypot(s.x - x, s.y - y) > 110) && (near ? pathDist(x, y, pts) < 40 : pathDist(x, y, pts) > 46);
@@ -75,14 +77,37 @@ function pathX(pts, y) {
   for (let k = 0; k < pts.length - 1; k++) { const [ax, ay] = pts[k], [bx, by] = pts[k + 1]; if (y <= ay && y >= by) return ax + (bx - ax) * (ay - y) / (ay - by || 1); }
   return pts.at(-1)[0];
 }
-function pathDist(x, y, pts = FLOOR.path) {
-  let best = 1e9;
+function pathNearest(x, y, pts = FLOOR.path) {
+  let best = 1e9, px = 0, py = 0;
   for (let k = 0; k < pts.length - 1; k++) {
     const [ax, ay] = pts[k], [bx, by] = pts[k + 1], vx = bx - ax, vy = by - ay;
-    const t = clamp(((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy || 1), 0, 1);
-    best = Math.min(best, Math.hypot(x - ax - vx * t, y - ay - vy * t));
+    const t = clamp(((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy || 1), 0, 1), qx = ax + vx * t, qy = ay + vy * t, d = Math.hypot(x - qx, y - qy);
+    if (d < best) { best = d; px = qx; py = qy; }
   }
-  return best;
+  return { d: best, px, py };
+}
+const pathDist = (x, y, pts = FLOOR.path) => pathNearest(x, y, pts).d;
+// 高树离主路远一点：树冠往屏幕上方投，长在路南边的树会把路整段盖住，所以南边让得更远
+function treeOffPath(x, y) { const n = pathNearest(x, y); return n.d > (y > n.py ? 36 : 21); }
+// 路边的记号：主路拐弯处插木桩（拴红布条），中间隔一段长一簇发光的小菌子，黑里也看得出路往哪走
+function pathMarkers(F, r) {
+  const out = [], pts = F.path;
+  for (let k = 1; k < pts.length - 1; k++) {
+    const [ax, ay] = pts[k - 1], [bx, by] = pts[k], [cx, cy] = pts[k + 1];
+    const ux = (bx - ax) / Math.hypot(bx - ax, by - ay) - (cx - bx) / Math.hypot(cx - bx, cy - by), uy = (by - ay) / Math.hypot(bx - ax, by - ay) - (cy - by) / Math.hypot(cx - bx, cy - by), ul = Math.hypot(ux, uy) || 1;
+    out.push({ kind: 'stake', x: bx + ux / ul * 8.5, y: by + uy / ul * 8.5 });   // 插在拐弯的外侧
+  }
+  let side = 1;
+  for (let k = 0; k < pts.length - 1; k++) {
+    const [ax, ay] = pts[k], [bx, by] = pts[k + 1], len = Math.hypot(bx - ax, by - ay), nx = -(by - ay) / len, ny = (bx - ax) / len;
+    for (let d = 22; d < len - 10; d += 26 + r() * 10) {
+      side = -side;
+      const x = ax + (bx - ax) * d / len + nx * side * (7.5 + r() * 2), y = ay + (by - ay) * d / len + ny * side * (7.5 + r() * 2);
+      if (y > F.entry.y - 20 || y < F.gate.y + 60) continue;   // 入口和石门前不放
+      out.push({ kind: 'fungus', x, y });
+    }
+  }
+  return out;
 }
 // 离可走区域的边还有多远（负数 = 在外面）
 const edgeDist = (x, y) => Math.min(x - EDGE, FLOOR_W - EDGE - x, y - EDGE, FLOOR_W - EDGE - y);
@@ -91,10 +116,11 @@ const inFloor = (x, y, m = 0) => edgeDist(x, y) >= m;
 const pondField = (gx, gy) => fbm((gx + FLOOR.nx) * .014, (gy + FLOOR.ny) * .014, 9);
 const groveField = (gx, gy) => fbm((gx + FLOOR.nx) * .011 + 50, (gy + FLOOR.ny) * .011, 14);   // 高的地方成片林子，低的地方是林间空地
 const trailAt = (gx, gy) => { const x = gx + FLOOR.nx, y = gy + FLOOR.ny; return Math.abs(vnoise(x * .0065 + 2 * vnoise(x * .02, y * .02, 7) * .3, y * .0065, 21) - .5) < .03 + .014 * vnoise(x * .05, y * .05, 3); };   // 弯弯的林间小路
-const mainPath = (gx, gy) => pathDist(gx, gy) < 3.2 + 1.4 * vnoise(gx * .08, gy * .08, 5);
+const pathHalf = (gx, gy) => 5 + 1.6 * vnoise(gx * .08, gy * .08, 5);   // 主路半宽：10~13 格宽的一条土路
+const mainPath = (gx, gy) => pathDist(gx, gy) < pathHalf(gx, gy);
 function keepClear(gx, gy, m) {   // 入口、石门前、主路边上、石碑和树洞旁边不放东西
   const F = FLOOR;
-  return Math.hypot(gx - F.entry.x, gy - F.entry.y) < 30 + m || Math.hypot(gx - F.gate.x, gy - F.gate.y - 26) < 48 + m || pathDist(gx, gy) < 7 + m ||
+  return Math.hypot(gx - F.entry.x, gy - F.entry.y) < 30 + m || Math.hypot(gx - F.gate.x, gy - F.gate.y - 26) < 48 + m || pathDist(gx, gy) < 10 + m ||
     F.spots.some(s => Math.hypot(gx - s.x, gy - s.y) < 26 + m);   // 石碑、树洞周围留一小块空地，不让树冠盖住
 }
 function waterAt(gx, gy) {
@@ -112,17 +138,19 @@ function genChunk(cx, cy) {
     const gx = ox + x, gy = oy + y, i = y * CH + x, ed = edgeDist(gx, gy);
     const n = fbm(gx * .03, gy * .03, 1), grove = groveField(gx, gy), w = waterAt(gx, gy) ? 1 : 0;
     const shore = !w && ed > 10 && !keepClear(gx, gy, 6) && pondField(gx, gy) > pond - .01;
-    const trail = ed > 4 && (mainPath(gx, gy) || trailAt(gx, gy));
+    const pd = pathDist(gx, gy), ph = pathHalf(gx, gy), main = ed > 4 && pd < ph, trail = main || (ed > 4 && trailAt(gx, gy));
+    const dirt = mix([100, 86, 64], [80, 68, 52], fbm(gx * .09, gy * .09, 6)), pebble = hash(gx, gy, 5, 31) < .035;
     let col;
     if (ART.on) {   // 画师的底图 + 颜色表里的路和水，不混色
       col = artBaseCol(gx, gy);
-      if (trail) col = artCol('trail', col);
+      if (trail) col = mix(col, dirt, main ? (pd > ph - 1.3 ? .5 : .86) : .42);   // 主路是一条亮一点的土路，边上一格跟草地混一混；岔出去的小路淡一些
+      if (main && pebble) col = mix(col, [150, 142, 126], .7);   // 路上的小石子
       if (w) { water[i] = 1; col = pondField(gx, gy) < pond + .009 ? artCol('waterHi', col) : artCol('water', col); }
       else if (shore) col = artCol('soilDark', col);
     } else {
       col = mix([46, 62, 48], [58, 76, 56], n);
       col = mix(col, [34, 46, 40], smooth(clamp((grove - .45) / .2, 0, 1)) * .8);
-      if (trail) col = mix([78, 70, 58], [66, 60, 50], fbm(gx * .1, gy * .1, 6));
+      if (trail) col = main ? (pebble ? [146, 138, 122] : dirt) : mix(col, dirt, .5);
       if (w) { water[i] = 1; col = mix([16, 28, 40], [26, 44, 58], fbm(gx * .06, gy * .2, 6)); }
     }
     if (look.tint && !w) col = mix(col, look.tint[0], look.tint[1]);   // 这一段的地面往哪个颜色偏
@@ -138,6 +166,8 @@ function genChunk(cx, cy) {
     const k = r(); decals.push({ x, y, c: k < .55 ? (r() < .5 ? '#5e4a3a' : '#6e5844') : k < .85 ? '#4f6a4c' : '#6a6c66' });
   }
   const objs = [];
+  for (const mk of F.markers) if (mk.x >= ox && mk.x < ox + CH && mk.y >= oy && mk.y < oy + CH && !waterAt(mk.x, mk.y))   // 路边的记号先摆上
+    objs.push(mk.kind === 'stake' ? { m: MODELS.stakes[(hash(mk.x, mk.y, 1, 7) * 2) | 0], x: mk.x, y: mk.y, ro: 0, r: 1.2 } : { m: MODELS.fungus[1], x: mk.x, y: mk.y, ro: 0, r: 0, glow: true });
   const free = (x, y, rad) => objs.every(o => Math.hypot(o.x - x, o.y - y) > (o.r || 1.5) + rad);
   const dry = (x, y, m) => { for (let a = 0; a < 8; a++) if (waterAt(x + Math.cos(a * TAU / 8) * m, y + Math.sin(a * TAU / 8) * m)) return false; return !waterAt(x, y); };
   const clear = (x, y, m) => !keepClear(x, y, m) && !trailAt(x, y) && !trailAt(x + m, y) && !trailAt(x - m, y);
@@ -148,7 +178,7 @@ function genChunk(cx, cy) {
   // 外面和贴边的一圈：密密的树，挡住视线
   place(14, 140, () => {
     const x = ox + 2 + r() * (CH - 4), y = oy + 2 + r() * (CH - 4), ed = edgeDist(x, y);
-    if (ed > 14 || ed < -60 || !free(x, y, ART.on ? 15 : 11) || keepClear(x, y, 0)) return false;
+    if (ed > 14 || ed < -60 || !free(x, y, ART.on ? 15 : 11) || keepClear(x, y, 0) || !treeOffPath(x, y)) return false;
     tree(x, y); return true;
   });
   // 里面的树：按林子的疏密接受，成片长
@@ -156,7 +186,7 @@ function genChunk(cx, cy) {
     const x = ox + 4 + r() * (CH - 8), y = oy + 4 + r() * (CH - 8);
     if (edgeDist(x, y) < 14) return false;
     if (r() > smooth(clamp((groveField(x, y) - .36 + (look.trees - 1) * .12) / .26, 0, 1))) return false;
-    if (!dry(x, y, 6) || !clear(x, y, 6) || !free(x, y, (ART.on ? 27 : 17) / Math.sqrt(look.trees))) return false;   // 画师的树冠大而实，隔开一点免得连成一片；老林子挤一些
+    if (!dry(x, y, 6) || !clear(x, y, 6) || !treeOffPath(x, y) || !free(x, y, (ART.on ? 27 : 17) / Math.sqrt(look.trees))) return false;   // 画师的树冠大而实，隔开一点免得连成一片；老林子挤一些
     trees.push(tree(x, y)); return true;
   });
   // 树脚下：灌木、草、偶尔一簇菌子

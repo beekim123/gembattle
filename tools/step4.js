@@ -1,4 +1,4 @@
-// 第 4 步的试玩：老林子的新东西挨个看一遍——地貌、扑棱（扑粉盖牌）、木木（急性子）、精英、老猫头（盯着）、新零碎、新牌。
+// 第 4 步的试玩：老林子的新东西挨个看一遍——地貌、扑棱（撕页糊牌）、木木（急性子）、精英、大眼珠（盯着）、新零碎、新牌。
 // 用法：npx electron tools/shot.cjs tools/step4.js /tmp/shots
 module.exports = async g => {
   const S = o => JSON.stringify(o);
@@ -20,14 +20,14 @@ module.exports = async g => {
   await g.key('W', 900); await g.wait(200);
   await g.shot('l2-forest-walk');
 
-  // 扑棱：攒一回合，看它扑粉盖牌
+  // 扑棱：攒一回合，看它撕页糊牌
   await fight({ kind: 'pulang', hp: 9e4 });
   await g.shot('l3-pulang');
   await g.key('Space', 60); await g.wait(500);
   await g.shot('l4-pulang-dust');
   await g.wait(2200);
   await g.js(`(()=>{ const c = BT.b.hand.find(c => !c.instant && !c.junk && !c.hidden); if (c) c.hidden = true; })()`);   // 再盖一张宝石牌，好看链里的「？」
-  g.log('扑粉以后', await g.js(`S({ phase: BT.phase, turn: BT.b.turn, hand: BT.b.hand.map(c => c.name + (c.hidden ? '(盖)' : '')) })`));
+  g.log('撕页以后', await g.js(`S({ phase: BT.phase, turn: BT.b.turn, hand: BT.b.hand.map(c => c.name + (c.hidden ? '(盖)' : '')) })`));
   const hid = await handPos('c.hidden');
   if (hid) { await g.move(hid[0], hid[1]); await g.wait(300); }
   await g.shot('l5-hidden-card');
@@ -55,19 +55,19 @@ module.exports = async g => {
   await g.shot('l10-pulang-elite');
   await flee();
 
-  // 老猫头：盯着一种颜色
-  await fight({ kind: 'maotou', hp: 5e6, guard: true });
+  // 大眼珠：盯着一种颜色
+  await fight({ kind: 'yanzhu', hp: 5e6, guard: true });
   await g.wait(800);
-  await g.shot('l11-maotou');
-  g.log('老猫头', await g.js(`S({ name: BT.b.mon.name, hp: BT.b.mon.hp, stare: BT.b.mon.stare })`));
+  await g.shot('l11-yanzhu');
+  g.log('大眼珠', await g.js(`S({ name: BT.b.mon.name, hp: BT.b.mon.hp, stare: BT.b.mon.stare })`));
   await g.key('Space', 60); await g.wait(400);
-  await g.shot('l12-maotou-stare');
+  await g.shot('l12-yanzhu-stare');
   await g.wait(2400);
   g.log('换眼神以后', await g.js(`S({ phase: BT.phase, stare: BT.b.mon.stare, turn: BT.b.turn })`));
   await tapHand(5); await g.wait(300);
-  await g.shot('l13-maotou-plan');
+  await g.shot('l13-yanzhu-plan');
   await g.key('Space', 60); await g.wait(1300);
-  await g.shot('l14-maotou-cast');
+  await g.shot('l14-yanzhu-cast');
   await g.wait(3500);
   g.log('打了一下', await g.js(`S({ phase: BT.phase, hp: BT.b.mon.hp|0 })`));
 
