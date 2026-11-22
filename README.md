@@ -18,6 +18,11 @@
 | `src/battle.js` | 俯视战斗：拖牌、序列、施法播放、怪攻击、战利品、逃跑 |
 | `src/lobby.js` | 大厅：林边石碑空地、菜单（进入迷雾森林 / 牌组 / 退出游戏）、存档 |
 | `src/main.js` | 主循环、输入、大厅 ↔ 探索 ↔ 战斗切换、小地图 |
+| `设计.md` | 现在的设计（整局流程、战斗规则、数值、怪和牌、分步计划） |
+| `进度.md` | 做到哪、下一步、坑（开头“现在”一段）+ 每步的记录 |
+| `tools/shot.cjs` | 无窗口试玩截图：`npx electron tools/shot.cjs <脚本.js> /tmp/shots`，脚本写法见文件开头 |
+| `tools/tour.js` | 给 `shot.cjs` 用的脚本：大厅 → 林子 → 进战斗 → 施法，一路截图 |
+| `tools/sim.js` | 链伤害粗算：`node tools/sim.js` |
 
 调试：控制台里 `NOLIGHT = true` 关掉黑暗看整片林子。
 
