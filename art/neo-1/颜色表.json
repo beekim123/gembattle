@@ -1,0 +1,73 @@
+{
+  "名字": "像素林子",
+  "颜色": {
+    "water": "#162632",
+    "waterHi": "#2c495c",
+    "trail": "#312a24",
+    "shadow": "#090c10",
+    "night": "#060a14",
+    "firefly": "#d4f788",
+    "wisp": "#66c9e8",
+    "wispCore": "#e0fbff",
+
+    "soilDark": "#1c2224",
+    "soilMid": "#252c2e",
+    "barkDark": "#241e1a",
+    "barkMid": "#382f29",
+    "barkLight": "#50443b",
+    "woodRing": "#6a5a4b",
+
+    "leafDeep": "#12201b",
+    "leafDark": "#1c3229",
+    "leafMid": "#2a483b",
+    "leafLight": "#3f6453",
+    "leafMist": "#59806f",
+
+    "reedMid": "#494f3a",
+    "reedLight": "#676e52",
+
+    "stoneDark": "#2c3a41",
+    "stoneMid": "#404e57",
+    "stoneLight": "#5c6f7a",
+
+    "fungusGlow": "#7cebd8",
+    "runeGlow": "#6ec8ff",
+
+    "heroHair": "#241f2e",
+    "heroSkin": "#d6b296",
+    "heroCoatDark": "#1e2536",
+    "heroCoatMid": "#313c54",
+    "heroAccent": "#e8d8b8",
+
+    "body": "#171d26",
+    "bodyDeep": "#0e1218",
+    "bodyLow": "#291e16",
+    "inner": "#2e3944",
+    "rimTop": "#cfe0e8",
+    "rimTopHi": "#eaf6fa",
+    "rimTopBack": "#7fa0a8",
+    "rimLow": "#e2a24f",
+    "rimLowHi": "#f7c978",
+    "skinDark": "#260d10",
+    "skinMid": "#52181a",
+    "skin": "#8e2c24",
+    "skinEdge": "#c9563c",
+    "eye": "#f4fffd",
+    "eyeGlow": "#cfe0e8",
+    "pupil": "#040608",
+    "spark": "#f7c978",
+    "sparkCore": "#fffbe6",
+    "fog": "#2c3a41",
+    "fogHi": "#6b8791"
+  },
+  "发光": [
+    "fungusGlow",
+    "runeGlow",
+    "eye",
+    "spark",
+    "sparkCore",
+    "firefly",
+    "wisp",
+    "wispCore"
+  ]
+}

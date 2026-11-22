@@ -1,0 +1,13 @@
+{
+  "name": "card-stack",
+  "private": true,
+  "version": "0.1.0",
+  "description": "异能卡牌 · 像素堆叠俯视原型",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "env -u ELECTRON_RUN_AS_NODE electron ."
+  },
+  "devDependencies": {
+    "electron": "41.7.1"
+  }
+}
