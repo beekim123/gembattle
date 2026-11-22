@@ -141,16 +141,16 @@ function drawLobbyUI(ctx, t) {
 function drawSummary(ctx) {
   const s = lobbySummary, f = FLOORS[s.floor];
   ctx.fillStyle = 'rgba(0,0,0,.72)'; ctx.fillRect(0, 0, 1280, 720);
-  ctx.fillStyle = 'rgba(16,16,20,.96)'; ctx.fillRect(440, 170, 400, 360);
-  ctx.strokeStyle = 'rgba(214,180,120,.7)'; ctx.lineWidth = 2; ctx.strokeRect(441, 171, 398, 358);
+  ctx.fillStyle = 'rgba(16,16,20,.96)'; ctx.fillRect(440, 150, 400, 420);
+  ctx.strokeStyle = 'rgba(214,180,120,.7)'; ctx.lineWidth = 2; ctx.strokeRect(441, 151, 398, 418);
   const head = s.reason === 'dead' ? '心打光了' : s.reason === 'clear' ? '走穿了三段林子' : '先回来歇歇';
-  txt(ctx, head, 640, 220, 28, s.reason === 'dead' ? '#ff9a8a' : '#efe2c4', 'center', 800);
-  txt(ctx, s.reason === 'clear' ? '最里头的空场子还没做好（以后的事）' : `走到 ${f.name}（第${NUM_CN[s.floor]}段）`, 640, 262, 15, '#a49c8c', 'center', 500);
-  const rows = [['打倒', `${s.kills} 只`], ['最高一击', fmt(s.bestHit)], ['最高一次施法', fmt(s.bestCast)], ['牌组', `${s.deck} 张`]];
-  rows.forEach(([k, v], i) => { txt(ctx, k, 500, 316 + i * 40, 16, '#a49c8c', 'left', 500); txt(ctx, v, 780, 316 + i * 40, 20, '#efe4cc', 'right', 700); });
+  txt(ctx, head, 640, 200, 28, s.reason === 'dead' ? '#ff9a8a' : '#efe2c4', 'center', 800);
+  txt(ctx, s.reason === 'clear' ? '最里头的空场子还没做好（以后的事）' : `走到 ${f.name}（第${NUM_CN[s.floor]}段）`, 640, 240, 15, '#a49c8c', 'center', 500);
+  const rows = [['打倒', `${s.kills} 只`], ['最高一击', fmt(s.bestHit)], ['最高一次施法', fmt(s.bestCast)], ['牌组', `${s.deck} 张`], ['零碎', `${s.relics || 0} 件`], ['宝石', (s.gems || [1, 1, 1]).map((l, j) => GEM_NAMES[j] + ' Lv' + l).join('　')]];
+  rows.forEach(([k, v], i) => { txt(ctx, k, 500, 290 + i * 36, 16, '#a49c8c', 'left', 500); txt(ctx, v, 780, 290 + i * 36, i < 5 ? 20 : 16, '#efe4cc', 'right', 700); });
   btn(ctx, SUMMARY_OK, '知道了', true, inRect(mouse, SUMMARY_OK));
 }
-const SUMMARY_OK = { x: 580, y: 470, w: 120, h: 40 };
+const SUMMARY_OK = { x: 580, y: 508, w: 120, h: 40 };
 function drawDeck(ctx) {
   ctx.fillStyle = 'rgba(0,0,0,.78)'; ctx.fillRect(0, 0, 1280, 720);
   txt(ctx, `起手牌组（${START_DECK.length} 张）`, 640, 70, 26, '#efe2c4', 'center', 800);

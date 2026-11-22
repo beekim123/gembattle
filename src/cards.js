@@ -97,3 +97,68 @@ function drawCard(ctx, card, x, y, w, h, o = {}) {
   if (o.hi) { ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 2; ctx.strokeRect(-w / 2, -h / 2, w, h); }
   ctx.restore();
 }
+
+// ---------- 零碎的小图：12×12，按整数倍放大 ----------
+const RELIC_BMP = {
+  mitten: [{ a: [186, 74, 66], b: [228, 140, 112], c: [74, 30, 30], d: [214, 204, 182], e: [168, 156, 136] }, [
+    '............', '...cccc.....', '..caaaac....', '..cbbbbc.cc.', '..caaaaccac.', '..caaaaaaac.',
+    '..cbbbbbbc..', '..caaaaaac..', '..cddddddc..', '..ceeeeeec..', '...cccccc...', '............']],
+  watch: [{ k: [196, 164, 96], r: [168, 132, 66], f: [222, 216, 198], h: [40, 36, 40] }, [
+    '.....kk.....', '....rrrr....', '..rrffffrr..', '.rffffffffr.', '.rfffhffffr.', '.rfffhffffr.',
+    '.rfffhhhffr.', '.rffffffffr.', '..rrffffrr..', '....rrrr....', '............', '............']],
+  shard: [{ w: [232, 232, 224], s: [180, 182, 178], b: [70, 110, 196], c: [110, 112, 120] }, [
+    '............', '.....cc.....', '....cwwc....', '...cwwwwc...', '..cwwwwwwc..', '..cbbbbbbbc.',
+    '.cwwwwwwwc..', '.cswwwwwc...', '..csswwc....', '...cccc.....', '............', '............']],
+  redstring: [{ a: [214, 62, 58], d: [150, 36, 40] }, [
+    '............', '...aaaaaa...', '..aaddddaa..', '.aad....daa.', '.ad......da.', '.ad......da.',
+    '.aad....daa.', '..aadaadaa..', '....aaaa....', '....a..a....', '...a....a...', '..a......a..']],
+  greenglass: [{ g: [96, 186, 112], h: [200, 248, 206], d: [56, 128, 76], c: [34, 80, 50] }, [
+    '............', '...cccccc...', '..chhggggc..', '.chggggggdc.', '.cggggggggc.', '.cggggggggc.',
+    '.cgggggggdc.', '.cdggggggdc.', '..cddggddc..', '...cccccc...', '............', '............']],
+  blueink: [{ k: [36, 34, 40], K: [80, 78, 90], g: [150, 170, 196], b: [46, 74, 180], B: [110, 150, 236], c: [36, 44, 70] }, [
+    '....kkkk....', '....kKKk....', '.....cc.....', '...cccccc...', '..cggggggc..', '..cgbbbbgc..',
+    '..cbBbbbbc..', '..cbBbbbbc..', '..cbbbbbbc..', '..cbbbbbbc..', '..cccccccc..', '............']],
+  tape: [{ t: [206, 190, 150], e: [138, 124, 94], i: [170, 154, 118] }, [
+    '....eeee....', '..eettttee..', '.etttttttte.', '.etttiittte.', 'ettti..ittte', 'ettti..ittte',
+    '.etttiittte.', '.etttttttte.', '..eettttee..', '....eeeett..', '........tt..', '........tt..']],
+  dice: [{ w: [228, 224, 212], s: [180, 174, 160], p: [30, 28, 34], c: [96, 92, 86] }, [
+    '............', '.cccccccccc.', '.cwwwwwwwwc.', '.cwpwwwwpwc.', '.cwwwwwwwwc.', '.cwpwwwwpwc.',
+    '.cwwwwwwwwc.', '.cwpwwwwpwc.', '.cwwwwwwwwc.', '.cssssssssc.', '.cccccccccc.', '............']],
+  candy: [{ a: [232, 128, 64], h: [255, 214, 150], d: [190, 84, 52], t: [214, 104, 60] }, [
+    '............', '............', '............', 't..........t', 'tt..aaaa..tt', 'ttdaahhaadtt',
+    'ttdaahaaadtt', 'tt..aaaa..tt', 't..........t', '............', '............', '............']],
+  coat: [{ a: [72, 86, 128], d: [50, 60, 96], b: [222, 206, 170], c: [30, 34, 52], l: [104, 120, 164] }, [
+    '............', '..ccc..ccc..', '.caaallaaac.', 'caaaallaaaac', 'cadaabbaadac', 'caaaallaaaac',
+    'cddddllddddc', 'cacaabbaacac', 'cacaallaacac', 'cacddllddcac', '.c.cccccc.c.', '............']],
+};
+const relicArtCache = new Map();
+function relicArt(k) {
+  if (relicArtCache.has(k)) return relicArtCache.get(k);
+  const c = document.createElement('canvas'); c.width = c.height = 12;
+  const g = c.getContext('2d'), [pal, rows] = RELIC_BMP[k] || [{}, []];
+  rows.forEach((row, y) => [...row].forEach((ch, x) => { if (pal[ch]) pix(g, x, y, pal[ch]); }));
+  relicArtCache.set(k, c); return c;
+}
+function drawRelic(ctx, k, x, y, s) { ctx.imageSmoothingEnabled = false; ctx.drawImage(relicArt(k), Math.round(x), Math.round(y), 12 * s, 12 * s); }
+// 一排零碎（左上角，心底下）；relicAt 找鼠标底下是哪件
+const RELIC_GAP = 30;
+function relicRow(ctx, x, y, keys) {
+  keys.forEach((k, i) => {
+    const rx = x + i * RELIC_GAP;
+    ctx.fillStyle = 'rgba(10,10,14,.7)'; ctx.fillRect(rx - 1, y - 1, 26, 26);
+    ctx.strokeStyle = 'rgba(190,160,110,.45)'; ctx.lineWidth = 1; ctx.strokeRect(rx - .5, y - .5, 25, 25);
+    drawRelic(ctx, k, rx + 1, y + 1, 2);
+  });
+}
+function relicAt(m, x, y, keys) { const i = Math.floor((m.x - x) / RELIC_GAP); return m.y >= y && m.y <= y + 24 && i >= 0 && i < keys.length && m.x - x - i * RELIC_GAP <= 24 ? keys[i] : null; }
+const relicTip = k => [`${RELICS[k].name}：${RELICS[k].text}`, `“${RELICS[k].note}”`];
+// 一件零碎的大卡：图、名字、效果、一句话
+function relicPanel(ctx, k, r, hot) {
+  const it = RELICS[k];
+  ctx.fillStyle = hot ? 'rgba(52,46,38,.97)' : 'rgba(22,21,24,.96)'; ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.strokeStyle = hot ? 'rgba(255,224,160,.95)' : 'rgba(190,160,110,.7)'; ctx.lineWidth = 2; ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+  drawRelic(ctx, k, r.x + r.w / 2 - 30, r.y + 22, 5);
+  txt(ctx, it.name, r.x + r.w / 2, r.y + 108, 20, '#ffe6b0', 'center', 800);
+  wrap(ctx, it.text, r.x + r.w / 2, r.y + 142, r.w - 24, 14, '#e8e2d4');
+  wrap(ctx, `“${it.note}”`, r.x + r.w / 2, r.y + r.h - 50, r.w - 20, 12, '#8e877a');
+}

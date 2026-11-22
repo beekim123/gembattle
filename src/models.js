@@ -266,3 +266,24 @@ function makeGate(open) {
     return mix(light, dark, clamp(n * 1.2 - .1 + (Zz < 12 ? .2 : 0), 0, 1));
   });
 }
+
+// 树洞：一截烂掉的老树干，正面（+y）一个洞；里头还有东西时，洞底亮着一点暖光（发光体素）。
+function makeHollow(full) {
+  const S = 28, Z = 32, c = 14, keep = rimLight;
+  rimLight = true;
+  const m = build(S, S, Z, (x, y, z) => {
+    const X = x + .5 - c, Y = y + .5 - c, Zz = z + .5, a = Math.atan2(Y, X), d = Math.hypot(X, Y);
+    const rad = 8.5 + vnoise(a * 2 + 1, Zz * .1, 51) + 3.5 * Math.max(0, 1 - Zz / 5) ** 2;
+    const top = 20 + 6 * vnoise(a * 1.8, 3, 53) + hash(Math.floor((a + 4) * 2.5), 0, 0, 55) * 4;
+    if (d >= rad || Zz >= top) return null;
+    const hx = X / 3.8, hz = (Zz - 9) / 5.6, e = hx * hx + hz * hz;
+    if (e < 1 && Y > rad - 5) return null;
+    if (e < 1.6 && Y > rad - 6.5) return full && Zz < 9 && Math.abs(X) < 1.8 && Y > rad - 4.6 ? [255, 214, 140, 1] : [16, 13, 12];
+    if (e < 2.4 && Y > rad - 2.4) return [132, 112, 90];   // 洞口一圈浅色的木头边
+    if (Zz > top - 1.3 && d < rad - 1.4) return d < 4 ? [22, 17, 15] : [124, 106, 86];
+    const groove = Math.sin(a * 13 + vnoise(Zz * .1, a, 57) * 3) > .5;
+    return groove ? [52, 44, 40] : mix([118, 104, 88], [78, 68, 60], vnoise(a * 5, Zz * .25, 59));
+  });
+  rimLight = keep;
+  return m;
+}

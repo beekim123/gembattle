@@ -71,7 +71,7 @@ function groundMosaic(near) {
   return { x0, y0 };
 }
 
-// view: {player, t, dt, monster?, battle?, chunks?, lightR?, dark?, calm?, groundFx?, fx?(ectx), overFx?(ectx)}
+// view: {player, t, dt, monster?, props?, battle?, chunks?, lightR?, dark?, calm?, groundFx?, fx?(ectx), overFx?(ectx)}
 function renderWorld(ctx, view) {
   const { player: pl, t } = view, W = CAM.W, H = CAM.H, dt = view.dt || 0;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
@@ -109,6 +109,7 @@ function renderWorld(ctx, view) {
   if (mon && mon.alpha > 0) drawShadow(ctx, mon.x, mon.y, 8, .32 * mon.alpha);
   list.push({ player: true, p: pp, ry: pp.ry });
   if (mon) { const p = proj(mon.x, mon.y); list.push({ mon, p, ry: p.ry }); }
+  if (view.props) for (const pr of view.props) { const p = proj(pr.x, pr.y); list.push({ prop: pr, p, ry: p.ry + (pr.bias || 0) }); }   // 另外画的模型（老墩的根须圈）
   list.sort((a, b) => a.ry - b.ry);
   const face = Math.round((pl.h - Math.PI / 2) / (Math.PI / 4)) * (Math.PI / 4);   // 主角朝向按 8 个方向，转起来不糊
   if (EC.width !== W || EC.height !== H) { EC.width = W; EC.height = H; }
@@ -118,6 +119,7 @@ function renderWorld(ctx, view) {
   for (const it of list) {
     if (it.player) { drawStack(ctx, heroModel(pl.moving, pl.walk), it.p, face); continue; }
     if (it.mon) { if (mon.alpha > 0) drawStack(ctx, mon.model, it.p, mon.ro, mon.alpha, mon.lift); continue; }
+    if (it.prop) { drawStack(ctx, it.prop.m, it.p, it.prop.ro || 0, it.prop.alpha ?? 1, it.prop.lift || 0); continue; }
     const o = it.o;
     let a = 1;
     if (o.tall) {   // 树在主角前面、树冠盖住了主角的身子：慢慢变透明，永远看得见自己
@@ -171,6 +173,7 @@ function renderWorld(ctx, view) {
   if (mon && mon.alpha > 0) { lights.push({ x: mon.x, y: mon.y, z: mon.lift + 30, r: 48, a: .85 * mon.alpha }); }
   for (const c of near) for (const o of c.objs) {
     if (o.glow) lights.push({ x: o.x, y: o.y, z: 2, r: 13, a: .45, c: [110, 200, 186] });
+    if (o.glint) lights.push({ x: o.x, y: o.y + 4, z: 4, r: 20 + 2 * Math.sin(t * 3 + o.x), a: .7, c: [255, 206, 130] });   // 树洞里还有东西
     if (o.light) lights.push({ x: o.x, y: o.y + 3, z: 14, r: 62 + 3 * Math.sin(t * 2.1), a: .95, c: ART.on ? artCol('runeGlow', [110, 200, 255]) : [255, 150, 70] });
     if (o.gate) { const open = FLOOR && FLOOR.gateOpen; lights.push({ x: o.x, y: o.y + 3, z: 18, r: open ? 74 + 3 * Math.sin(t * 2.3) : 30, a: open ? .95 : .45, c: open ? [110, 200, 255] : null }); }
   }

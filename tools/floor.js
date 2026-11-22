@@ -1,4 +1,4 @@
-// 第 2 步的试玩：一段林子的俯视图 → 走两步 → 打看门的 → 开石门 → 进下一段 → 回大厅看结算。
+// 一局的骨架试玩：一段林子的俯视图（f0-overview）→ 走两步 → 打看门的 → 零碎 + 选牌 → 开石门 → 进下一段 → 回大厅看结算。
 // 用法：npx electron tools/shot.cjs tools/floor.js /tmp/shots
 const fs = require('fs');
 module.exports = async g => {
@@ -11,7 +11,8 @@ module.exports = async g => {
     const c = document.createElement('canvas'); c.width = c.height = FLOOR_W; const x = c.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(F.mm, 0, 0, FLOOR_W, FLOOR_W);
     for (const ch of chunks.values()) for (const o of ch.objs) if (o.tall) { x.fillStyle = o.dead ? '#5a4a40' : '#1e3a2c'; x.fillRect(o.x - 2, o.y - 2, 4, 4); }
     x.strokeStyle = 'rgba(255,220,150,.5)'; x.beginPath(); F.path.forEach(([a, b], i) => i ? x.lineTo(a, b) : x.moveTo(a, b)); x.stroke();
-    for (const w of wisps) { x.fillStyle = w.guard ? '#ff7a54' : '#6e96ff'; x.beginPath(); x.arc(w.x, w.y, w.guard ? 7 : 5, 0, 7); x.fill(); }
+    for (const w of wisps) { x.fillStyle = w.guard ? '#ff7a54' : w.elite ? '#ff3c3c' : rgba(w.color); x.beginPath(); x.arc(w.x, w.y, w.guard ? 7 : w.elite ? 6 : 5, 0, 7); x.fill(); }
+    for (const sp of F.spots) { x.fillStyle = sp.kind === 'rest' ? '#7cc8ff' : '#ffd08a'; x.fillRect(sp.x - 5, sp.y - 5, 10, 10); }
     x.fillStyle = '#fff'; x.fillRect(F.entry.x - 4, F.entry.y - 4, 8, 8); x.fillStyle = '#7cc8ff'; x.fillRect(F.gate.x - 10, F.gate.y - 3, 20, 6);
     F.explored.fill(0); F.mm.getContext('2d').clearRect(0, 0, MM_N, MM_N);
     return c.toDataURL(); })()`);
@@ -22,13 +23,16 @@ module.exports = async g => {
   await g.js(`(()=>{ const gd = wisps.find(w => w.guard); player.x = gd.x; player.y = gd.y + 60; CAM.x = player.x; CAM.y = player.y; })()`);
   await g.wait(800);
   await g.shot('f3-guard');
-  await g.key('W', 900); await g.wait(2600);
+  await g.js(`(()=>{ const gd = wisps.find(w => w.guard); player.x = gd.x; player.y = gd.y + 40; })()`);   // 挪进碰撞距离（直接走过去偶尔会被树挡住）
+  await g.wait(2600);
   g.log('进战斗', await g.js(`JSON.stringify({ mode, name: BT.b && BT.b.mon.name, hp: BT.b && BT.b.mon.hp, guard: BT.b && BT.b.mon.guard })`));
   await g.shot('f4-guard-battle');
-  await g.js(`BT.b.mon.hp = 1`);
+  await g.js(`BT.b.mon.hp = 1; BT.b.mon.roots = BT.b.mon.rootMax = 0`);   // 老墩的根须也拿掉，一下打死
   for (let k = 0; k < 3; k++) { const pos = await g.js(`(()=>{ const b = BT.b, lay = handLayout(b.hand.length); const i = b.hand.findIndex(c => !c.instant); return i < 0 ? null : [lay[i].x, lay[i].y]; })()`); if (!pos) break; await g.click(pos[0], pos[1]); await g.wait(150); }
   await g.key('Space', 60); await g.wait(4200);
-  await g.click(640, 333); await g.wait(1600);
+  g.log('看门的掉的零碎', await g.js(`JSON.stringify(BT.relicPick && BT.relicPick.keys)`));
+  await g.click(640, 345); await g.wait(500);   // 零碎三选一：中间那件
+  await g.click(640, 333); await g.wait(1600);   // 选牌：中间那张
   g.log('打完', await g.js(`JSON.stringify({ mode, gateOpen: FLOOR.gateOpen, toast: exploreToast && exploreToast.text })`));
   await g.shot('f5-gate-open');
   await g.js(`(()=>{ player.x = FLOOR.gate.x; player.y = FLOOR.gate.y + 24; })()`);

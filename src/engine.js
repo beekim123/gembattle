@@ -29,9 +29,9 @@ function shuffle(a, rng) {
 }
 
 // ---------- 体素 → 切片 ----------
-// fn(x,y,z) 返回 [r,g,b]（吃明暗）或 [r,g,b,1]（自发光）或空。
+// fn(x,y,z) 返回 [r,g,b]（吃明暗）或 [r,g,b,1]（自发光）或空。flat = 颜色原样用，不自动加明暗（怪自己打光，见 monsters.js）。
 let rimLight = false;   // 只给枯树、石头开：朝上的面带一点冷光边
-function build(sx, sy, sz, fn) {
+function build(sx, sy, sz, fn, flat = false) {
   const vox = new Array(sx * sy * sz);
   for (let z = 0; z < sz; z++) for (let y = 0; y < sy; y++) for (let x = 0; x < sx; x++) vox[(z * sy + y) * sx + x] = fn(x, y, z) || null;
   const at = (x, y, z) => x < 0 || y < 0 || z < 0 || x >= sx || y >= sy || z >= sz ? null : vox[(z * sy + y) * sx + x];
@@ -44,14 +44,14 @@ function build(sx, sy, sz, fn) {
       const v = at(x, y, z); if (!v) continue; any = true;
       let [r, gg, b, e] = v;
       const i = (y * sx + x) * 4;
-      if (!e) {
+      if (!e && !flat) {
         let k = .6 + .4 * z / Math.max(1, sz - 1);
         const top = !at(x, y, z + 1);
         if (top) k *= 1.15;
         else if (!at(x - 1, y, z) || !at(x + 1, y, z) || !at(x, y - 1, z) || !at(x, y + 1, z)) k *= .82;
         r *= k; gg *= k; b *= k;
         if (top && rimLight && z > sz * .3) { r = r * .82 + 20; gg = gg * .82 + 26; b = b * .82 + 40; }   // 朝上的面：冷光边（逆光）
-      } else {
+      } else if (e) {
         if (!eim) eim = new ImageData(sx, sy);
         eim.data[i] = r; eim.data[i + 1] = gg; eim.data[i + 2] = b; eim.data[i + 3] = 255;
       }

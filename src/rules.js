@@ -49,10 +49,39 @@ const START_DECK = ['g0', 'g0', 'g2', 'g2', 'g4', 'g4', 'g1', 'g3', 'g5', 'g6', 
 const startDeck = () => START_DECK.map(makeCard);
 
 // ---------- 怪 ----------
-// cd：倒计时（每回合结束减一，到 0 出手后回满）；atk：打掉几颗心（半颗为单位）
+// cd：倒计时（每回合结束减一，到 0 出手后回满）；atk：打掉几颗心（半颗为单位）；hpMul：同一段里比提可血厚多少；
+// wisp：林子里那团鬼火的颜色。模型和动作见 monsters.js 的 LOOKS。
 const MONSTERS = {
-  tiko: { name: '提可', hp: 2000, cd: 3, atk: .5, trait: 'flutter', traitName: '扑闪', traitText: '每次施法的第一发躲开', color: [110, 150, 255] },
+  tiko: { name: '提可', hp: 2000, hpMul: 1, cd: 3, atk: .5, trait: 'flutter', traitName: '扑闪', traitText: '每次施法的第一发躲开', wisp: [110, 150, 255] },
+  dasan: { name: '打伞的', hp: 2400, hpMul: 1.2, cd: 3, atk: .5, trait: 'spore', traitName: '抖伞', traitText: '每回合往你的牌堆里抖一张「孢子」（没用，还占手牌）', wisp: [178, 214, 150] },
+  laodun: { name: '老墩', hp: 15e4, hpMul: 1, cd: 3, atk: 1, trait: 'roots', roots: .06, traitName: '扎根', traitText: '每回合长满一圈根须，先替它挡伤害；一次施法打不穿根须，就伤不到它', wisp: [255, 120, 84] },
 };
+const ELITE = { hp: 3, atk: .5 };   // 精英「凶·××」：血 ×3（world.js 摆鬼火时乘好），攻击多半颗心
+
+// ---------- 零碎：以前走丢的人落下的东西，捡到了这一趟一直有用 ----------
+const RELICS = {
+  mitten: { name: '毛线手套', text: '每回合多摸 1 张', note: '只有左手那只，还潮乎乎的' },
+  watch: { name: '慢表', text: '怪开局的倒计时 +1', note: '一天慢半个钟头，没人去拨它' },
+  shard: { name: '白瓷片', text: '合白补的那三发白光 ×5', note: '碗沿上磕下来的，描着一道蓝边' },
+  redstring: { name: '红头绳', text: '红色每发 ×2', note: '扎辫子的，打了个死结' },
+  greenglass: { name: '绿玻璃', text: '绿色每发 ×2', note: '汽水瓶底，对着亮处看是绿的' },
+  blueink: { name: '蓝墨水', text: '蓝色每发 ×2', note: '半瓶，盖子拧不开' },
+  tape: { name: '胶布', text: '断链时倍率不回 ×1，只减半', note: '缠了好几圈，撕不下来' },
+  dice: { name: '灌铅骰子', text: '暴击率 +15%', note: '怎么扔都是六点' },
+  candy: { name: '水果糖', text: '每打赢一仗回半颗心', note: '一兜子，糖纸都粘在一块儿了' },
+  coat: { name: '厚棉袄', text: '心的上限 +1，捡到时回 1 颗', note: '大人的，袖子长出一截' },
+};
+const RELIC_KEYS = Object.keys(RELICS);
+const hasRelic = (run, k) => run.relics.includes(k);
+const GEM_RELIC = ['redstring', 'greenglass', 'blueink'];
+const relicGemMul = (run, j) => j >= 0 && hasRelic(run, GEM_RELIC[j]) ? 2 : 1;
+// 从还没有的零碎里随机挑 n 件
+function relicChoices(run, n) { return shuffle(RELIC_KEYS.filter(k => !hasRelic(run, k)), run.rng).slice(0, n); }
+function gainRelic(run, k) {
+  if (!k || hasRelic(run, k)) return;
+  run.relics.push(k);
+  if (k === 'coat') { run.maxHearts += 1; run.hearts = Math.min(run.maxHearts, run.hearts + 1); }
+}
 
 // ---------- 数字 ----------
 const CN_UNITS = ['', '万', '亿', '兆', '京', '垓', '秭', '穰', '沟', '涧', '正', '载'];
@@ -70,20 +99,22 @@ function fmt(value) {
 // ---------- 一局 ----------
 function newRun(seed) {
   return { seed, rng: rngFrom(seed), deck: startDeck(), hearts: R.hearts, maxHearts: R.hearts,
-    gems: [0, 1, 2].map(() => ({ level: 1, exp: 0 })), wins: 0, bestHit: 0, bestCast: 0 };
+    gems: [0, 1, 2].map(() => ({ level: 1, exp: 0 })), relics: [], wins: 0, bestHit: 0, bestCast: 0 };
 }
 const gemPow = (run, j) => j < 0 ? 1 : R.gemGrowth ** (run.gems[j].level - 1);
 const gemNeed = level => R.gemStep * level;
 
 // ---------- 一仗 ----------
-const drawCount = (run, turn) => Math.min(R.drawMax, R.drawFirst + turn - 1);
+const drawCount = (run, turn) => Math.min(R.drawMax, R.drawFirst + turn - 1) + (hasRelic(run, 'mitten') ? 1 : 0);
 // 血量取个整：留三位有效数字（至少到百位），显示出来好看
 const niceHp = v => { const p = 10 ** Math.max(2, Math.floor(Math.log10(Math.max(1, v))) - 2); return Math.max(100, Math.round(v / p) * p); };
-// spec：{ kind, hp?, atk?, cd?, name?, guard? }——鬼火身上带着，见 world.js placeWisps
+// spec：{ kind, hp?, atk?, cd?, name?, guard?, elite? }——鬼火身上带着，见 world.js placeWisps
 function startFight(run, spec) {
   const base = MONSTERS[spec.kind], hp = niceHp(spec.hp || base.hp);
-  const mon = { ...base, name: spec.name || base.name, atk: spec.atk ?? base.atk, cd: spec.cd ?? base.cd, guard: !!spec.guard, maxHp: hp, hp };
-  mon.countdown = mon.cd;
+  const mon = { ...base, name: spec.name || base.name, atk: spec.atk ?? base.atk, cd: spec.cd ?? base.cd, guard: !!spec.guard, elite: !!spec.elite, maxHp: hp, hp };
+  if (mon.elite) { mon.name = '凶·' + mon.name; mon.atk += ELITE.atk; }
+  mon.countdown = mon.cd + (hasRelic(run, 'watch') ? 1 : 0);
+  mon.rootMax = base.roots ? niceHp(hp * base.roots) : 0; mon.roots = mon.rootMax;   // 老墩的根须
   const b = { kind: spec.kind, mon, turn: 1,
     hand: [], line: [], draw: shuffle(run.deck.map(c => ({ ...c })), run.rng), discard: [], gone: [],
     shield: 0, rng: run.rng, gemExp: [0, 0, 0] };
@@ -133,12 +164,12 @@ function plan(run, b, cards = b.line) {
     if (c.kind === 'gem') {
       const m = c.mask, rel = relationOf(m, last);
       if (rel === '接上' || rel === '合白') { mult *= (rainbow ? R.rainbowLink : R.link) * boost; boost = 1; }
-      else if (rel === '断') { mult = c.tag === '稳' ? Math.max(1, mult / 2) : 1; lamps = 0; rainbow = false; boost = 1; }
+      else if (rel === '断') { mult = c.tag === '稳' || hasRelic(run, 'tape') ? Math.max(1, mult / 2) : 1; lamps = 0; rainbow = false; boost = 1; }
       st.rel = rel;
       if (c.col >= 0 && c.col < 6) lamps |= 1 << c.col;
       const rep = c.tag === '双响' ? 2 : 1;
       for (let k = 0; k < rep; k++) for (let j = 0; j < 3; j++) if (m >> j & 1) st.shots.push({ gem: j, pts: c.pts });
-      if (rel === '合白') for (let j = 0; j < 3; j++) st.shots.push({ gem: j, pts: c.pts, white: true });
+      if (rel === '合白') for (let j = 0; j < 3; j++) st.shots.push({ gem: j, pts: c.pts * (hasRelic(run, 'shard') ? 5 : 1), white: true });
       if (c.tag === '开花') {
         const extra = [];
         for (const s of st.shots) for (let k = 0; k < R.bloom; k++) extra.push({ gem: s.gem, pts: s.pts * R.bloomPart, small: true });
@@ -160,14 +191,14 @@ function plan(run, b, cards = b.line) {
       if (c.up) mult *= 2;
     } else st.rel = c.junk ? '没用' : '';
     st.mult = mult; st.lamps = lamps; st.rainbow = rainbow; st.boost = boost;
-    for (const s of st.shots) { s.dmg = Math.round(s.pts * mult * gemPow(run, s.gem)); st.total += s.dmg; }
+    for (const s of st.shots) { s.dmg = Math.round(s.pts * mult * gemPow(run, s.gem) * relicGemMul(run, s.gem)); st.total += s.dmg; }
     total += st.total;
     states.push(st);
   }
   if (b.mon.trait === 'flutter') {   // 提可：每次施法第一发躲开
     for (const st of states) if (st.shots.length) { const s = st.shots[0]; s.dodge = true; st.total -= s.dmg; total -= s.dmg; break; }
   }
-  return { states, mult, lamps, rainbow, total };
+  return { states, mult, lamps, rainbow, total, roots: b.mon.roots || 0 };
 }
 // 施法：展开成一发一发，掷暴击
 function startCast(run, b) {
@@ -176,16 +207,18 @@ function startCast(run, b) {
   p.states.forEach((st, i) => {
     for (const s of st.shots) {
       let dmg = s.dodge ? 0 : s.dmg, crit = false;
-      if (!s.dodge && b.rng() < R.critChance) { crit = true; dmg *= R.critMul; }
+      if (!s.dodge && b.rng() < R.critChance + (hasRelic(run, 'dice') ? .15 : 0)) { crit = true; dmg *= R.critMul; }
       p.hits.push({ ci: i, gem: s.gem, white: !!s.white, bean: !!s.bean, small: !!s.small, dodge: !!s.dodge, crit, dmg });
     }
   });
   return p;
 }
-// 一发打中；返回这一发是不是把怪打死了
+// 一发打中；返回这一发是不是把怪打死了。老墩的根须先挡（h.rooted = 挡了多少，h.rootBreak = 这一发打穿了）
 function applyHit(run, b, p, h) {
   const m = b.mon, before = m.hp;
-  m.hp = Math.max(0, m.hp - h.dmg);
+  let dmg = h.dmg;
+  if (m.roots > 0 && dmg > 0) { const a = Math.min(m.roots, dmg); m.roots -= a; dmg -= a; h.rooted = a; if (m.roots <= 0) h.rootBreak = true; }
+  m.hp = Math.max(0, m.hp - dmg);
   p.dealt += h.dmg;
   if (h.dmg > run.bestHit) run.bestHit = h.dmg;
   return before > 0 && m.hp === 0;
@@ -208,6 +241,12 @@ function settleGems(run, b) {
   }
   return ups;
 }
+// 轮到怪：先发特性（打伞的往牌堆里塞一张孢子），返回发生了什么
+function monsterTrait(run, b) {
+  const m = b.mon; if (m.hp <= 0) return null;
+  if (m.trait === 'spore') { const c = makeCard('spore'); b.draw.splice(Math.floor(b.rng() * (b.draw.length + 1)), 0, c); return { spore: c }; }
+  return null;
+}
 // 回合结束：怪的倒计时减一，到 0 出手（有挡一下就挡掉）。返回 null 或 { blocked, dmg }
 function monsterTurn(run, b) {
   const m = b.mon; if (m.hp <= 0) return null;
@@ -218,7 +257,25 @@ function monsterTurn(run, b) {
   run.hearts = Math.max(0, run.hearts - m.atk);
   return { blocked: false, dmg: m.atk };
 }
-function nextTurn(run, b) { b.turn++; return drawCards(b, drawCount(run, b.turn)); }
+// 下一回合：根须长满（b.rootsGrew = 本来被打掉过），摸牌
+function nextTurn(run, b) {
+  b.turn++;
+  const m = b.mon; b.rootsGrew = m.rootMax > 0 && m.roots < m.rootMax; if (m.rootMax) m.roots = m.rootMax;
+  return drawCards(b, drawCount(run, b.turn));
+}
+// 打赢一仗：水果糖回半颗心。返回回了多少
+function onWin(run) {
+  if (!hasRelic(run, 'candy')) return 0;
+  const before = run.hearts; run.hearts = Math.min(run.maxHearts, run.hearts + .5); return run.hearts - before;
+}
+
+// ---------- 石碑歇脚 ----------
+const REST_HEAL = 2;
+function restHeal(run) { const before = run.hearts; run.hearts = Math.min(run.maxHearts, run.hearts + REST_HEAL); return run.hearts - before; }
+const canUpgrade = c => !c.up && !c.junk;
+function upgradeCard(run, i) { const c = run.deck[i]; if (!c || !canUpgrade(c)) return null; run.deck[i] = makeCard(c.id + '+'); return run.deck[i]; }
+const MIN_DECK = 5;
+function removeCard(run, i) { if (run.deck.length <= MIN_DECK || !run.deck[i]) return null; return run.deck.splice(i, 1)[0]; }
 
 // ---------- 奖励 ----------
 const LOOT_SPELLS = ['block', 'lens', 'parrot', 'contra', 'beans', 'draw', 'stall', 'family'];

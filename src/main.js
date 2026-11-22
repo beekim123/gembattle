@@ -43,9 +43,9 @@ function goLobby(reason = 'quit') {
     const floor = FLOOR ? FLOOR.i : 0;
     profile.bestFloor = Math.max(profile.bestFloor, floor); if (reason === 'clear') profile.clears++;
     saveProfile();
-    lobbySummary = { reason, floor, kills: run.wins, bestHit: run.bestHit, bestCast: run.bestCast, deck: run.deck.length };
+    lobbySummary = { reason, floor, kills: run.wins, bestHit: run.bestHit, bestCast: run.bestCast, deck: run.deck.length, relics: run.relics.length, gems: run.gems.map(g => g.level) };
   }
-  trans = { kind: 'out', t: 0, then: () => { mode = 'lobby'; shake(0); exploreConfirm = null; enterLobby(); } };
+  trans = { kind: 'out', t: 0, then: () => { mode = 'lobby'; shake(0); exploreConfirm = null; spotMenu = null; enterLobby(); } };
 }
 function restartRun() {
   run = newRun((Math.random() * 1e9) | 0);
@@ -59,7 +59,7 @@ function enterFloor(i) {
   placeWisps(FLOOR);
   player = { x: FLOOR.entry.x, y: FLOOR.entry.y, h: -Math.PI / 2, walk: 0, moving: false, grace: 1 };
   CAM.ox = 0; CAM.x = player.x; CAM.y = player.y; CAM.view = viewT = 0; CAM.oy = 14; setTilt(.6);
-  mode = 'explore'; setRes('explore'); exploreConfirm = null;
+  mode = 'explore'; setRes('explore'); exploreConfirm = null; spotMenu = null;
   titleCard = { name: FLOOR.def.name, sub: `第${NUM_CN[i]}段`, t: 0 };
   exploreToast = null;
 }
@@ -90,8 +90,9 @@ function leaveBattle(how) {
 const SNAP = Math.PI / 2;
 addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
-  if (!e.repeat && mode === 'explore' && !exploreConfirm) { if (k === 'q') viewT -= SNAP; if (k === 'e') viewT += SNAP; }   // 一次转 90 度
-  keys[k] = true; if (e.key === 'Escape' && mode === 'explore' && !trans) exploreConfirm = exploreConfirm ? null : CONFIRM;
+  if (!e.repeat && mode === 'explore' && !exploreConfirm && !spotMenu) { if (k === 'q') viewT -= SNAP; if (k === 'e') viewT += SNAP; }   // 一次转 90 度
+  keys[k] = true;
+  if (e.key === 'Escape' && mode === 'explore' && !trans) { if (spotMenu) spotKey('Escape'); else exploreConfirm = exploreConfirm ? null : CONFIRM; }
   if (mode === 'battle' && !trans) { if (e.key === ' ') e.preventDefault(); battleKey(e.key); } });
 const CONFIRM = { yes: { x: 520, y: 380, w: 110, h: 40 }, no: { x: 650, y: 380, w: 110, h: 40 } };
 const EXPLORE_LOBBY = { x: 1136, y: 184, w: 88, h: 30 };
@@ -102,6 +103,7 @@ stage.addEventListener('mousedown', e => {
   toUI(e); mouse.down = true; if (trans) return;
   if (mode === 'battle') return battleDown(mouse);
   if (mode === 'lobby') return lobbyDown(mouse);
+  if (spotMenu) return spotDown(mouse);
   if (exploreConfirm) { if (inRect(mouse, CONFIRM.yes)) goLobby(); else if (inRect(mouse, CONFIRM.no)) exploreConfirm = null; return; }
   if (inRect(mouse, EXPLORE_LOBBY)) { exploreConfirm = CONFIRM; return; }
   dragView = mouse.x;
@@ -116,7 +118,8 @@ function updateExplore(dt) {
   if (Math.abs(viewT - CAM.view) < .002) CAM.view = viewT;   // 停下来时正好落在直角上
   let ix = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
   let iy = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
-  player.moving = !!(ix || iy) && !trans && !exploreConfirm;
+  const busy = !!(trans || exploreConfirm || spotMenu);   // 菜单开着：人和鬼火都停下
+  player.moving = !!(ix || iy) && !busy;
   if (player.moving) {
     const l = Math.hypot(ix, iy); ix /= l; iy /= l;
     const [dx, dy] = screenDirToWorld(ix, iy);
@@ -132,11 +135,12 @@ function updateExplore(dt) {
   player.grace = Math.max(0, player.grace - dt);
   CAM.x += (player.x - CAM.x) * Math.min(1, dt * 5); CAM.y += (player.y - CAM.y) * Math.min(1, dt * 5);
   updateChunks(player.x, player.y);
-  updateWisps(player.x, player.y, dt);
+  if (!busy) updateWisps(player.x, player.y, dt);
   exploreAround(FLOOR, player.x, player.y, 58);
   if (titleCard) { titleCard.t += dt; if (titleCard.t > 3.2) titleCard = null; }
   if (exploreToast) { exploreToast.t += dt; if (exploreToast.t > 3) exploreToast = null; }
-  if (trans || exploreConfirm) return;
+  if (busy) return;
+  if (touchSpots()) return;   // 石碑 / 树洞
   const G = FLOOR.gate;   // 走进开着的石门 → 下一段
   if (FLOOR.gateOpen && Math.abs(player.x - G.x) < 5.5 && player.y < G.y + 6) { nextFloor(); return; }
   if (player.grace <= 0) for (const w of wisps) if (Math.hypot(w.x - player.x, w.y - player.y) < WISP.guard * (w.guard ? 1.25 : 1)) {
@@ -151,7 +155,7 @@ function drawWisps(ctx, t) {
     const p = proj(w.x, w.y, (w.guard ? 18 : 12) + Math.sin(t * 2 + w.phase) * 2);
     if (p.x < -30 || p.x > CAM.W + 30 || p.y < -30 || p.y > CAM.H + 30) continue;
     const flare = trans && trans.wisp === w ? 1 + trans.t * 3 : 1;
-    drawWisp(ctx, p, t + w.phase, w.color, (w.guard ? 2 : 1) * flare);
+    drawWisp(ctx, p, t + w.phase, w.color, (w.guard ? 2 : w.elite ? 1.4 : 1) * flare);
   }
 }
 // 鬼火和看门的也照亮一点脚下：看门的那团从老远就能看见
@@ -159,7 +163,7 @@ function wispLights() {
   const out = [];
   for (const w of wisps) {
     if (Math.hypot(w.x - player.x, w.y - player.y) > 300) continue;
-    out.push(w.guard ? { x: w.x, y: w.y, z: 18, r: 46, a: .7, c: w.color } : { x: w.x, y: w.y, z: 12, r: 16, a: .45, c: w.color });
+    out.push(w.guard ? { x: w.x, y: w.y, z: 18, r: 46, a: .7, c: w.color } : { x: w.x, y: w.y, z: 12, r: w.elite ? 24 : 16, a: w.elite ? .6 : .45, c: w.color });
   }
   return out;
 }
@@ -173,9 +177,15 @@ function drawMinimap(ctx, t) {
   ctx.beginPath(); ctx.arc(cx, cy, R0, 0, TAU); ctx.clip();
   ctx.save(); ctx.translate(cx, cy); ctx.rotate(CAM.view); ctx.scale(k, k); ctx.translate(-player.x, -player.y);
   ctx.imageSmoothingEnabled = false; ctx.drawImage(F.mm, 0, 0, FLOOR_W, FLOOR_W); ctx.restore();
+  for (const sp of F.spots) {   // 石碑、树洞：那一格亮过才画；用过的变灰
+    if (!F.explored[Math.floor(sp.y / MM_CELL) * MM_N + Math.floor(sp.x / MM_CELL)]) continue;
+    const [x, y] = at(sp.x, sp.y);
+    ctx.fillStyle = sp.used ? '#5a5a5a' : sp.kind === 'rest' ? '#7cc8ff' : '#ffd08a';
+    if (sp.kind === 'rest') ctx.fillRect(x - 2.5, y - 4, 5, 8); else { ctx.beginPath(); ctx.moveTo(x, y - 4); ctx.lineTo(x + 4, y); ctx.lineTo(x, y + 4); ctx.lineTo(x - 4, y); ctx.fill(); }
+  }
   for (const w of wisps) {
     if (w.guard || !w.seen) continue;
-    const [x, y] = at(w.x, w.y), pulse = 3 + Math.sin(t * 5 + w.phase) * .7;
+    const [x, y] = at(w.x, w.y), pulse = (w.elite ? 4 : 3) + Math.sin(t * 5 + w.phase) * .7;
     ctx.fillStyle = rgba(w.color, .35); ctx.beginPath(); ctx.arc(x, y, pulse + 3, 0, TAU); ctx.fill();
     ctx.fillStyle = rgba(w.color); ctx.beginPath(); ctx.arc(x, y, pulse, 0, TAU); ctx.fill();
   }
@@ -200,11 +210,21 @@ function drawMinimap(ctx, t) {
   ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(5, 5); ctx.lineTo(0, 2); ctx.lineTo(-5, 5); ctx.fill();
   ctx.restore();
 }
+// 三颗宝石的等级（探索时在心的右边）
+function gemRow(ctx, x, y) {
+  for (let j = 0; j < 3; j++) {
+    const gx = x + j * 50;
+    ctx.fillStyle = rgba(GEM_COLORS[j]); ctx.beginPath(); ctx.moveTo(gx, y - 6); ctx.lineTo(gx + 5, y); ctx.lineTo(gx, y + 6); ctx.lineTo(gx - 5, y); ctx.fill();
+    txt(ctx, 'Lv' + run.gems[j].level, gx + 9, y + 1, 13, 'rgba(220,210,190,.85)', 'left', 600);
+  }
+}
 function drawExploreUI(ctx, t) {
   drawMinimap(ctx, t);
   btn(ctx, EXPLORE_LOBBY, '回大厅', true, inRect(mouse, EXPLORE_LOBBY));
   heartRow(ctx, 24, 20, 4, run.hearts, run.maxHearts);
+  gemRow(ctx, 24 + Math.ceil(run.maxHearts) * 30 + 14, 30);
   txt(ctx, `${FLOOR.def.name}　打倒 ${run.wins} 只　牌 ${run.deck.length} 张`, 24, 56, 14, 'rgba(220,210,190,.75)', 'left', 500);
+  relicRow(ctx, 24, 72, run.relics);
   txt(ctx, 'WASD 走（Shift 跑）· Q E 或拖鼠标 转镜头 · 碰到鬼火就开打 · Esc 回大厅', 24, 700, 13, 'rgba(200,190,170,.6)', 'left', 500);
   const G = FLOOR.gate, nearGate = Math.hypot(player.x - G.x, player.y - G.y) < 70;
   if (nearGate && !FLOOR.gateOpen && !wisps.some(w => w.guard && Math.hypot(w.x - player.x, w.y - player.y) < 60)) txt(ctx, '石门关着。打倒看门的才开。', 640, 560, 16, 'rgba(220,210,190,.8)', 'center', 600);
@@ -216,6 +236,12 @@ function drawExploreUI(ctx, t) {
     txt(ctx, titleCard.name, 640, 296, 46, '#efe2c4', 'center', 800);
     ctx.fillStyle = 'rgba(216,187,136,.45)'; ctx.fillRect(560, 330, 160, 1);
     ctx.globalAlpha = 1;
+  }
+  if (spotMenu) drawSpotMenu(ctx);
+  else if (!exploreConfirm) {   // 鼠标停在零碎 / 宝石上：说明
+    const rk = relicAt(mouse, 24, 72, run.relics), gx = 24 + Math.ceil(run.maxHearts) * 30 + 14;
+    if (rk) tip(ctx, relicTip(rk));
+    else if (mouse.y > 18 && mouse.y < 42 && mouse.x > gx - 8 && mouse.x < gx + 150) tip(ctx, run.gems.map((g, j) => `${GEM_NAMES[j]}宝石 Lv${g.level}：${GEM_NAMES[j]}色每发 ×${+gemPow(run, j).toFixed(2)}（再打 ${gemNeed(g.level) - g.exp} 发升级）`));
   }
   if (exploreConfirm) {
     ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, 1280, 720);
@@ -242,11 +268,11 @@ function frame(now) {
     updateLobby(dt); renderLobby(wctx, T, dt);
   } else if (mode === 'explore') {
     updateExplore(dt);
-    renderWorld(wctx, { player, t: T, dt, dark: FLOOR.def.dark, lights: wispLights(), overFx: ctx => drawWisps(ctx, T) });
+    renderWorld(wctx, { player, t: T, dt, dark: FLOOR.def.dark, lights: wispLights(), overFx: ctx => { drawSpotFx(ctx, T); drawWisps(ctx, T); } });
   } else {
     updateBattle(dt);
     const sh = BT.shake;
-    renderWorld(wctx, { player, t: T, dt, battle: true, lightR: 80, dark: .7, monster: BT.mon, fx: battleFx, chunks: BT.arena });
+    renderWorld(wctx, { player, t: T, dt, battle: true, lightR: 80, dark: .7, monster: BT.mon, props: battleProps(), fx: battleFx, chunks: BT.arena });
     shake(sh * 10);
   }
   // UI 层
