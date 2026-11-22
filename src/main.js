@@ -268,7 +268,7 @@ function frame(now) {
     updateLobby(dt); renderLobby(wctx, T, dt);
   } else if (mode === 'explore') {
     updateExplore(dt);
-    renderWorld(wctx, { player, t: T, dt, dark: FLOOR.def.dark, lights: wispLights(), overFx: ctx => { drawSpotFx(ctx, T); drawWisps(ctx, T); } });
+    renderWorld(wctx, { player, t: T, dt, dark: FLOOR.def.dark, shade: FLOOR.def.look.shade, fog: FLOOR.def.look.fog, lights: wispLights(), overFx: ctx => { drawSpotFx(ctx, T); drawWisps(ctx, T); } });
   } else {
     updateBattle(dt);
     const sh = BT.shake;

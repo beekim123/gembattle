@@ -287,3 +287,28 @@ function makeHollow(full) {
   rimLight = keep;
   return m;
 }
+
+// 倒木：一截倒在地上的老树干，沿模型的 x 放倒；两头是断口，顶上长苔，侧面几截断枝、一两片木耳。
+// 碰撞在 world.js 里沿着树干摆一串看不见的挡块。
+function makeLog(sd) {
+  const r = rngFrom(sd * 613 + 5), L = 38 + (r() * 8 | 0), S = L + 4, SY = 16, Z = 13, cy = SY / 2, R = 4.4 + r() * .8;
+  const stubs = []; for (let i = 0; i < 3; i++) stubs.push([4 + r() * (L - 8), r() < .5 ? -1 : 1, .5 + r() * .8]);
+  const keep = rimLight; rimLight = true;
+  const m = build(S, SY, Z, (x, y, z) => {
+    const X = x + .5 - 2, Y = y + .5 - cy, Zz = z + .5;
+    if (X < 0 || X > L) return null;
+    const sag = Math.sin(X / L * Math.PI) * .6, rad = R * (1 - .12 * X / L) + .5 * vnoise(X * .3, sd, 61), zc = R + .2 - sag;
+    const d = Math.hypot(Y, Zz - zc);
+    for (const [sx, side, a] of stubs) {   // 断枝：斜着往上戳
+      const t = (Zz - zc) / 5; if (t < 0 || t > 1) continue;
+      if (Math.hypot(X - sx - t * 2, Y - side * (rad + t * 3 * a)) < 1.3 - .5 * t) return [104, 90, 76];
+    }
+    if (d >= rad) return null;
+    if (X < 1.2 || X > L - 1.2) return d < rad - 1.2 ? (d < 1.6 ? [30, 24, 20] : mix([168, 146, 116], [128, 108, 86], (Math.sin(d * 2.2) + 1) / 2)) : [84, 72, 62];   // 断口的年轮
+    if (Zz > zc + rad * .55 && vnoise(X * .25, Y * .4, 63 + sd) > .45) return mix([76, 116, 84], [54, 86, 64], hash(x, y, z, sd));   // 顶上的苔
+    if (Math.abs(Y + rad) < 1 && Math.abs(Zz - zc) < .8 && Math.abs(X - L * .62) < 2.2) return [164, 152, 132];   // 一片木耳
+    return Math.sin(X * 1.1 + vnoise(X * .2, Y, 65) * 3) > .6 ? [66, 56, 50] : mix([138, 120, 100], [96, 84, 72], vnoise(X * .4, Zz * .5, 67 + sd));
+  });
+  rimLight = keep; m.len = L;
+  return m;
+}

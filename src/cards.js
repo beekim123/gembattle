@@ -35,6 +35,14 @@ const SPELL_ICON = {
     for (let y = 0; y < 11; y++) { const w = Math.abs(y - 5); for (let x = -w; x <= w; x++) pix(g, 11 + x, 7 + y, y === 0 || y === 10 ? [176, 140, 96] : (y > 5 && Math.abs(x) < w) ? [226, 200, 140] : Math.abs(x) === w ? [190, 196, 210] : [36, 36, 46]); }
   },
   family(g) { for (let i = 0; i < 6; i++) { const a = -Math.PI / 2 + i / 6 * TAU, x = Math.round(11 + Math.cos(a) * 4.5), y = Math.round(12 + Math.sin(a) * 4.5); pix(g, x, y, LAMP_COL[i]); pix(g, x + 1, y, LAMP_COL[i]); pix(g, x, y + 1, LAMP_COL[i]); pix(g, x + 1, y + 1, mix(LAMP_COL[i], [255, 255, 255], .4)); } },
+  follow(g) {   // 两个小人，小的跟在大的后头
+    const fig = (x, y, h, c) => { pix(g, x, y, c); for (let i = 1; i <= h; i++) pix(g, x, y + i, c); pix(g, x - 1, y + 2, c); pix(g, x + 1, y + 2, c); pix(g, x - 1, y + h + 1, c); pix(g, x + 1, y + h + 1, c); };
+    fig(14, 7, 6, [232, 214, 170]); fig(8, 11, 4, [170, 150, 116]);
+  },
+  stack(g) {   // 叠罗汉：底下两个，中间一个，顶上一个
+    const fig = (x, y, c) => { pix(g, x, y, c); pix(g, x, y + 1, c); pix(g, x, y + 2, c); pix(g, x - 1, y + 1, c); pix(g, x + 1, y + 1, c); pix(g, x - 1, y + 3, c); pix(g, x + 1, y + 3, c); };
+    fig(8, 15, [168, 148, 116]); fig(14, 15, [168, 148, 116]); fig(11, 11, [214, 194, 150]); fig(11, 7, [255, 236, 190]);
+  },
   spore(g) { for (const [x, y, s] of [[7, 9, 2], [13, 8, 3], [9, 14, 3], [15, 15, 2], [11, 12, 1]]) for (let i = 0; i < s; i++) for (let j = 0; j < s; j++) pix(g, x + i, y + j, (i + j) % 2 ? [96, 104, 84] : [130, 138, 110]); },
 };
 // 宝石牌的词：左上角一个小记号
@@ -67,6 +75,28 @@ function cardArt(card) {
   if (card.up) { pix(g, 17, 3, [255, 240, 190]); pix(g, 16, 3, [255, 240, 190]); pix(g, 18, 3, [255, 240, 190]); pix(g, 17, 2, [255, 240, 190]); pix(g, 17, 4, [255, 240, 190]); }
   cardArtCache.set(key, c);
   return c;
+}
+
+// 盖住的牌（扑棱扑了粉）：灰扑扑的牌背，一道粉印子，正中一个大问号
+let cardBackArt = null;
+const CARD_Q = ['.#####.', '##...##', '##...##', '.....##', '....##.', '...##..', '...##..', '.......', '...##..', '...##..'];
+function drawCardBack(ctx, x, y, w, h, o = {}) {
+  if (!cardBackArt) {
+    const c = document.createElement('canvas'); c.width = 22; c.height = 31; const g = c.getContext('2d');
+    g.fillStyle = 'rgb(120,108,84)'; g.fillRect(0, 0, 22, 31); g.fillStyle = 'rgb(40,36,32)'; g.fillRect(1, 1, 20, 29);
+    for (let yy = 2; yy < 29; yy++) for (let xx = 2; xx < 20; xx++) {
+      const smear = Math.abs(xx - yy * .7 - 1) < 3.2;   // 斜着一道粉印子，像翅膀蹭过去的
+      if (hash(xx, yy, 0, 83) < (smear ? .45 : .1)) pix(g, xx, yy, smear ? [138, 126, 98] : [84, 76, 60]);
+    }
+    CARD_Q.forEach((row, j) => [...row].forEach((ch, i) => { if (ch === '#') { pix(g, 8 + i, 8 + j, [20, 18, 16]); } }));
+    CARD_Q.forEach((row, j) => [...row].forEach((ch, i) => { if (ch === '#') pix(g, 7 + i, 7 + j, [226, 212, 174]); }));
+    cardBackArt = c;
+  }
+  ctx.save(); ctx.translate(x, y); ctx.rotate(o.rot || 0); ctx.globalAlpha = o.alpha ?? 1;
+  ctx.imageSmoothingEnabled = false; ctx.drawImage(cardBackArt, -w / 2, -h / 2, w, h);
+  ctx.font = `700 ${Math.round(h * .085)}px "PingFang SC",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#cfc2a2'; ctx.fillText('盖住了', 0, h * .37);
+  ctx.restore();
 }
 
 // 在界面层画一张牌。x, y 是中心。
@@ -131,6 +161,17 @@ const RELIC_BMP = {
     '............', '..ccc..ccc..', '.caaallaaac.', 'caaaallaaaac', 'cadaabbaadac', 'caaaallaaaac',
     'cddddllddddc', 'cacaabbaacac', 'cacaallaacac', 'cacddllddcac', '.c.cccccc.c.', '............']],
 };
+Object.assign(RELIC_BMP, {
+  whistle: [{ a: [196, 176, 104], h: [236, 222, 160], d: [150, 128, 70], c: [70, 56, 30], o: [30, 22, 14], s: [200, 70, 60] }, [
+    '..........s.', '.........s.s', '..........s.', '.....cccccs.', '.cccchhhhhc.', 'chhhooaaaahc',
+    'caaaaaaaaaac', 'cdddaaaaaaac', '.cccdaaaaadc', '....cddaadc.', '.....ccddc..', '.......cc...']],
+  kaleido: [{ b: [168, 96, 140], h: [214, 150, 186], c: [70, 40, 60], R: [236, 84, 72], Y: [234, 198, 86], G: [98, 208, 122], B: [98, 142, 242] }, [
+    '............', '.........cc.', '........cRYc', '.......chGBc', '......chbcc.', '.....chbc...',
+    '....chbc....', '...chbc.....', '..chbc......', '.cbbc.......', '.ccc........', '............']],
+  pocket: [{ a: [96, 104, 140], d: [70, 76, 108], s: [206, 196, 166], c: [40, 44, 60] }, [
+    '............', '.cccccccccc.', '.cs.s.s.s.c.', '.caaaaaaaac.', '.caaaaaaaac.', '.caaaaaaaac.',
+    '.caaaaaaaac.', '.cdaaaaaadc.', '..cdaaaadc..', '...cccccc...', '............', '............']],
+});
 const relicArtCache = new Map();
 function relicArt(k) {
   if (relicArtCache.has(k)) return relicArtCache.get(k);

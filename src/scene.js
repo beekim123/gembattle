@@ -46,6 +46,7 @@ function gemOrbit(pl, t) {
 function shadowOf(o) {
   const m = o.m;
   if (o.tall) return o.dead ? [m.sx * .2, .3] : [m.sx * .36, .26];
+  if (o.log) return [0, 0];
   if (o.r) return [Math.max(3, o.r * 1.05), .3];
   return [m.sx * .32, .22];
 }
@@ -71,7 +72,22 @@ function groundMosaic(near) {
   return { x0, y0 };
 }
 
-// view: {player, t, dt, monster?, props?, battle?, chunks?, lightR?, dark?, calm?, groundFx?, fx?(ectx), overFx?(ectx)}
+// 雾：一团团很淡的雾在黑里慢慢飘、慢慢散；亮圈会把它挖掉，所以只在暗处看得见。画在黑暗层上
+function drawFog(dens, t, k) {
+  const G = 96, x0 = Math.floor((CAM.x - 300) / G), x1 = Math.floor((CAM.x + 300) / G), y0 = Math.floor((CAM.y - 240) / G), y1 = Math.floor((CAM.y + 240) / G);
+  for (let gy = y0; gy <= y1; gy++) for (let gx = x0; gx <= x1; gx++) {
+    const h1 = hash(gx, gy, 0, 91), h2 = hash(gx, gy, 1, 91), h3 = hash(gx, gy, 2, 91);
+    const ph = (h1 + t * (.012 + .01 * h3)) % 1, a = dens * (.45 + .55 * h2) * Math.sin(ph * Math.PI);   // 飘过一格的工夫里慢慢浓起来再散掉
+    if (a < .01) continue;
+    const p = proj((gx + ph) * G, (gy + h2) * G), r = (56 + 44 * h3) * k;
+    sctx.setTransform(1, 0, 0, .75, SX(p.x), SY(p.y));
+    const g = sctx.createRadialGradient(0, 0, 0, 0, 0, r);
+    g.addColorStop(0, `rgba(132,150,158,${a})`); g.addColorStop(1, 'rgba(132,150,158,0)');
+    sctx.fillStyle = g; sctx.fillRect(-r, -r, r * 2, r * 2);
+  }
+  sctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+// view: {player, t, dt, monster?, props?, battle?, chunks?, lightR?, dark?, shade?, fog?, calm?, groundFx?, fx?(ectx), overFx?(ectx)}
 function renderWorld(ctx, view) {
   const { player: pl, t } = view, W = CAM.W, H = CAM.H, dt = view.dt || 0;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
@@ -178,7 +194,8 @@ function renderWorld(ctx, view) {
     if (o.gate) { const open = FLOOR && FLOOR.gateOpen; lights.push({ x: o.x, y: o.y + 3, z: 18, r: open ? 74 + 3 * Math.sin(t * 2.3) : 30, a: open ? .95 : .45, c: open ? [110, 200, 255] : null }); }
   }
   if (!window.NOLIGHT) {
-    sctx.fillStyle = `rgba(6,10,22,${view.dark ?? .76})`; sctx.fillRect(0, 0, shadeC.width, shadeC.height);
+    sctx.fillStyle = rgba(view.shade || [6, 10, 22], view.dark ?? .76); sctx.fillRect(0, 0, shadeC.width, shadeC.height);
+    if (view.fog) drawFog(view.fog, t, k);
     sctx.globalCompositeOperation = 'destination-out';
     const flick = .97 + .03 * Math.sin(t * 7.1) * Math.sin(t * 3.3);
     for (const L of lights) {

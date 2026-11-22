@@ -17,6 +17,7 @@ function initModels() {
   MODELS.stone = makeStone();
   MODELS.gate = [makeGate(false), makeGate(true)];
   MODELS.hollow = [makeHollow(true), makeHollow(false)];
+  MODELS.logs = [1, 2, 3].map(makeLog);
 }
 // 用过的石碑：同一个模型，刻痕不再发光
 const DIM = new Map();
@@ -27,11 +28,16 @@ const quarter = r => ((r() * 4) | 0) * Math.PI / 2;   // 物件只转直角：�
 // ---------- 这一段的设定 ----------
 const FLOOR_N = 7, FLOOR_W = FLOOR_N * CH, EDGE = 12;   // 离边 12 体素以内走不过去
 // normal：普通怪的血（越靠北越多，最深 ×4，再乘各种怪的 hpMul）；elites：红鬼火几团（血 ×3）；hollows：树洞几个（最少~最多）；
-// guard：看门的（老林子、蛤蟆塘的先用提可顶着，第 4、5 步换成各段自己的）
+// guard：看门的（蛤蟆塘的先用提可顶着，第 5 步换）
+// look：地貌。shade 黑暗的颜色；fog 雾多浓（0~.3）；trees 林子里头的树多几倍；dead 枯树多出来多少；pond 水塘门槛（越小水越多）；
+//       stumps / logs 每块地出树桩 / 倒木的机会；tint 地面往哪个颜色偏多少
 const FLOORS = [
-  { name: '砍柴坡', dark: .74, kinds: ['tiko', 'dasan'], wisps: 4, elites: 1, hollows: [1, 2], normal: 1500, guard: { kind: 'laodun', hp: 15e4 } },
-  { name: '老林子', dark: .8, kinds: ['tiko'], wisps: 5, elites: 1, hollows: [1, 2], normal: 5e4, guard: { kind: 'tiko', hp: 4e6, atk: 1 } },
-  { name: '蛤蟆塘', dark: .84, kinds: ['tiko'], wisps: 5, elites: 1, hollows: [1, 2], normal: 1.6e6, guard: { kind: 'tiko', hp: 1.6e8, atk: 1.5 } },
+  { name: '砍柴坡', dark: .74, kinds: ['tiko', 'dasan'], wisps: 4, elites: 1, hollows: [1, 2], normal: 1500, guard: { kind: 'laodun', hp: 15e4 },
+    look: { shade: [6, 10, 22], fog: .05, trees: 1, dead: 0, pond: .655, stumps: .7, logs: .08, tint: null } },
+  { name: '老林子', dark: .8, kinds: ['pulang', 'mumu'], wisps: 5, elites: 1, hollows: [1, 2], normal: 5e4, guard: { kind: 'maotou', hp: 5e6 },
+    look: { shade: [4, 12, 11], fog: .2, trees: 1.7, dead: .08, pond: .7, stumps: .12, logs: .6, tint: [[20, 38, 30], .32] } },
+  { name: '蛤蟆塘', dark: .84, kinds: ['tiko'], wisps: 5, elites: 1, hollows: [1, 2], normal: 1.6e6, guard: { kind: 'tiko', hp: 1.6e8, atk: 1.5 },
+    look: { shade: [8, 12, 16], fog: .24, trees: .7, dead: .35, pond: .6, stumps: .1, logs: .2, tint: [[44, 46, 34], .22] } },
 ];
 const NUM_CN = ['一', '二', '三', '四'];
 let FLOOR = null;
@@ -93,10 +99,10 @@ function keepClear(gx, gy, m) {   // 入口、石门前、主路边上、石碑�
 }
 function waterAt(gx, gy) {
   if (!FLOOR || !inFloor(gx, gy, 10) || keepClear(gx, gy, 8)) return false;
-  return pondField(gx, gy) > .655;
+  return pondField(gx, gy) > FLOOR.def.look.pond;
 }
 function genChunk(cx, cy) {
-  const F = FLOOR, r = rngFrom(Math.floor(hash(cx, cy, F.i + 1, F.seed) * 4294967296));
+  const F = FLOOR, look = F.def.look, pond = look.pond, r = rngFrom(Math.floor(hash(cx, cy, F.i + 1, F.seed) * 4294967296));
   const ox = cx * CH, oy = cy * CH;
   const g = document.createElement('canvas'); g.width = g.height = CH;
   const gc = g.getContext('2d'), im = gc.createImageData(CH, CH);
@@ -105,13 +111,13 @@ function genChunk(cx, cy) {
   for (let y = 0; y < CH; y++) for (let x = 0; x < CH; x++) {
     const gx = ox + x, gy = oy + y, i = y * CH + x, ed = edgeDist(gx, gy);
     const n = fbm(gx * .03, gy * .03, 1), grove = groveField(gx, gy), w = waterAt(gx, gy) ? 1 : 0;
-    const shore = !w && ed > 10 && !keepClear(gx, gy, 6) && pondField(gx, gy) > .645;
+    const shore = !w && ed > 10 && !keepClear(gx, gy, 6) && pondField(gx, gy) > pond - .01;
     const trail = ed > 4 && (mainPath(gx, gy) || trailAt(gx, gy));
     let col;
     if (ART.on) {   // 画师的底图 + 颜色表里的路和水，不混色
       col = artBaseCol(gx, gy);
       if (trail) col = artCol('trail', col);
-      if (w) { water[i] = 1; col = pondField(gx, gy) < .664 ? artCol('waterHi', col) : artCol('water', col); }
+      if (w) { water[i] = 1; col = pondField(gx, gy) < pond + .009 ? artCol('waterHi', col) : artCol('water', col); }
       else if (shore) col = artCol('soilDark', col);
     } else {
       col = mix([46, 62, 48], [58, 76, 56], n);
@@ -119,12 +125,13 @@ function genChunk(cx, cy) {
       if (trail) col = mix([78, 70, 58], [66, 60, 50], fbm(gx * .1, gy * .1, 6));
       if (w) { water[i] = 1; col = mix([16, 28, 40], [26, 44, 58], fbm(gx * .06, gy * .2, 6)); }
     }
+    if (look.tint && !w) col = mix(col, look.tint[0], look.tint[1]);   // 这一段的地面往哪个颜色偏
     if (ed < 6) col = col.map(v => v * clamp(.25 + (ed + 18) / 32, .14, 1));   // 边上沉进黑里
     const k = i * 4; im.data[k] = col[0]; im.data[k + 1] = col[1]; im.data[k + 2] = col[2]; im.data[k + 3] = 255;
   }
   gc.putImageData(im, 0, 0);
   const decals = [];
-  const badDecal = (x, y) => edgeDist(x, y) < 4 || waterAt(x, y) || pondField(x, y) > .64 || mainPath(x, y) || trailAt(x, y);
+  const badDecal = (x, y) => edgeDist(x, y) < 4 || waterAt(x, y) || pondField(x, y) > pond - .015 || mainPath(x, y) || trailAt(x, y);
   if (ART.on) artDecorate(gc, ox, oy, r, 3, 16, badDecal);
   else for (let i = 0; i < 46; i++) {
     const x = ox + r() * CH, y = oy + r() * CH; if (badDecal(x, y)) continue;
@@ -135,7 +142,7 @@ function genChunk(cx, cy) {
   const dry = (x, y, m) => { for (let a = 0; a < 8; a++) if (waterAt(x + Math.cos(a * TAU / 8) * m, y + Math.sin(a * TAU / 8) * m)) return false; return !waterAt(x, y); };
   const clear = (x, y, m) => !keepClear(x, y, m) && !trailAt(x, y) && !trailAt(x + m, y) && !trailAt(x - m, y);
   const place = (n, tries, fn) => { for (let k = 0, c = 0; k < tries && c < n; k++) if (fn()) c++; };
-  const deadness = clamp(fbm(ox * .004 - 9, oy * .004, 12) + F.i * .18, 0, 1);   // 越往里枯树越多
+  const deadness = clamp(fbm(ox * .004 - 9, oy * .004, 12) + look.dead, 0, 1);   // 越往里枯树越多
   const tree = (x, y, rad) => { const dead = r() < deadness * .7; const o = { m: dead ? MODELS.dead[(r() * 4) | 0] : MODELS.live[(r() * 6) | 0], x, y, ro: quarter(r), r: dead ? 4 : 3.4, tall: true, dead }; objs.push(o); return o; };
   const trees = [];
   // 外面和贴边的一圈：密密的树，挡住视线
@@ -145,11 +152,11 @@ function genChunk(cx, cy) {
     tree(x, y); return true;
   });
   // 里面的树：按林子的疏密接受，成片长
-  place(6, 90, () => {
+  place(Math.round(6 * look.trees), Math.round(90 * look.trees), () => {
     const x = ox + 4 + r() * (CH - 8), y = oy + 4 + r() * (CH - 8);
     if (edgeDist(x, y) < 14) return false;
-    if (r() > smooth(clamp((groveField(x, y) - .36) / .26, 0, 1))) return false;
-    if (!dry(x, y, 6) || !clear(x, y, 6) || !free(x, y, ART.on ? 27 : 17)) return false;   // 画师的树冠大而实，隔开一点免得连成一片
+    if (r() > smooth(clamp((groveField(x, y) - .36 + (look.trees - 1) * .12) / .26, 0, 1))) return false;
+    if (!dry(x, y, 6) || !clear(x, y, 6) || !free(x, y, (ART.on ? 27 : 17) / Math.sqrt(look.trees))) return false;   // 画师的树冠大而实，隔开一点免得连成一片；老林子挤一些
     trees.push(tree(x, y)); return true;
   });
   // 树脚下：灌木、草、偶尔一簇菌子
@@ -162,10 +169,20 @@ function genChunk(cx, cy) {
     }
     if (r() < .18) { const a = r() * TAU, x = t.x + Math.cos(a) * 5, y = t.y + Math.sin(a) * 5; if (dry(x, y, 1) && free(x, y, 2)) { const glow = r() < .5; objs.push({ m: MODELS.fungus[glow ? 1 : 0], x, y, ro: quarter(r), r: 0, glow }); } }
   }
-  if (r() < .25) place(1, 20, () => {
+  if (r() < look.stumps) place(1, 20, () => {
     const x = ox + r() * CH, y = oy + r() * CH;
     if (edgeDist(x, y) < 16 || !dry(x, y, 4) || !clear(x, y, 4) || !free(x, y, 8)) return false;
     objs.push({ m: MODELS.stumps[(r() * 2) | 0], x, y, ro: quarter(r), r: 4 }); return true;
+  });
+  // 倒木：一截老树干横在地上，挡路；沿着树干摆一串看不见的挡块
+  if (r() < look.logs) place(1, 30, () => {
+    const x = ox + 8 + r() * (CH - 16), y = oy + 8 + r() * (CH - 16), ro = quarter(r), m = MODELS.logs[(r() * MODELS.logs.length) | 0];
+    const ux = Math.cos(ro), uy = Math.sin(ro), half = m.len / 2 * .9;
+    const pts = [-1, -.5, 0, .5, 1].map(t => [x + ux * half * t, y + uy * half * t]);
+    if (edgeDist(x, y) < 24 || pts.some(([px, py]) => !dry(px, py, 3) || !clear(px, py, 5) || !free(px, py, 7))) return false;
+    objs.push({ m, x, y, ro, r: 0, log: true });
+    for (const [px, py] of pts) objs.push({ m: null, x: px, y: py, r: 3.2 });
+    return true;
   });
   // 水边：石头、枯苇、灌木
   place(8, 80, () => {
@@ -253,11 +270,11 @@ function placeWisps(F) {
     return !waterAt(x, y) && !blocked(x, y, 6);
   };
   // 普通的先摆；精英（红鬼火）摆在后半段
-  const total = F.def.wisps + F.def.elites;
+  const total = F.def.wisps + F.def.elites, k0 = (r() * F.def.kinds.length) | 0;   // 几种怪轮着摆，一段里每种都碰得到
   for (let k = 0; k < 900 && out.length < total; k++) {
     const elite = out.length >= F.def.wisps, x = 30 + r() * (FLOOR_W - 60), y = 50 + r() * (FLOOR_W - 140);
     if (!ok(x, y, elite ? .45 : 0)) continue;
-    const kind = F.def.kinds[(r() * F.def.kinds.length) | 0], depth = clamp((F.entry.y - y) / (F.entry.y - F.gate.y), 0, 1);
+    const kind = F.def.kinds[(k0 + out.length) % F.def.kinds.length], depth = clamp((F.entry.y - y) / (F.entry.y - F.gate.y), 0, 1);
     const hp = F.def.normal * (1 + 3 * depth) * MONSTERS[kind].hpMul * (elite ? ELITE.hp : 1);
     out.push({ x, y, hx: x, hy: y, kind, elite, color: elite ? ELITE_COL : MONSTERS[kind].wisp, phase: r() * TAU, seen: false,
       spec: { kind, hp, elite } });

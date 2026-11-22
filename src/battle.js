@@ -60,7 +60,7 @@ function enterBattle(w) {
   player.x = AX; player.y = AY + 20;
   Object.assign(BT, {
     b, wisp: w, phase: 'plan', plan: null, press: null, drag: null, hover: -1, pos: new Map(), nums: [], shots: [], beams: [], parts: [],
-    flying: [], incoming: [], flash: 0, shake: 0, cold: 0, castTotal: 0, castShown: 0, multPop: 0, hpShown: b.mon.hp, banner: null, toast: null,
+    flying: [], incoming: [], uiParts: [], flash: 0, shake: 0, cold: 0, castTotal: 0, castShown: 0, multPop: 0, hpShown: b.mon.hp, banner: null, toast: null,
     t: 0, confirm: null, loot: null, relicPick: null, over: null, circle: 0, back, arena, rootGrowT: 9,
     mon: { x: 0, y: 0, ro: 0, lift: 0, alpha: 0, look: lookOf(b.kind), model: null, hit: 0, lunge: 0, ux, uy, dart: 0, shake: 0 },
   });
@@ -162,6 +162,7 @@ function useCard(card, at) {
   const b = BT.b, i = b.hand.indexOf(card); if (i < 0) return;
   const p = BT.pos.get(card);
   if (card.instant) {
+    card.hidden = false;
     const r = playInstant(run, b, i);
     flyToDiscard(card, at ? at.x : p?.x, at ? at.y : p?.y);
     banner(card.name + '：' + card.text, [214, 186, 130]);
@@ -189,6 +190,7 @@ function nextCard() {
   BT.ci++;
   if (BT.ci >= BT.plan.states.length) { BT.castWait = true; BT.waitT = 0; return; }
   const hits = BT.groups[BT.ci], st = BT.plan.states[BT.ci], speed = Math.max(.45, 1 - BT.ci * .05);
+  if (BT.castCards[BT.ci]) BT.castCards[BT.ci].hidden = false;   // 盖住的牌打出去这一下翻开
   Object.assign(BT, { fire: hits, fi: 0, ft: 0, gap: (hits.length > 6 ? .022 : .05) * speed, hold: Math.max(.16, .3 * speed), castWait: false });
   BT.multPop = 1;
   if (st.rainbowNow) { BT.flash = 1; banner('彩虹！从此每接一张 ×3', [255, 236, 170]); }
@@ -208,9 +210,9 @@ function hitArrive(s) {
   BT.castTotal = BT.plan.dealt;
   const { x: ux, y: uy } = w2ui(proj(s.to.x, s.to.y, s.to.z));
   const spot = numberSpot(ux, uy);
-  const rooted = !!h.rooted && h.rooted >= h.dmg;   // 整发都被根须挡了：数字是土色的
+  const rooted = !!h.rooted && h.rooted >= h.dmg;   // 整发都被根须挡了：数字是土色的（被老猫头盯着的颜色：发灰）
   BT.nums.push({ text: h.dodge ? '躲开' : fmt(h.dmg), v: h.dmg, crit: h.crit && !rooted, white: h.white, small: h.small || h.bean, dodge: h.dodge, rooted,
-    rainbow: BT.plan.states[h.ci].rainbow && !rooted, col: rooted ? [176, 140, 96] : hitCol(h), x: spot.x, y: spot.y, t: 0 });
+    rainbow: BT.plan.states[h.ci].rainbow && !rooted && !h.stared, col: rooted ? [176, 140, 96] : h.stared ? mix(hitCol(h), [120, 120, 130], .6) : hitCol(h), x: spot.x, y: spot.y, t: 0 });
   if (h.rootBreak) {   // 根须打穿了：一圈木屑崩开
     banner('根须打穿了！', [236, 204, 150]); BT.shake = Math.max(BT.shake, .7);
     const m = BT.mon;
@@ -258,6 +260,17 @@ function monsterPhase() {
     banner(`${BT.b.mon.name}抖了抖伞：牌堆里多了一张孢子`, [196, 220, 164]);
     BT.phase = 'trait'; BT.traitT = 0; return;
   }
+  if (ev && ev.dust) {   // 扑棱扑粉：那张牌上落一阵粉，翻成背面
+    BT.mon.shake = .7;
+    const i = BT.b.hand.indexOf(ev.dust), lay = handLayout(BT.b.hand.length)[i];
+    if (lay) for (let k = 0; k < 44; k++) BT.uiParts.push({ x: lay.x + (Math.random() - .5) * 80, y: lay.y - 70 - Math.random() * 50, vx: (Math.random() - .5) * 24, vy: 50 + Math.random() * 50, t: 0, life: .9 + Math.random() * .6, s: Math.random() < .4 ? 4 : 2, c: Math.random() < .5 ? [226, 214, 176] : [176, 160, 120] });
+    banner(`${BT.b.mon.name}扑了扑翅膀：盖住了你一张牌`, [226, 214, 176]);
+    BT.phase = 'trait'; BT.traitT = .2; return;
+  }
+  if (ev && ev.stare != null) {
+    banner(`${BT.b.mon.name}换了个眼神：盯着${GEM_NAMES[ev.stare]}色`, mix(GEM_COLORS[ev.stare], [255, 255, 255], .3));
+    BT.phase = 'trait'; BT.traitT = .3; return;
+  }
   monsterStrike();
 }
 function monsterStrike() {
@@ -279,7 +292,7 @@ function endOfRound() {
   if (run.hearts <= 0) { BT.phase = 'done'; BT.over = { btn: { x: 560, y: 400, w: 160, h: 44 } }; return; }
   const got = nextTurn(run, BT.b);
   BT.phase = 'plan'; dealIn(got, .15);
-  toast(`第 ${BT.b.turn} 回合 · 摸 ${got.length} 张` + (BT.b.hand.length >= R.handMax ? '（手满了）' : ''));
+  toast(`第 ${BT.b.turn} 回合 · 摸 ${got.length} 张` + (BT.b.hand.length >= BT.b.handMax ? '（手满了）' : ''));
   if (BT.b.rootsGrew) { BT.rootGrowT = 0; banner(`根须又长满了（${fmt(BT.b.mon.roots)}）`, [206, 170, 120]); }
 }
 
@@ -334,6 +347,7 @@ function updateBattle(dt) {
   if (BT.phase === 'pass') { BT.passT += dt; if (BT.passT > .45) monsterPhase(); }
   if (BT.phase === 'trait') { BT.traitT += dt; if (BT.traitT > 1.05) monsterStrike(); }
   for (let i = BT.incoming.length - 1; i >= 0; i--) { const f = BT.incoming[i]; f.t += dt * 1.5; if (f.t >= 1) BT.incoming.splice(i, 1); }
+  for (let i = BT.uiParts.length - 1; i >= 0; i--) { const q = BT.uiParts[i]; q.t += dt; q.x += q.vx * dt; q.y += q.vy * dt; q.vx *= .98; if (q.t > q.life) BT.uiParts.splice(i, 1); }
   if (BT.phase === 'attack') {
     BT.atkT += dt; const a = BT.atkT;
     m.lunge = a < .32 ? smooth(a / .32) : a < .7 ? 1 - smooth((a - .32) / .38) : 0;
@@ -409,6 +423,7 @@ function battleFx(ctx) {
 // 战斗场景里另外画的东西：老墩的根须圈（前后两半，前半圈压在老墩前面）。刚长回来时一节节冒出来
 function battleProps() {
   const mon = BT.b && BT.b.mon, m = BT.mon;
+  if (mon && mon.trait === 'stare' && m.alpha > 0 && BT.t % 5.3 < 5.1) return [{ m: owlEyes(mon.stare), x: m.x, y: m.y, lift: m.lift, bias: .5, alpha: m.alpha }];   // 老猫头的大眼睛（偶尔眨一下）
   if (!mon || !mon.rootMax || m.alpha <= 0 || mon.roots <= 0) return null;
   const f = mon.roots / mon.rootMax, grow = BT.rootGrowT < .5 ? Math.floor(BT.rootGrowT / .17) : 2;
   const dist = m.look.dist || 38, stage = Math.min(grow, f > .6 ? 2 : f > .25 ? 1 : 0), x = player.x + m.ux * dist, y = player.y + m.uy * dist;
@@ -509,11 +524,18 @@ function drawNumber(ctx, q) {
 function drawMonsterHead(ctx, b) {
   const m = BT.mon, mon = b.mon;
   if (m.alpha < .05) return;
-  const hp = w2ui(proj(m.x, m.y, m.lift + m.model.sz + 2)), cx = hp.x, y = Math.max(96, hp.y - 26);
+  const hp = w2ui(proj(m.x, m.y, m.lift + m.model.sz + 2)), cx = hp.x, y = Math.max(96, hp.y - 26 - (m.look.head || 0));
   ctx.globalAlpha = Math.min(1, m.alpha * 1.5);
-  if (mon.guard) txt(ctx, '看门的', cx - 100, y - 38, 12, '#e8b878', 'left', 700);
   txt(ctx, mon.name, cx - 100, y - 18, 17, mon.elite ? '#ff9c84' : '#efe4cc', 'left', 800);
-  txt(ctx, mon.traitName, cx + 100, y - 18, 13, '#9fb8e8', 'right', 600);
+  if (mon.guard) {   // 「看门的」小牌子挂在名字后面（不另起一行，免得顶到上面施法的大数字）
+    ctx.font = '800 17px "PingFang SC",sans-serif'; const nx = cx - 100 + ctx.measureText(mon.name).width + 8;
+    ctx.fillStyle = 'rgba(232,184,120,.16)'; ctx.fillRect(nx, y - 27, 44, 18); ctx.strokeStyle = 'rgba(232,184,120,.6)'; ctx.lineWidth = 1; ctx.strokeRect(nx + .5, y - 26.5, 43, 17);
+    txt(ctx, '看门的', nx + 22, y - 18, 11, '#e8b878', 'center', 700);
+  }
+  if (mon.trait === 'stare') {   // 老猫头：头上写着它正盯着哪种颜色
+    const gc = GEM_COLORS[mon.stare];
+    txt(ctx, `盯着${GEM_NAMES[mon.stare]}色`, cx + 100, y - 18, 14, rgba(mix(gc, [255, 255, 255], .25)), 'right', 800);
+  } else txt(ctx, mon.traitName, cx + 100, y - 18, 13, '#9fb8e8', 'right', 600);
   ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(cx - 102, y - 6, 204, 16);
   ctx.fillStyle = '#3a1418'; ctx.fillRect(cx - 100, y - 4, 200, 12);
   ctx.fillStyle = '#e8d8c0'; ctx.fillRect(cx - 100, y - 4, 200 * BT.hpShown / mon.maxHp, 12);
@@ -545,6 +567,7 @@ function hintStyle(card, st) {
     case '断': return { dim: true, label: '断 ×1', labelCol: '#777' };
     case '起手': return { label: '起手' };
     case '放大': return { glow: [230, 230, 240], label: mul };
+    case '叠罗汉': return { glow: [255, 220, 160], label: '后面每接 +1' };
     default: return { label: st.rel };
   }
 }
@@ -593,9 +616,10 @@ function drawBattleUI(ctx) {
   // 链
   if (stripVisible()) {
     const base = BT.phase === 'cast' ? BT.plan : prev;
-    let head = `预计 ${fmt(base.total)}`;
+    const fogged = b.line.some(c => c.hidden) && BT.phase !== 'cast';   // 链里有盖住的牌：算不出来
+    let head = fogged ? '预计 ？（有盖住的牌）' : `预计 ${fmt(base.total)}`;
     if (mon.rootMax && BT.phase !== 'cast' && mon.roots > 0) head += base.total <= mon.roots ? `　· 打不穿根须（${fmt(mon.roots)}）` : `　· 根须先挡掉 ${fmt(mon.roots)}`;
-    if (planning && BT.hover >= 0 && b.hand[BT.hover] && !b.hand[BT.hover].instant) head += `  →  ${fmt(plan(run, b, [...b.line, b.hand[BT.hover]]).total)}`;
+    if (planning && !fogged && BT.hover >= 0 && b.hand[BT.hover] && !b.hand[BT.hover].instant && !b.hand[BT.hover].hidden) head += `  →  ${fmt(plan(run, b, [...b.line, b.hand[BT.hover]]).total)}`;
     ctx.fillStyle = 'rgba(10,10,14,.55)'; ctx.fillRect(250, L.stripY - 102, 780, 172);
     txt(ctx, head, 640, L.stripY - 86, 15, '#efe4cc', 'center', 700);
     if (planning) txt(ctx, '暴击另算 · 点链里的牌放回去', 1020, L.stripY - 86, 11, 'rgba(200,190,170,.5)', 'right', 500);
@@ -604,8 +628,10 @@ function drawBattleUI(ctx) {
       if (BT.phase === 'cast' && i <= (BT.flownUpTo ?? -1)) return;
       const p = BT.pos.get(c); if (!p) return;
       const st = base.states[i], hi = BT.phase === 'cast' && i === BT.ci;
+      if (c.hidden) { drawCardBack(ctx, p.x, p.y, L.cw * p.s, L.ch * p.s, {}); txt(ctx, '？', p.x, p.y - L.sh / 2 - 12, 13, '#d8d0c0', 'center', 800); return; }
       drawCard(ctx, c, p.x, p.y - (hi ? 8 : 0), L.cw * p.s, L.ch * p.s, { hi, glow: hi ? [255, 240, 200] : null, dim: st && st.rel === '断' && !hi });
-      if (st) {
+      if (st && fogged) txt(ctx, '？', p.x, p.y - L.sh / 2 - 12, 13, '#d8d0c0', 'center', 800);
+      else if (st) {
         const mc = st.rel === '断' ? '#888' : st.rel === '合白' ? '#fff' : st.rainbow ? '#ffe6a0' : '#d8d0c0';
         txt(ctx, '×' + fmt(st.mult), p.x, p.y - L.sh / 2 - 12, 13, mc, 'center', 800);
         txt(ctx, fmt(st.total), p.x, p.y + L.sh / 2 + 12, 12, '#d8d0c0', 'center', 600);
@@ -615,11 +641,14 @@ function drawBattleUI(ctx) {
   }
   if (planning && !stripVisible()) txt(ctx, '点手里的牌排进链 · 牌攒得越多，一口气打得越狠 · 空格施法', 640, L.stripY + 6, 14, 'rgba(220,210,190,.42)', 'center', 500);
   // 手牌 + 接链提示
+  const fogLine = b.line.some(c => c.hidden);
   b.hand.forEach((c, i) => {
     if (BT.drag && BT.drag.card === c) return;
     const p = BT.pos.get(c); if (!p || p.delay > 0) return;
+    if (c.hidden) { drawCardBack(ctx, p.x, p.y, L.cw * p.s, L.ch * p.s, { rot: p.r, alpha: p.a }); return; }
     let o = { rot: p.r, alpha: p.a };
-    if (planning) {
+    if (planning && fogLine && !c.instant) { if (b.line.length) txt(ctx, '？', p.x, p.y + L.ch / 2 * p.s + 12, 13, '#a49c8c', 'center', 700); }
+    else if (planning) {
       const st = c.instant ? null : plan(run, b, [...b.line, c]).states.at(-1);
       o = { ...o, ...hintStyle(c, c.instant ? {} : st) };
       if (o.label && (b.line.length || c.instant || c.junk)) txt(ctx, o.label, p.x, p.y + L.ch / 2 * p.s + 12, 13, o.labelCol || '#efe4cc', 'center', 700);
@@ -637,7 +666,11 @@ function drawBattleUI(ctx) {
     const t = smooth(f.t);
     drawCard(ctx, f.card, lerp(f.x, L.drawPile.x, t), lerp(f.y, L.drawPile.y, t) - Math.sin(t * Math.PI) * 90, L.cw * lerp(.8, .45, t), L.ch * lerp(.8, .45, t), { alpha: 1 - t * .3, rot: t * -1.5 });
   }
-  if (BT.drag) drawCard(ctx, BT.drag.card, mouse.x, mouse.y, L.cw * 1.08, L.ch * 1.08, { rot: 0 });
+  if (BT.drag) {
+    const c = BT.drag.card, w = L.cw * 1.08, h = L.ch * 1.08;
+    if (c.hidden) drawCardBack(ctx, mouse.x, mouse.y, w, h, {}); else drawCard(ctx, c, mouse.x, mouse.y, w, h, { rot: 0 });
+  }
+  for (const q of BT.uiParts) { ctx.fillStyle = rgba(q.c, Math.max(0, 1 - q.t / q.life) * .9); ctx.fillRect(Math.round(q.x), Math.round(q.y), q.s || 3, q.s || 3); }   // 扑下来的粉
   for (const q of BT.nums) drawNumber(ctx, q);
   if (BT.cold > 0) {   // 挨打：四周冷色一闪
     const g = ctx.createRadialGradient(640, 360, 200, 640, 360, 760);
@@ -662,13 +695,13 @@ function drawBattleUI(ctx) {
     const rk = relicAt(mouse, 24, 62, run.relics);
     if (rk) tip(ctx, relicTip(rk));
     else if (BT.monRect && inRect(mouse, BT.monRect)) tip(ctx, [`${mon.name}　血 ${fmt(mon.hp)} / ${fmt(mon.maxHp)}`, `${mon.traitName}：${mon.traitText}`, `倒计时 ${mon.countdown}：每回合结束减一，到 0 出手，打掉${heartWord(mon.atk)}心`].concat(mon.elite ? ['凶：血是平常的三倍，多打半颗心'] : []));
-    else if (Math.hypot(mouse.x - L.drawPile.x, mouse.y - L.drawPile.y) < 34) tip(ctx, [`牌堆：还剩 ${b.draw.length} 张`, `下回合摸 ${drawCount(run, b.turn + 1)} 张（手牌最多 ${R.handMax} 张）`]);
+    else if (Math.hypot(mouse.x - L.drawPile.x, mouse.y - L.drawPile.y) < 34) tip(ctx, [`牌堆：还剩 ${b.draw.length} 张`, `下回合摸 ${drawCount(run, b.turn + 1)} 张（手牌最多 ${b.handMax} 张）`]);
     else if (Math.hypot(mouse.x - L.discard.x, mouse.y - L.discard.y) < 34) tip(ctx, ['弃牌堆：打出去的牌放这里', '牌堆摸空了就洗回去接着摸']);
     else if (Math.hypot(mouse.x - L.wheel.x, mouse.y - L.wheel.y) < 58) tip(ctx, ['色环：链里打过的颜色会亮', '跟上一张有同一种宝石 → 接上 ×2', '合起来红绿蓝齐全 → 合白 ×2，再补一发白光', '都不沾 → 断，倍率回 ×1', '一条链凑齐六色 → 彩虹，之后每接一张 ×3']);
     else if (mouse.x > 150 && mouse.x < 220 && mouse.y > 580 && mouse.y < 700) {
       const j = clamp(Math.floor((mouse.y - 576) / 40), 0, 2), g = run.gems[j];
       tip(ctx, [`${GEM_NAMES[j]}宝石 Lv${g.level}：${GEM_NAMES[j]}色每发 ×${+gemPow(run, j).toFixed(2)}`, `再打出 ${gemNeed(g.level) - g.exp} 发${GEM_NAMES[j]}色升一级`]);
-    } else if (BT.hover >= 0 && b.hand[BT.hover]) tip(ctx, [b.hand[BT.hover].name + '：' + b.hand[BT.hover].text]);
+    } else if (BT.hover >= 0 && b.hand[BT.hover]) tip(ctx, b.hand[BT.hover].hidden ? ['盖住了：看不出是什么', '照样能打，打出去才翻开'] : [b.hand[BT.hover].name + '：' + b.hand[BT.hover].text]);
     else if (inRect(mouse, L.escape) && !canFlee()) tip(ctx, [BT.b.mon.guard ? '看门的跑不掉，只能打' : '只剩半颗心，逃不动了']);
   }
   if (BT.confirm) {

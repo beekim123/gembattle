@@ -28,6 +28,8 @@ const SPELLS = {
   stall: { name: '打岔', instant: true, text: u => `怪的倒计时 +${u ? 2 : 1}` },
   family: { name: '全家福', rare: true, text: u => '马上凑齐六色：从此每接一张 ×3' + (u ? '；倍率再 ×2' : '') },
   spore: { name: '孢子', junk: true, text: () => '没用，打出去就没了' },
+  follow: { name: '跟屁虫', text: u => '变成上一张宝石牌的颜色，一定接上' + (u ? '；点数 ×2.5' : '') },
+  stack: { name: '叠罗汉', rare: true, text: u => `这次施法里，后面每接上一次多乘 ${u ? 2 : 1}（×2 变 ×${u ? 4 : 3}）` },
 };
 const TAGS = { 双响: '打两遍', 垫脚: '下一张接上时 ×4', 开花: '每发再炸出 3 发小的', 稳: '断链时不回 ×1，只减半' };
 
@@ -55,6 +57,9 @@ const MONSTERS = {
   tiko: { name: '提可', hp: 2000, hpMul: 1, cd: 3, atk: .5, trait: 'flutter', traitName: '扑闪', traitText: '每次施法的第一发躲开', wisp: [110, 150, 255] },
   dasan: { name: '打伞的', hp: 2400, hpMul: 1.2, cd: 3, atk: .5, trait: 'spore', traitName: '抖伞', traitText: '每回合往你的牌堆里抖一张「孢子」（没用，还占手牌）', wisp: [178, 214, 150] },
   laodun: { name: '老墩', hp: 15e4, hpMul: 1, cd: 3, atk: 1, trait: 'roots', roots: .06, traitName: '扎根', traitText: '每回合长满一圈根须，先替它挡伤害；一次施法打不穿根须，就伤不到它', wisp: [255, 120, 84] },
+  pulang: { name: '扑棱', hp: 6e4, hpMul: 1.1, cd: 3, atk: .5, trait: 'dust', traitName: '扑粉', traitText: '每回合往你手里扑一下粉，盖住一张牌（打出去才知道是什么）', wisp: [214, 196, 150] },
+  mumu: { name: '木木', hp: 5e4, hpMul: .9, cd: 2, atk: .5, trait: 'hasty', traitName: '急性子', traitText: '倒计时只有 2，没工夫让你慢慢攒', wisp: [200, 204, 220] },
+  maotou: { name: '老猫头', hp: 5e6, hpMul: 1, cd: 3, atk: 1, trait: 'stare', traitName: '盯着', traitText: '它盯着的那种颜色只打出一半伤害；每回合换着盯', wisp: [255, 120, 84] },
 };
 const ELITE = { hp: 3, atk: .5 };   // 精英「凶·××」：血 ×3（world.js 摆鬼火时乘好），攻击多半颗心
 
@@ -70,6 +75,9 @@ const RELICS = {
   dice: { name: '灌铅骰子', text: '暴击率 +15%', note: '怎么扔都是六点' },
   candy: { name: '水果糖', text: '每打赢一仗回半颗心', note: '一兜子，糖纸都粘在一块儿了' },
   coat: { name: '厚棉袄', text: '心的上限 +1，捡到时回 1 颗', note: '大人的，袖子长出一截' },
+  whistle: { name: '哨子', text: '每次施法，倍率从 ×3 起（断了也只回到 ×3）', note: '竹子削的，一吹就劈了音' },
+  kaleido: { name: '万花筒', text: '彩虹以后，每接一张 ×4（本来 ×3）', note: '转一下，里头的碎片沙沙响' },
+  pocket: { name: '大口袋', text: '手牌上限 +2，第一回合多摸 1 张', note: '缝在褂子里头的，比褂子还深' },
 };
 const RELIC_KEYS = Object.keys(RELICS);
 const hasRelic = (run, k) => run.relics.includes(k);
@@ -105,7 +113,8 @@ const gemPow = (run, j) => j < 0 ? 1 : R.gemGrowth ** (run.gems[j].level - 1);
 const gemNeed = level => R.gemStep * level;
 
 // ---------- 一仗 ----------
-const drawCount = (run, turn) => Math.min(R.drawMax, R.drawFirst + turn - 1) + (hasRelic(run, 'mitten') ? 1 : 0);
+const drawCount = (run, turn) => Math.min(R.drawMax, R.drawFirst + turn - 1) + (hasRelic(run, 'mitten') ? 1 : 0) + (turn === 1 && hasRelic(run, 'pocket') ? 1 : 0);
+const handMaxOf = run => R.handMax + (hasRelic(run, 'pocket') ? 2 : 0);
 // 血量取个整：留三位有效数字（至少到百位），显示出来好看
 const niceHp = v => { const p = 10 ** Math.max(2, Math.floor(Math.log10(Math.max(1, v))) - 2); return Math.max(100, Math.round(v / p) * p); };
 // spec：{ kind, hp?, atk?, cd?, name?, guard?, elite? }——鬼火身上带着，见 world.js placeWisps
@@ -115,7 +124,8 @@ function startFight(run, spec) {
   if (mon.elite) { mon.name = '凶·' + mon.name; mon.atk += ELITE.atk; }
   mon.countdown = mon.cd + (hasRelic(run, 'watch') ? 1 : 0);
   mon.rootMax = base.roots ? niceHp(hp * base.roots) : 0; mon.roots = mon.rootMax;   // 老墩的根须
-  const b = { kind: spec.kind, mon, turn: 1,
+  if (mon.trait === 'stare') mon.stare = Math.floor(run.rng() * 3);   // 老猫头先盯着哪种颜色
+  const b = { kind: spec.kind, mon, turn: 1, handMax: handMaxOf(run),
     hand: [], line: [], draw: shuffle(run.deck.map(c => ({ ...c })), run.rng), discard: [], gone: [],
     shield: 0, rng: run.rng, gemExp: [0, 0, 0] };
   drawCards(b, drawCount(run, 1));
@@ -124,7 +134,7 @@ function startFight(run, spec) {
 // 摸牌：手满了就不摸（留在牌堆里）；牌堆空了把弃牌洗回去
 function drawCards(b, n) {
   const got = [];
-  for (let i = 0; i < n && b.hand.length < R.handMax; i++) {
+  for (let i = 0; i < n && b.hand.length < (b.handMax || R.handMax); i++) {
     if (!b.draw.length) { if (!b.discard.length) break; b.draw = shuffle(b.discard.splice(0), b.rng); }
     const c = b.draw.pop(); b.hand.push(c); got.push(c);
   }
@@ -152,19 +162,21 @@ function relationOf(mask, last) {
 }
 // 排好的链 → 每张牌的结果：跟上一张的关系、打完这张时的倍率、打出去的每一发（不含暴击）。
 function plan(run, b, cards = b.line) {
-  let mult = 1, last = 0, lastGem = null, lamps = 0, rainbow = false, boost = 1, total = 0;
+  const start = hasRelic(run, 'whistle') ? 3 : 1;   // 哨子：起手倍率 ×3，断了也回到 ×3
+  let mult = start, last = 0, lastGem = null, lamps = 0, rainbow = false, boost = 1, total = 0, extra = 0;
+  const rbLink = hasRelic(run, 'kaleido') ? 4 : R.rainbowLink, stare = b.mon.trait === 'stare' ? b.mon.stare : -1;
   const states = [];
   for (const raw of cards) {
     let c = raw;
-    if (raw.key === 'contra') {   // 唱反调：变成上一张的补色（没有上一张就当白）
-      const m = last ? 7 & ~last : 7;
+    if (raw.key === 'contra' || raw.key === 'follow') {   // 唱反调：变成上一张的补色；跟屁虫：变成上一张的颜色（没有上一张都当白）
+      const m = !last ? 7 : raw.key === 'contra' ? (7 & ~last) || 7 : last;   // 白牌没有补色：唱反调也当白
       c = { ...raw, kind: 'gem', mask: m, col: hueOfMask(m), pts: R.points * (raw.up ? R.upPoints : 1) };
     }
     const st = { card: raw, as: c, rel: '', mult: 1, shots: [], total: 0, rainbowNow: false };
     if (c.kind === 'gem') {
       const m = c.mask, rel = relationOf(m, last);
-      if (rel === '接上' || rel === '合白') { mult *= (rainbow ? R.rainbowLink : R.link) * boost; boost = 1; }
-      else if (rel === '断') { mult = c.tag === '稳' || hasRelic(run, 'tape') ? Math.max(1, mult / 2) : 1; lamps = 0; rainbow = false; boost = 1; }
+      if (rel === '接上' || rel === '合白') { mult *= ((rainbow ? rbLink : R.link) + extra) * boost; boost = 1; }
+      else if (rel === '断') { mult = c.tag === '稳' || hasRelic(run, 'tape') ? Math.max(start, mult / 2) : start; lamps = 0; rainbow = false; boost = 1; }
       st.rel = rel;
       if (c.col >= 0 && c.col < 6) lamps |= 1 << c.col;
       const rep = c.tag === '双响' ? 2 : 1;
@@ -179,6 +191,7 @@ function plan(run, b, cards = b.line) {
       if (c.tag === '垫脚') boost = R.boostLink;
       last = m; lastGem = st;
     } else if (c.key === 'lens') { mult *= c.up ? 4 : 3; st.rel = '放大'; }
+    else if (c.key === 'stack') { extra += c.up ? 2 : 1; st.rel = '叠罗汉'; }
     else if (c.key === 'parrot') {
       st.rel = '学舌';
       if (lastGem) for (let k = 0; k < (c.up ? 2 : 1); k++) for (const s of lastGem.shots) st.shots.push({ gem: s.gem, pts: s.pts, white: s.white, small: s.small });
@@ -191,7 +204,7 @@ function plan(run, b, cards = b.line) {
       if (c.up) mult *= 2;
     } else st.rel = c.junk ? '没用' : '';
     st.mult = mult; st.lamps = lamps; st.rainbow = rainbow; st.boost = boost;
-    for (const s of st.shots) { s.dmg = Math.round(s.pts * mult * gemPow(run, s.gem) * relicGemMul(run, s.gem)); st.total += s.dmg; }
+    for (const s of st.shots) { s.dmg = Math.round(s.pts * mult * gemPow(run, s.gem) * relicGemMul(run, s.gem) * (s.gem === stare ? .5 : 1)); s.stared = s.gem === stare; st.total += s.dmg; }
     total += st.total;
     states.push(st);
   }
@@ -208,7 +221,7 @@ function startCast(run, b) {
     for (const s of st.shots) {
       let dmg = s.dodge ? 0 : s.dmg, crit = false;
       if (!s.dodge && b.rng() < R.critChance + (hasRelic(run, 'dice') ? .15 : 0)) { crit = true; dmg *= R.critMul; }
-      p.hits.push({ ci: i, gem: s.gem, white: !!s.white, bean: !!s.bean, small: !!s.small, dodge: !!s.dodge, crit, dmg });
+      p.hits.push({ ci: i, gem: s.gem, white: !!s.white, bean: !!s.bean, small: !!s.small, dodge: !!s.dodge, stared: !!s.stared, crit, dmg });
     }
   });
   return p;
@@ -245,6 +258,11 @@ function settleGems(run, b) {
 function monsterTrait(run, b) {
   const m = b.mon; if (m.hp <= 0) return null;
   if (m.trait === 'spore') { const c = makeCard('spore'); b.draw.splice(Math.floor(b.rng() * (b.draw.length + 1)), 0, c); return { spore: c }; }
+  if (m.trait === 'dust') {   // 扑棱：盖住一张还看得见的手牌
+    const open = b.hand.filter(c => !c.hidden); if (!open.length) return null;
+    const c = open[Math.floor(b.rng() * open.length)]; c.hidden = true; return { dust: c };
+  }
+  if (m.trait === 'stare') { m.stare = (m.stare + 1 + Math.floor(b.rng() * 2)) % 3; return { stare: m.stare }; }   // 老猫头：换一种颜色盯
   return null;
 }
 // 回合结束：怪的倒计时减一，到 0 出手（有挡一下就挡掉）。返回 null 或 { blocked, dmg }
@@ -278,7 +296,7 @@ const MIN_DECK = 5;
 function removeCard(run, i) { if (run.deck.length <= MIN_DECK || !run.deck[i]) return null; return run.deck.splice(i, 1)[0]; }
 
 // ---------- 奖励 ----------
-const LOOT_SPELLS = ['block', 'lens', 'parrot', 'contra', 'beans', 'draw', 'stall', 'family'];
+const LOOT_SPELLS = ['block', 'lens', 'parrot', 'contra', 'beans', 'draw', 'stall', 'family', 'follow', 'stack'];
 const LOOT_TAGS = Object.keys(TAGS);
 function lootChoices(run) {
   const r = run.rng, out = [], seen = new Set();
