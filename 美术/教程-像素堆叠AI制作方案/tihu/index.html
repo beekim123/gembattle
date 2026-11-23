@@ -1000,25 +1000,49 @@ function buildScrollingBoardwalkAssets(makeCanvas, size = 184, period = 32) {
 // === PELICAN_VOXEL_CORE_END ===
 
 // ---------------------------------------------------------------------------
-// 5. 工业级像素堆叠渲染器：
-//    - 角度烘焙缓存模式（单体独立轮廓 + 双子步防漏缝 + 自遮挡发光抠除 + LRU）
-//    - 跨物体发光 Z 遮挡抠除 + 1/4 降采样柔光模糊（60fps 稳如磐石）
-//    - 同步纯滚动木栈道 + 真实轮廓阴影 + 夜色车灯光锥与路灯地面光斑
+// 5. 工业级像素堆叠渲染器（旋转也满帧架构）：
+//    - 固定黄金倍率 BAKE_SCALE=2.5（HS*2.5=2 整数步进 + 1px 半步压实 + 面积直降 18 倍）
+//    - 零 GC 复用临时画布与对象池 + 路灯 90° 对称共享 + minGlowZ 跳过无用抠除
+//    - 预渲染背景 + 2x 小地表缓冲（集成阴影/夜色/光锥）+ 省去全屏 mc/gc 拷贝
+//    - 1/4 小画布离屏真降采样模糊（杜绝全屏 ctx.filter=blur 掉帧）
 // ---------------------------------------------------------------------------
 (function initApp() {
   const TILT = 0.6, HS = 0.8, TAU = Math.PI * 2;
   const REV_PER_SEC = 1.15; // 骑行节奏：每秒 1.15 圈
   const GROUND_SPEED = REV_PER_SEC * TAU * WHEEL_RADIUS; // 纯滚动精确地速 ≈ 59.25 体素/秒
+  const BAKE_SCALE = 2.5; // 黄金烘焙倍率：0.8 * 2.5 = 2.0 精确整数步进，与窗口缩放解耦！
+  const BAKE_STEP = 2;    // Math.round(HS * BAKE_SCALE) === 2
+  const BAKE_HALF = 1;    // 半步压实 1px，彻底消除 HS>TILT 导致的斜管层间缝隙
+  const ANGLE_QUANT_DEG = 3; // 3° 一档（120 档），旋转视觉丝滑且极大提升缓存命中
+  const GROUND_SUPERSAMPLE = 2; // 2x 地表缓冲（368×368），比全屏小 30 倍且光锥/投影细腻
 
   const cv = document.getElementById('view'), dctx = cv.getContext('2d');
   const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, w); c.height = Math.max(1, h); return c; };
 
-  // 离屏图层：地面(gc)、实时模式实体(mc)、描边临时(oc)、1/4降采样发光(ec)、木栈道滚动缓冲(gbuf)
-  const gc = mk(1, 1), gctx = gc.getContext('2d');
+  // 离屏图层：预渲染天空(bgc)、2x地表缓冲(gbuf)、实时模式专用(mc/oc)、1/4发光(ec)与1/4真模糊(eb)
+  const bgc = mk(1, 1), bgctx = bgc.getContext('2d');
   const mc = mk(1, 1), mctx = mc.getContext('2d');
   const oc = mk(1, 1), octx = oc.getContext('2d');
   const ec = mk(1, 1), ectx = ec.getContext('2d');
-  const gbuf = mk(184, 184), gbctx = gbuf.getContext('2d');
+  const eb = mk(1, 1), ebctx = eb.getContext('2d');
+  const gbuf = mk(184 * GROUND_SUPERSAMPLE, 184 * GROUND_SUPERSAMPLE), gbctx = gbuf.getContext('2d');
+
+  // 烘焙专用复用临时画布（全局仅 2 张，旋转烘焙时零额外临时纹理分配！）
+  const scratchRaw = mk(256, 256), srCtx = scratchRaw.getContext('2d');
+  const scratchSil = mk(256, 256), ssCtx = scratchSil.getContext('2d');
+
+  // 回收 Canvas 对象池，避免 LRU 淘汰触发浏览器 GC 掉帧
+  const canvasPool = [];
+  function acquireCanvas(w, h) {
+    const c = canvasPool.pop() || document.createElement('canvas');
+    if (c.width !== w) c.width = w;
+    if (c.height !== h) c.height = h;
+    return c;
+  }
+  function releaseCanvas(c) {
+    if (!c) return;
+    if (canvasPool.length < 160) canvasPool.push(c);
+  }
 
   // 1. 启动构建资产并记录精准耗时
   const tBuild0 = performance.now();
@@ -1031,108 +1055,126 @@ function buildScrollingBoardwalkAssets(makeCanvas, size = 184, period = 32) {
   const boardAssets = buildScrollingBoardwalkAssets(mk, 184, 32);
   const buildMs = (performance.now() - tBuild0).toFixed(1);
 
-  // 2. 角度烘焙精灵缓存（LRU）
+  // 2. 角度烘焙精灵缓存（与屏幕 SCALE 解耦，滚轮缩放 100% 保持命中！）
   const spriteCache = new Map();
-  const MAX_CACHE = 180;
+  const MAX_CACHE = 480;
   let cacheHits = 0, cacheMisses = 0;
 
-  // 为单个资产按给定角度、缩放、轮廓与发光状态离屏烘焙一张紧凑 2D 精灵
-  function getBakedSprite(asset, assetId, angle, sc, outlineHex, useOutline, emitGlow, subStep) {
-    // 角度按 2° 量化（180 档，视觉完全平滑且缓存极高命中）
-    const normA = ((angle % TAU) + TAU) % TAU;
-    const degKey = Math.round((normA * 180 / Math.PI) / 2) % 180;
-    const qAng = (degKey * 2) * Math.PI / 180;
-    const key = `${assetId}|${degKey}|${sc}|${useOutline ? outlineHex : 'no'}|${emitGlow ? 1 : 0}|${subStep ? 1 : 0}`;
+  function getBakedSprite(asset, assetId, angle, outlineHex, useOutline, emitGlow, symDeg = 360) {
+    const rawDeg = (((angle * 180 / Math.PI) % symDeg) + symDeg) % symDeg;
+    const slots = Math.max(1, Math.round(symDeg / ANGLE_QUANT_DEG));
+    const degSlot = Math.round(rawDeg / ANGLE_QUANT_DEG) % slots;
+    const qAng = (degSlot * ANGLE_QUANT_DEG) * Math.PI / 180;
+    const key = `${assetId}|${degSlot}|${useOutline ? outlineHex : 'no'}|${emitGlow ? 1 : 0}`;
     const hit = spriteCache.get(key);
     if (hit) {
       cacheHits++;
-      // LRU refresh
       spriteCache.delete(key);
       spriteCache.set(key, hit);
       return hit;
     }
     cacheMisses++;
 
-    const { w, d, activeLayers, glowSlot, glowStrip } = asset;
+    const { w, d, activeLayers, glowLayers, glowSlot, glowStrip } = asset;
     const stripImg = emitGlow ? asset.strip : asset.stripDay;
     const c = Math.cos(qAng), s = Math.sin(qAng);
-    const step = Math.max(1, Math.round(HS * sc));
+    const sc = BAKE_SCALE;
     const maxZ = activeLayers.length ? activeLayers[activeLayers.length - 1] : 0;
-    const op = useOutline ? Math.max(1, Math.round(sc * 0.30)) : 0;
-    const pad = op + 3;
+    const op = useOutline ? 1 : 0;
+    const pad = op + 2;
 
-    // 精确旋转后水平与垂直投影半宽
     const rxSpan = Math.ceil((Math.abs(c) * w * 0.5 + Math.abs(s) * d * 0.5) * sc);
     const rySpan = Math.ceil((Math.abs(s) * w * 0.5 + Math.abs(c) * d * 0.5) * TILT * sc);
     const bw = rxSpan * 2 + pad * 2;
-    const bh = rySpan * 2 + maxZ * step + pad * 2 + step;
+    const bh = rySpan * 2 + maxZ * BAKE_STEP + pad * 2 + BAKE_STEP;
     const anchorX = Math.floor(bw / 2);
     const anchorY = bh - rySpan - pad;
 
-    const rawC = mk(bw, bh), rctx = rawC.getContext('2d');
-    rctx.imageSmoothingEnabled = false;
+    // 复用全局临时画布 scratchRaw（按需扩容，不缩小，零分配）
+    if (scratchRaw.width < bw) scratchRaw.width = bw;
+    if (scratchRaw.height < bh) scratchRaw.height = bh;
+    srCtx.setTransform(1, 0, 0, 1, 0, 0);
+    srCtx.globalCompositeOperation = 'source-over';
+    srCtx.imageSmoothingEnabled = false;
+    srCtx.clearRect(0, 0, bw, bh);
 
-    const hasGlow = emitGlow && !!glowStrip;
-    const glowC = hasGlow ? mk(bw, bh) : null;
+    const hasGlow = emitGlow && !!glowStrip && glowLayers.length > 0;
+    const minGlowZ = hasGlow ? glowLayers[0] : 9999;
+    const glowC = hasGlow ? acquireCanvas(bw, bh) : null;
     const glctx = hasGlow ? glowC.getContext('2d') : null;
-    if (glctx) glctx.imageSmoothingEnabled = false;
+    if (glctx) {
+      glctx.setTransform(1, 0, 0, 1, 0, 0);
+      glctx.globalCompositeOperation = 'source-over';
+      glctx.imageSmoothingEnabled = false;
+      glctx.clearRect(0, 0, bw, bh);
+    }
 
-    // 双子步压实：当步进大于压扁层厚（HS > TILT）时在半步处补画一次，彻底消灭层间百叶窗黑缝！
-    const halfStep = (subStep && step > Math.floor(TILT * sc)) ? Math.max(1, Math.round(step * 0.5)) : 0;
+    const cs = c * sc, ss = s * sc, tss = TILT * ss, tcs = TILT * cs;
+    const hw = -w * 0.5, hd = -d * 0.5;
 
     for (let li = 0; li < activeLayers.length; li++) {
       const z = activeLayers[li];
-      const yy = anchorY - z * step;
+      const yy = anchorY - z * BAKE_STEP;
       const sx = z * w;
 
-      if (halfStep) {
-        rctx.setTransform(c * sc, TILT * s * sc, -s * sc, TILT * c * sc, anchorX, yy + halfStep);
-        rctx.drawImage(stripImg, sx, 0, w, d, -w / 2, -d / 2, w, d);
-      }
-      rctx.setTransform(c * sc, TILT * s * sc, -s * sc, TILT * c * sc, anchorX, yy);
-      rctx.drawImage(stripImg, sx, 0, w, d, -w / 2, -d / 2, w, d);
+      // 双子步压实（1px 半步补绘），杜绝斜管/辐条层间缝隙
+      srCtx.setTransform(cs, tss, -ss, tcs, anchorX, yy + BAKE_HALF);
+      srCtx.drawImage(stripImg, sx, 0, w, d, hw, hd, w, d);
+      srCtx.setTransform(cs, tss, -ss, tcs, anchorX, yy);
+      srCtx.drawImage(stripImg, sx, 0, w, d, hw, hd, w, d);
 
-      // 发光自遮挡裁切：每升一层先用当前实心切片对发光层执行 destination-out，再画当前层发光！
-      if (hasGlow) {
-        glctx.globalCompositeOperation = 'destination-out';
-        if (halfStep) {
-          glctx.setTransform(c * sc, TILT * s * sc, -s * sc, TILT * c * sc, anchorX, yy + halfStep);
-          glctx.drawImage(stripImg, sx, 0, w, d, -w / 2, -d / 2, w, d);
+      // 仅从首个发光层 minGlowZ 起执行自遮挡抠除（跳过底层大量无用 destination-out！）
+      if (hasGlow && z >= minGlowZ) {
+        if (z > minGlowZ) {
+          glctx.globalCompositeOperation = 'destination-out';
+          glctx.setTransform(cs, tss, -ss, tcs, anchorX, yy + BAKE_HALF);
+          glctx.drawImage(stripImg, sx, 0, w, d, hw, hd, w, d);
+          glctx.setTransform(cs, tss, -ss, tcs, anchorX, yy);
+          glctx.drawImage(stripImg, sx, 0, w, d, hw, hd, w, d);
         }
-        glctx.setTransform(c * sc, TILT * s * sc, -s * sc, TILT * c * sc, anchorX, yy);
-        glctx.drawImage(stripImg, sx, 0, w, d, -w / 2, -d / 2, w, d);
-
         const gSlot = glowSlot[z];
         if (gSlot >= 0) {
           glctx.globalCompositeOperation = 'source-over';
-          glctx.setTransform(c * sc, TILT * s * sc, -s * sc, TILT * c * sc, anchorX, yy);
-          glctx.drawImage(glowStrip, gSlot * w, 0, w, d, -w / 2, -d / 2, w, d);
+          glctx.setTransform(cs, tss, -ss, tcs, anchorX, yy);
+          glctx.drawImage(glowStrip, gSlot * w, 0, w, d, hw, hd, w, d);
         }
       }
     }
 
-    // 单体独立轮廓描边（只在烘焙时画一次，且天然把前景物体与背景物体轮廓清晰分开！）
-    let finalC = rawC;
-    if (useOutline) {
-      finalC = mk(bw, bh);
-      const fctx = finalC.getContext('2d');
-      fctx.imageSmoothingEnabled = false;
-      const sil = mk(bw, bh);
-      const sctx = sil.getContext('2d');
-      sctx.drawImage(rawC, 0, 0);
-      sctx.globalCompositeOperation = 'source-in';
-      sctx.fillStyle = outlineHex;
-      sctx.fillRect(0, 0, bw, bh);
-      for (const [ox, oy] of [[-op, 0], [op, 0], [0, -op], [0, op]]) {
-        fctx.drawImage(sil, ox, oy);
-      }
-      fctx.drawImage(rawC, 0, 0);
-    }
+    // 合成最终单体独立描边精灵到唯一输出 Canvas
+    const finalC = acquireCanvas(bw, bh);
+    const fctx = finalC.getContext('2d');
+    fctx.setTransform(1, 0, 0, 1, 0, 0);
+    fctx.globalCompositeOperation = 'source-over';
+    fctx.imageSmoothingEnabled = false;
+    fctx.clearRect(0, 0, bw, bh);
 
-    const entry = { main: finalC, mask: rawC, glow: glowC, anchorX, anchorY, bw, bh };
+    if (useOutline) {
+      if (scratchSil.width < bw) scratchSil.width = bw;
+      if (scratchSil.height < bh) scratchSil.height = bh;
+      ssCtx.setTransform(1, 0, 0, 1, 0, 0);
+      ssCtx.globalCompositeOperation = 'source-over';
+      ssCtx.clearRect(0, 0, bw, bh);
+      ssCtx.drawImage(scratchRaw, 0, 0, bw, bh, 0, 0, bw, bh);
+      ssCtx.globalCompositeOperation = 'source-in';
+      ssCtx.fillStyle = outlineHex;
+      ssCtx.fillRect(0, 0, bw, bh);
+
+      fctx.drawImage(scratchSil, 0, 0, bw, bh, -op, 0, bw, bh);
+      fctx.drawImage(scratchSil, 0, 0, bw, bh,  op, 0, bw, bh);
+      fctx.drawImage(scratchSil, 0, 0, bw, bh, 0, -op, bw, bh);
+      fctx.drawImage(scratchSil, 0, 0, bw, bh, 0,  op, bw, bh);
+    }
+    fctx.drawImage(scratchRaw, 0, 0, bw, bh, 0, 0, bw, bh);
+
+    const entry = { main: finalC, glow: glowC, anchorX, anchorY, bw, bh };
     spriteCache.set(key, entry);
     if (spriteCache.size > MAX_CACHE) {
-      spriteCache.delete(spriteCache.keys().next().value);
+      const oldestKey = spriteCache.keys().next().value;
+      const old = spriteCache.get(oldestKey);
+      spriteCache.delete(oldestKey);
+      releaseCanvas(old.main);
+      releaseCanvas(old.glow);
     }
     return entry;
   }
@@ -1178,13 +1220,35 @@ function buildScrollingBoardwalkAssets(makeCanvas, size = 184, period = 32) {
     }
   };
 
+  // 预渲染天空背景（仅尺寸或主题变化时重绘一次，每帧省掉 2 次全屏渐变计算）
+  function renderSkyCache() {
+    const theme = THEMES[mood];
+    bgc.width = Math.max(1, cv.width);
+    bgc.height = Math.max(1, cv.height);
+    bgctx.setTransform(1, 0, 0, 1, 0, 0);
+    const sky = bgctx.createLinearGradient(0, 0, 0, bgc.height);
+    sky.addColorStop(0, theme.skyTop);
+    sky.addColorStop(1, theme.skyBot);
+    bgctx.fillStyle = sky;
+    bgctx.fillRect(0, 0, bgc.width, bgc.height);
+
+    const halo = bgctx.createRadialGradient(
+      bgc.width * 0.5, bgc.height * 0.40, 10,
+      bgc.width * 0.5, bgc.height * 0.40, bgc.height * 0.52
+    );
+    halo.addColorStop(0, theme.sun);
+    halo.addColorStop(1, 'rgba(0,0,0,0)');
+    bgctx.fillStyle = halo;
+    bgctx.fillRect(0, 0, bgc.width, bgc.height);
+  }
+
   function fit() {
     DPR = Math.min(2, window.devicePixelRatio || 1);
     const cssW = window.innerWidth, cssH = window.innerHeight;
     cv.width = Math.floor(cssW * DPR);
     cv.height = Math.floor(cssH * DPR);
 
-    // 按逻辑像素算基准缩放再乘 DPR，保证 1x/2x 屏幕缩放手感和描边粗细完全一致
+    // 按逻辑像素算基准缩放再乘 DPR，保证 1x/2x 屏幕缩放手感和视觉比例一致
     const logicalScale = Math.max(2, Math.round(cssH / 128) + zoom);
     SCALE = Math.max(2, Math.round(logicalScale * DPR));
 
@@ -1196,25 +1260,33 @@ function buildScrollingBoardwalkAssets(makeCanvas, size = 184, period = 32) {
       CW = cv.width;
       CH = cv.height;
     }
-    gc.width = mc.width = oc.width = CW;
-    gc.height = mc.height = oc.height = CH;
 
-    // 发光缓冲使用 1/4 降采样尺寸，大幅降低高斯模糊的像素填充率！
-    EW = Math.max(1, Math.ceil(CW / 4));
-    EH = Math.max(1, Math.ceil(CH / 4));
-    ec.width = EW;
-    ec.height = EH;
-    spriteCache.clear();
+    // cached 模式直接绘制到 dctx，不需要全屏 mc/oc，节省数十 MB 显存与清屏带宽！
+    if (mode === 'cached') {
+      mc.width = oc.width = 1;
+      mc.height = oc.height = 1;
+    } else {
+      mc.width = oc.width = CW;
+      mc.height = oc.height = CH;
+    }
+
+    // 发光与模糊缓冲统一 1/4 降采样，在 1/4 小图上执行真降采样 blur！
+    EW = Math.max(1, Math.ceil(cv.width / 4));
+    EH = Math.max(1, Math.ceil(cv.height / 4));
+    ec.width = eb.width = EW;
+    ec.height = eb.height = EH;
+
+    renderSkyCache();
   }
 
   function proj(x, y, z, sc) {
     const c = Math.cos(th), s = Math.sin(th);
     const rx = c * x - s * y, ry = s * x + c * y;
-    const step = MODES[modeIdx] === 'retro' ? HS : Math.max(1, Math.round(HS * sc));
+    const step = MODES[modeIdx] === 'retro' ? HS : (MODES[modeIdx] === 'cached' ? HS * sc : Math.max(1, Math.round(HS * sc)));
     return [CW / 2 + rx * sc, CH / 2 + 16 * sc + ry * TILT * sc - z * step, ry];
   }
 
-  // 实时模式逐层绘制（跳过空层 + 半步防漏缝 + 发光层自遮挡）
+  // 实时模式逐层绘制（跳过空层 + 半步防漏缝 + minGlowZ 发光自遮挡）
   function drawStackRealtime(asset, x, y, ro, sc, emitGlow) {
     const [X, Y] = proj(x, y, 0, sc);
     const a = ro + th, c = Math.cos(a), s = Math.sin(a);
@@ -1223,8 +1295,10 @@ function buildScrollingBoardwalkAssets(makeCanvas, size = 184, period = 32) {
     const step = isRetro ? HS : Math.max(1, Math.round(HS * sc));
     const halfStep = (!isRetro && step > Math.floor(TILT * sc)) ? Math.max(1, Math.round(step * 0.5)) : 0;
     const stripImg = emitGlow ? asset.strip : asset.stripDay;
-    const { w, d, activeLayers, glowSlot, glowStrip } = asset;
-    const eScale = EW / CW;
+    const { w, d, activeLayers, glowLayers, glowSlot, glowStrip } = asset;
+    const hasGlow = emitGlow && !!glowStrip && glowLayers.length > 0;
+    const minGlowZ = hasGlow ? glowLayers[0] : 9999;
+    const eScaleX = EW / CW, eScaleY = EH / CH;
     let calls = 0;
 
     for (let li = 0; li < activeLayers.length; li++) {
@@ -1242,10 +1316,12 @@ function buildScrollingBoardwalkAssets(makeCanvas, size = 184, period = 32) {
       calls++;
 
       if (emitGlow) {
-        ectx.globalCompositeOperation = 'destination-out';
-        ectx.setTransform(c * sc * eScale, TILT * s * sc * eScale, -s * sc * eScale, TILT * c * sc * eScale, X0 * eScale, yy * eScale);
-        ectx.drawImage(stripImg, sx, 0, w, d, -w / 2, -d / 2, w, d);
-        if (glowStrip && glowSlot[z] >= 0) {
+        if (!hasGlow || z >= minGlowZ) {
+          ectx.globalCompositeOperation = 'destination-out';
+          ectx.setTransform(c * sc * eScaleX, TILT * s * sc * eScaleY, -s * sc * eScaleX, TILT * c * sc * eScaleY, X0 * eScaleX, yy * eScaleY);
+          ectx.drawImage(stripImg, sx, 0, w, d, -w / 2, -d / 2, w, d);
+        }
+        if (hasGlow && glowSlot[z] >= 0) {
           ectx.globalCompositeOperation = 'source-over';
           ectx.drawImage(glowStrip, glowSlot[z] * w, 0, w, d, -w / 2, -d / 2, w, d);
           calls++;
@@ -1263,9 +1339,10 @@ function buildScrollingBoardwalkAssets(makeCanvas, size = 184, period = 32) {
     sp: GROUND_SPEED * (0.45 + (i % 4) * 0.14)
   }));
 
-  let last = 0, rideTime = 0, fpsAcc = 0, fpsFrames = 0, fpsVal = 60, statTimer = 0;
+  let last = 0, rideTime = 0, fpsAcc = 0, fpsFrames = 0, fpsVal = 60, statTimer = 0, cpuMsSmooth = 1.0;
 
   function tick(ms) {
+    const tCpu0 = performance.now();
     const t = ms / 1000, dt = Math.min(0.05, t - (last || t)); last = t;
     fpsAcc += dt; fpsFrames++;
     if (fpsAcc >= 0.4) {
@@ -1281,225 +1358,231 @@ function buildScrollingBoardwalkAssets(makeCanvas, size = 184, period = 32) {
     const theme = THEMES[mood];
     const sc = mode === 'retro' ? 1 : SCALE;
     const c = Math.cos(th), s = Math.sin(th);
-    const eScale = EW / CW;
+    const eScale = EW / cv.width;
     let drawCalls = 0;
 
-    for (const ctx of [gctx, mctx, ectx]) {
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.imageSmoothingEnabled = false;
-      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    }
-
-    // 1. 滚动木栈道（与车轮纯滚动速度严格一致！）
+    // 1. 组装场景动态物体列表
     const distTravel = rideTime * GROUND_SPEED;
+    const spanY = 96;
+    const scrollObj = distTravel % spanY;
+    const propY = base => { let py = base - scrollObj; while (py < -spanY / 2) py += spanY; return py; };
+    const objs = [
+      { id: 'lantern', m: lantern, x: -44, y: propY(20),  ro: 0,       isLantern: true, symDeg: 90 },
+      { id: 'lantern', m: lantern, x:  44, y: propY(-28), ro: Math.PI, isLantern: true, symDeg: 90 },
+      { id: 'tuft',    m: tuft,    x: -44, y: propY(-18), ro: 0.4,     symDeg: 360 },
+      { id: 'tuft',    m: tuft,    x:  44, y: propY(26),  ro: 2.1,     symDeg: 360 },
+      { id: 'tuft',    m: tuft,    x: -52, y: propY(42),  ro: 1.2,     symDeg: 360 }
+    ].filter(o => Math.hypot(o.x, o.y) < 72);
+
+    const fi = Math.floor(rideTime * REV_PER_SEC * bikeFrames.length) % bikeFrames.length;
+    const sway = playing ? Math.sin(rideTime * 4.2) * 0.035 : 0;
+    objs.push({ id: 'bike_' + fi, m: bikeFrames[fi], x: 0, y: 0, ro: sway, hero: true, symDeg: 360 });
+
+    // 2. 在 2x 小地表缓冲 gbuf（368×368）内一次性完成：滚动木栈道 + 投影 + 夜色压暗 + 光锥光斑
+    //    相比在全屏 2560×1600 画布上分步画地面与光斑，像素填充带宽直降 30 倍！
+    const bSize = boardAssets.size;
+    const halfB = bSize * 0.5;
     const tileOff = ((distTravel % boardAssets.period) + boardAssets.period) % boardAssets.period;
+    gbctx.setTransform(GROUND_SUPERSAMPLE, 0, 0, GROUND_SUPERSAMPLE, 0, 0);
     gbctx.globalCompositeOperation = 'source-over';
-    gbctx.clearRect(0, 0, boardAssets.size, boardAssets.size);
-    // 木板向 -Y 滚：向下采样源图 offset = period - tileOff
-    gbctx.drawImage(
-      boardAssets.tile,
-      0, Math.floor(tileOff), boardAssets.size, boardAssets.size,
-      0, 0, boardAssets.size, boardAssets.size
-    );
+    gbctx.imageSmoothingEnabled = false;
+    gbctx.clearRect(0, 0, bSize, bSize);
+    gbctx.drawImage(boardAssets.tile, 0, Math.floor(tileOff), bSize, bSize, 0, 0, bSize, bSize);
     gbctx.globalCompositeOperation = 'destination-in';
     gbctx.drawImage(boardAssets.mask, 0, 0);
     gbctx.globalCompositeOperation = 'source-over';
     gbctx.drawImage(boardAssets.rim, 0, 0);
 
-    gctx.setTransform(c * sc, TILT * s * sc, -s * sc, TILT * c * sc, CW / 2, CH / 2 + 16 * sc);
-    gctx.drawImage(gbuf, -boardAssets.size / 2, -boardAssets.size / 2);
-    drawCalls++;
-
-    // 2. 组装场景动态物体列表
-    const spanY = 96;
-    const scrollObj = distTravel % spanY;
-    const propY = base => { let py = base - scrollObj; while (py < -spanY / 2) py += spanY; return py; };
-    const objs = [
-      { id: 'lantern', m: lantern, x: -44, y: propY(20),  ro: 0,       isLantern: true },
-      { id: 'lantern', m: lantern, x:  44, y: propY(-28), ro: Math.PI, isLantern: true },
-      { id: 'tuft',    m: tuft,    x: -44, y: propY(-18), ro: 0.4 },
-      { id: 'tuft',    m: tuft,    x:  44, y: propY(26),  ro: 2.1 },
-      { id: 'tuft',    m: tuft,    x: -52, y: propY(42),  ro: 1.2 }
-    ].filter(o => Math.hypot(o.x, o.y) < 72);
-
-    const fi = Math.floor(rideTime * REV_PER_SEC * bikeFrames.length) % bikeFrames.length;
-    const sway = playing ? Math.sin(rideTime * 4.2) * 0.035 : 0;
-    objs.push({ id: 'bike_' + fi, m: bikeFrames[fi], x: 0, y: 0, ro: sway, hero: true });
-
-    // 3. 接地接触影 + 真实轮廓投射影（全部贴合地面世界矩阵）
-    gctx.setTransform(c * sc, TILT * s * sc, -s * sc, TILT * c * sc, CW / 2, CH / 2 + 16 * sc);
+    // 接地接触影 + 真实轮廓投射影（全部贴合 gbuf 世界平面）
+    gbctx.save();
+    gbctx.translate(halfB, halfB);
     for (const o of objs) {
-      gctx.save();
-      gctx.translate(o.x, o.y);
-      // 柔和偏移轮廓投影
-      gctx.save();
-      gctx.globalAlpha = theme.shadowAlpha * 0.55;
-      gctx.translate(2.5, -2.5);
-      gctx.rotate(o.ro);
-      gctx.drawImage(o.m.footShadow, -o.m.w / 2, -o.m.d / 2);
-      gctx.restore();
-      // 紧贴落脚点的深色接触影（Contact Shadow），消除漂浮感
-      gctx.fillStyle = `rgba(6, 10, 18, ${theme.shadowAlpha})`;
-      gctx.rotate(o.ro);
-      if (o.hero) {
-        gctx.beginPath(); gctx.ellipse(0, -14, 3.2, 8.8, 0, 0, TAU); gctx.fill();
-        gctx.beginPath(); gctx.ellipse(0,  14, 3.2, 8.8, 0, 0, TAU); gctx.fill();
-        gctx.globalAlpha = 0.55;
-        gctx.beginPath(); gctx.ellipse(0, 0, 6.2, 19.5, 0, 0, TAU); gctx.fill();
-      } else {
-        gctx.beginPath(); gctx.arc(0, 0, o.m.meta.footRadius * 1.05, 0, TAU); gctx.fill();
-      }
-      gctx.restore();
-    }
+      gbctx.save();
+      gbctx.translate(o.x, o.y);
+      gbctx.save();
+      gbctx.globalAlpha = theme.shadowAlpha * 0.55;
+      gbctx.translate(2.5, -2.5);
+      gbctx.rotate(o.ro);
+      gbctx.drawImage(o.m.footShadow, -o.m.w / 2, -o.m.d / 2);
+      gbctx.restore();
 
-    // 4. 黄昏/夜色地面氛围光斑（车前灯扇形光锥 + 路灯地面暖光圈）
+      gbctx.fillStyle = `rgba(6, 10, 18, ${theme.shadowAlpha})`;
+      gbctx.rotate(o.ro);
+      if (o.hero) {
+        gbctx.beginPath(); gbctx.ellipse(0, -14, 3.2, 8.8, 0, 0, TAU); gbctx.fill();
+        gbctx.beginPath(); gbctx.ellipse(0,  14, 3.2, 8.8, 0, 0, TAU); gbctx.fill();
+        gbctx.globalAlpha = 0.55;
+        gbctx.beginPath(); gbctx.ellipse(0, 0, 6.2, 19.5, 0, 0, TAU); gbctx.fill();
+      } else {
+        gbctx.beginPath(); gbctx.arc(0, 0, o.m.meta.footRadius * 1.05, 0, TAU); gbctx.fill();
+      }
+      gbctx.restore();
+    }
+    gbctx.restore();
+
     if (theme.nightTint) {
-      gctx.save();
-      gctx.globalCompositeOperation = 'source-atop';
-      gctx.setTransform(1, 0, 0, 1, 0, 0);
-      gctx.fillStyle = theme.nightTint;
-      gctx.fillRect(0, 0, CW, CH);
-      gctx.restore();
+      gbctx.save();
+      gbctx.globalCompositeOperation = 'source-atop';
+      gbctx.fillStyle = theme.nightTint;
+      gbctx.fillRect(0, 0, bSize, bSize);
+      gbctx.restore();
     }
     if (theme.beamAlpha > 0) {
-      gctx.save();
-      gctx.setTransform(c * sc, TILT * s * sc, -s * sc, TILT * c * sc, CW / 2, CH / 2 + 16 * sc);
-      // 严格裁切在圆形木栈道岛屿内，杜绝光锥溢出到暗色背景天空
-      gctx.beginPath();
-      gctx.arc(0, 0, boardAssets.size * 0.472, 0, TAU);
-      gctx.clip();
-      gctx.globalCompositeOperation = 'lighter';
+      gbctx.save();
+      gbctx.translate(halfB, halfB);
+      gbctx.beginPath();
+      gbctx.arc(0, 0, bSize * 0.472, 0, TAU);
+      gbctx.clip();
+      gbctx.globalCompositeOperation = 'lighter';
 
-      // 车前灯向前方 +Y 投射柔和扇形光束（远端柔和衰减至 0，无硬截断边）
-      gctx.save();
-      gctx.rotate(sway);
-      const beam = gctx.createRadialGradient(0, 20, 2, 0, 38, 34);
+      gbctx.save();
+      gbctx.rotate(sway);
+      const beam = gbctx.createRadialGradient(0, 20, 2, 0, 38, 34);
       beam.addColorStop(0, `rgba(255, 224, 128, ${theme.beamAlpha})`);
       beam.addColorStop(0.55, `rgba(255, 198, 92, ${theme.beamAlpha * 0.42})`);
       beam.addColorStop(1, 'rgba(255, 180, 60, 0)');
-      gctx.fillStyle = beam;
-      gctx.beginPath();
-      gctx.moveTo(-2.4, 18);
-      gctx.lineTo(-24, 72);
-      gctx.lineTo(24, 72);
-      gctx.lineTo(2.4, 18);
-      gctx.closePath();
-      gctx.fill();
-      gctx.restore();
+      gbctx.fillStyle = beam;
+      gbctx.beginPath();
+      gbctx.moveTo(-2.4, 18);
+      gbctx.lineTo(-24, 72);
+      gbctx.lineTo(24, 72);
+      gbctx.lineTo(2.4, 18);
+      gbctx.closePath();
+      gbctx.fill();
+      gbctx.restore();
 
-      // 两盏路灯洒在地面与木栈道上的暖色光斑
       for (const o of objs) {
         if (!o.isLantern) continue;
-        const pool = gctx.createRadialGradient(o.x, o.y, 2, o.x, o.y, 28);
+        const pool = gbctx.createRadialGradient(o.x, o.y, 2, o.x, o.y, 28);
         pool.addColorStop(0, `rgba(255, 214, 118, ${theme.lampPoolAlpha})`);
         pool.addColorStop(0.55, `rgba(255, 188, 86, ${theme.lampPoolAlpha * 0.35})`);
         pool.addColorStop(1, 'rgba(255, 170, 60, 0)');
-        gctx.fillStyle = pool;
-        gctx.beginPath();
-        gctx.arc(o.x, o.y, 28, 0, TAU);
-        gctx.fill();
+        gbctx.fillStyle = pool;
+        gbctx.beginPath();
+        gbctx.arc(o.x, o.y, 28, 0, TAU);
+        gbctx.fill();
       }
-      gctx.restore();
+      gbctx.restore();
     }
 
-    // 5. 按画家算法从远到近排序并绘制物体（同步处理跨物体发光遮挡！）
+    // 3. 清理发光缓冲，并将预渲染天空 + 地表缓冲一次贴到主画布 dctx
+    if (theme.glowAlpha > 0) {
+      ectx.setTransform(1, 0, 0, 1, 0, 0);
+      ectx.globalCompositeOperation = 'source-over';
+      ectx.imageSmoothingEnabled = false;
+      ectx.clearRect(0, 0, EW, EH);
+    }
+
+    dctx.setTransform(1, 0, 0, 1, 0, 0);
+    dctx.globalCompositeOperation = 'source-over';
+    dctx.imageSmoothingEnabled = false;
+    dctx.drawImage(bgc, 0, 0);
+    drawCalls++;
+
+    // 地表 1 次矩阵贴图到 dctx（复古低分模式按低分逻辑格绘制，其他模式直绘高清）
+    if (mode === 'retro') {
+      mctx.setTransform(1, 0, 0, 1, 0, 0);
+      mctx.imageSmoothingEnabled = false;
+      mctx.clearRect(0, 0, CW, CH);
+      dctx.setTransform(c * SCALE, TILT * s * SCALE, -s * SCALE, TILT * c * SCALE, cv.width / 2, cv.height / 2 + 16 * SCALE);
+      dctx.drawImage(gbuf, -halfB, -halfB, bSize, bSize);
+      dctx.setTransform(1, 0, 0, 1, 0, 0);
+    } else {
+      dctx.setTransform(c * SCALE, TILT * s * SCALE, -s * SCALE, TILT * c * SCALE, cv.width / 2, cv.height / 2 + 16 * SCALE);
+      dctx.drawImage(gbuf, -halfB, -halfB, bSize, bSize);
+      dctx.setTransform(1, 0, 0, 1, 0, 0);
+    }
+    drawCalls++;
+
+    // 4. 按画家算法从远到近排序并绘制物体（cached 模式直接绘制到 dctx，彻底消除全屏 mc 拷贝！）
     objs.sort((a, b) => proj(a.x, a.y, 0, sc)[2] - proj(b.x, b.y, 0, sc)[2]);
 
     if (mode === 'cached') {
-      mctx.setTransform(1, 0, 0, 1, 0, 0);
+      const dispRatio = SCALE / BAKE_SCALE;
       ectx.setTransform(1, 0, 0, 1, 0, 0);
       for (const o of objs) {
-        const [X, Y] = proj(o.x, o.y, 0, sc);
-        const sp = getBakedSprite(o.m, o.id, o.ro + th, sc, theme.outline, useOutline, theme.emitGlow, true);
-        const dx = Math.round(X - sp.anchorX);
-        const dy = Math.round(Y - sp.anchorY);
-        mctx.drawImage(sp.main, dx, dy);
+        const [X, Y] = proj(o.x, o.y, 0, SCALE);
+        const sp = getBakedSprite(o.m, o.id, o.ro + th, theme.outline, useOutline, theme.emitGlow, o.symDeg);
+        const dw = Math.round(sp.bw * dispRatio);
+        const dh = Math.round(sp.bh * dispRatio);
+        const dx = Math.round(X - sp.anchorX * dispRatio);
+        const dy = Math.round(Y - sp.anchorY * dispRatio);
+        dctx.drawImage(sp.main, dx, dy, dw, dh);
         drawCalls++;
 
         if (theme.emitGlow) {
-          // 前景物体先抠除背景被它挡住的发光，再叠自身已自遮挡裁切的发光
           ectx.globalCompositeOperation = 'destination-out';
-          ectx.drawImage(sp.mask, dx * eScale, dy * eScale, sp.bw * eScale, sp.bh * eScale);
+          ectx.drawImage(sp.main, dx * eScale, dy * eScale, dw * eScale, dh * eScale);
           if (sp.glow) {
             ectx.globalCompositeOperation = 'source-over';
-            ectx.drawImage(sp.glow, dx * eScale, dy * eScale, sp.bw * eScale, sp.bh * eScale);
+            ectx.drawImage(sp.glow, dx * eScale, dy * eScale, dw * eScale, dh * eScale);
             drawCalls++;
           }
         }
       }
       ectx.globalCompositeOperation = 'source-over';
     } else {
+      mctx.setTransform(1, 0, 0, 1, 0, 0);
+      mctx.globalCompositeOperation = 'source-over';
+      mctx.imageSmoothingEnabled = false;
+      mctx.clearRect(0, 0, CW, CH);
       for (const o of objs) {
         drawCalls += drawStackRealtime(o.m, o.x, o.y, o.ro, sc, theme.emitGlow);
       }
+      const drawW = mode === 'retro' ? CW * SCALE : CW;
+      const drawH = mode === 'retro' ? CH * SCALE : CH;
+      if (useOutline) {
+        octx.setTransform(1, 0, 0, 1, 0, 0);
+        octx.globalCompositeOperation = 'source-over';
+        octx.clearRect(0, 0, CW, CH);
+        octx.drawImage(mc, 0, 0);
+        octx.globalCompositeOperation = 'source-in';
+        octx.fillStyle = theme.outline;
+        octx.fillRect(0, 0, CW, CH);
+        octx.globalCompositeOperation = 'source-over';
+        const op = mode === 'retro' ? SCALE : Math.max(1, Math.round(SCALE * 0.30));
+        for (const [ox, oy] of [[-op, 0], [op, 0], [0, -op], [0, op]]) {
+          dctx.drawImage(oc, ox, oy, drawW, drawH);
+        }
+      }
+      dctx.drawImage(mc, 0, 0, drawW, drawH);
     }
 
-    // 6. 漂浮海风微粒
-    if (mood !== 'day') {
+    // 5. 漂浮海风微粒 + 真 1/4 降采样离屏模糊（在 1/4 小画布 eb 上 blur，dctx 零滤镜！）
+    if (theme.glowAlpha > 0) {
       ectx.setTransform(1, 0, 0, 1, 0, 0);
-      const dotSz = Math.max(1, Math.round((mode === 'retro' ? 1 : SCALE * 0.45) * eScale));
+      const dotSz = Math.max(1, Math.round(SCALE * 0.45 * eScale));
       ectx.fillStyle = theme.moteColor;
+      const pSc = mode === 'retro' ? 1 : SCALE;
+      const toE = mode === 'retro' ? (SCALE * eScale) : eScale;
       for (const p of motes) {
         let my = p.y - rideTime * p.sp;
         my = ((my + 62) % 124 + 124) % 124 - 62;
-        const [mx, msy] = proj(p.x, my, p.z + Math.sin(t * 2 + p.x) * 1.5, sc);
-        ectx.fillRect(Math.round(mx * eScale), Math.round(msy * eScale), dotSz, dotSz);
+        const [mx, msy] = proj(p.x, my, p.z + Math.sin(t * 2 + p.x) * 1.5, pSc);
+        ectx.fillRect(Math.round(mx * toE), Math.round(msy * toE), dotSz, dotSz);
       }
-    }
 
-    // 7. 最终合成到显示画布
-    dctx.setTransform(1, 0, 0, 1, 0, 0);
-    dctx.globalCompositeOperation = 'source-over';
-    const sky = dctx.createLinearGradient(0, 0, 0, cv.height);
-    sky.addColorStop(0, theme.skyTop);
-    sky.addColorStop(1, theme.skyBot);
-    dctx.fillStyle = sky;
-    dctx.fillRect(0, 0, cv.width, cv.height);
+      // 在 1/4 小画布 eb 上跑高斯模糊（像素数仅全屏的 1/16，比全屏 dctx.filter 快 16 倍！）
+      ebctx.setTransform(1, 0, 0, 1, 0, 0);
+      ebctx.clearRect(0, 0, EW, EH);
+      ebctx.filter = `blur(${Math.max(1, Math.round(SCALE * 0.14))}px)`;
+      ebctx.drawImage(ec, 0, 0);
+      ebctx.filter = 'none';
 
-    const halo = dctx.createRadialGradient(cv.width * 0.5, cv.height * 0.40, 10, cv.width * 0.5, cv.height * 0.40, cv.height * 0.52);
-    halo.addColorStop(0, theme.sun);
-    halo.addColorStop(1, 'rgba(0,0,0,0)');
-    dctx.fillStyle = halo;
-    dctx.fillRect(0, 0, cv.width, cv.height);
-
-    dctx.imageSmoothingEnabled = false;
-    const drawW = mode === 'retro' ? CW * SCALE : CW;
-    const drawH = mode === 'retro' ? CH * SCALE : CH;
-    dctx.drawImage(gc, 0, 0, drawW, drawH);
-
-    // 非缓存模式使用兼容描边（缓存模式已内含更优的单体独立轮廓描边）
-    if (useOutline && mode !== 'cached') {
-      octx.setTransform(1, 0, 0, 1, 0, 0);
-      octx.globalCompositeOperation = 'source-over';
-      octx.clearRect(0, 0, CW, CH);
-      octx.drawImage(mc, 0, 0);
-      octx.globalCompositeOperation = 'source-in';
-      octx.fillStyle = theme.outline;
-      octx.fillRect(0, 0, CW, CH);
-      octx.globalCompositeOperation = 'source-over';
-      const op = mode === 'retro' ? SCALE : Math.max(1, Math.round(SCALE * 0.30));
-      for (const [ox, oy] of [[-op, 0], [op, 0], [0, -op], [0, op]]) {
-        dctx.drawImage(oc, ox, oy, drawW, drawH);
-      }
-    }
-
-    dctx.drawImage(mc, 0, 0, drawW, drawH);
-
-    // 1/4 降采样柔光模糊合成（像素量仅 1/16，兼顾高清柔和晕染与 60fps 流畅度）
-    if (theme.glowAlpha > 0) {
       dctx.globalCompositeOperation = 'screen';
       dctx.imageSmoothingEnabled = true;
       dctx.globalAlpha = theme.glowAlpha;
-      dctx.filter = `blur(${Math.max(1, Math.round(SCALE * 0.35))}px)`;
-      dctx.drawImage(ec, 0, 0, drawW, drawH);
-      dctx.filter = 'none';
-      dctx.globalAlpha = theme.glowAlpha * 0.65;
+      dctx.drawImage(eb, 0, 0, cv.width, cv.height);
+      dctx.globalAlpha = theme.glowAlpha * 0.6;
       dctx.imageSmoothingEnabled = false;
-      dctx.drawImage(ec, 0, 0, drawW, drawH);
+      dctx.drawImage(ec, 0, 0, cv.width, cv.height);
       dctx.globalAlpha = 1;
       dctx.globalCompositeOperation = 'source-over';
+      drawCalls += 2;
     }
+
+    const cpuMs = performance.now() - tCpu0;
+    cpuMsSmooth = cpuMsSmooth * 0.88 + cpuMs * 0.12;
 
     statTimer += dt;
     if (statTimer >= 0.25) {
@@ -1508,6 +1591,7 @@ function buildScrollingBoardwalkAssets(makeCanvas, size = 184, period = 32) {
       $('stats').innerHTML =
         `<span>建模 <b>${buildMs}ms</b></span>` +
         `<span>帧率 <b>${fpsVal}fps</b></span>` +
+        `<span>单帧 <b>${cpuMsSmooth.toFixed(1)}ms</b></span>` +
         `<span>绘制 <b>${drawCalls}次</b></span>` +
         `<span>色表 <b>${PAL_KEYS.length}色</b></span>` +
         (mode === 'cached' ? `<span>缓存 <b>${spriteCache.size}</b> (${hitRate}%)</span>` : '');
@@ -1533,12 +1617,11 @@ function buildScrollingBoardwalkAssets(makeCanvas, size = 184, period = 32) {
   $('btnSpin').onclick = () => { autoSpin = !autoSpin; syncUI(); };
   $('btnOutline').onclick = () => { useOutline = !useOutline; syncUI(); };
   $('btnMode').onclick = () => { modeIdx = (modeIdx + 1) % MODES.length; fit(); syncUI(); };
-  $('btnSunset').onclick = () => { mood = 'sunset'; syncUI(); };
-  $('btnDay').onclick = () => { mood = 'day'; syncUI(); };
-  $('btnNight').onclick = () => { mood = 'night'; syncUI(); };
+  $('btnSunset').onclick = () => { mood = 'sunset'; renderSkyCache(); syncUI(); };
+  $('btnDay').onclick = () => { mood = 'day'; renderSkyCache(); syncUI(); };
+  $('btnNight').onclick = () => { mood = 'night'; renderSkyCache(); syncUI(); };
   $('btnReset').onclick = () => {
     thTarget = 0.92;
-    // 最短角路径规整，避免多圈旋转后重置时疯狂倒转
     th = thTarget + (((th - thTarget + Math.PI) % TAU + TAU) % TAU - Math.PI);
     zoom = 0; autoSpin = false; fit(); syncUI();
   };
