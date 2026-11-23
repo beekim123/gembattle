@@ -1,68 +1,57 @@
-# code00 原型（neon 做的那份）
+# code00 原型（`原型/neon/`）
 
-目前完成：**阶段 1 前半段（完整战斗可试玩）**。可以直接选仗、调开关、排链打仗、跑假玩家模拟器。
+neon 做了阶段 0 和阶段 1 前半段，claude 接手做完了阶段 1~4（2026-11-23）。现在能从大厅接任务、买装备、雇队友，出发进林子一片一片地走，打仗、挑奖励、挑出口，打到看门的，活着回来在工会提交，再出发。
 
-- 技术：浏览器原生 ES 模块 + HTML + 原生 JS + Canvas 2D，全用简单色块，界面中文，不取名。
-- 依赖：**零 npm 依赖**（只需要系统已安装的 Node.js；自动截图脚本复用本机已安装的 Chrome / Chromium）。
-- 未来搬到 Electron 时只加壳目录打开 `app/index.html`，现有模块不改。
+- 技术：浏览器原生 ES 模块 + Canvas 2D，全用简单色块，界面中文，不取名（游戏暂叫 code00）。
+- **零 npm 依赖**，只要本机有 Node.js；截图工具用本机的 Chrome。
+- 以后搬到 Electron 只加一个壳打开 `app/index.html`，模块不改。
 
-## 怎么玩 / 怎么打开
+## 打开
 
-三种开法效果一致，服务只监听本机 `127.0.0.1`：
+1. Mac 双击 `启动.command`；或
+2. `npm start`；或 `node tools/serve.js --port 8123`，开 `http://localhost:8123/app/`。
 
-1. **Mac 双击 `启动.command`**：弹出终端并自动在浏览器打开试打大厅（`http://localhost:8000/app/`），关掉终端窗口即停止。
-2. 终端在当前目录运行：
-   ```bash
-   npm start
-   ```
-3. 或直接用 node：
-   ```bash
-   node tools/serve.js --open
-   ```
+直达（调试、截图用）：`?fresh=1` 重开存档；`?run=1` 直接进林子；`?panel=guild` 打开工会；`?scene=trial` 试打台；`?encounter=pack_mixed` 直接打一仗（`&bare=1` 不带加成队友）。
 
-8000 端口被占时自动顺延寻找空闲端口；指定端口可用 `node tools/serve.js --port 9000`。
+## 怎么玩
 
-**进入后怎么玩**：
-- 左栏挑一种仗（5 种阶段 1 核心仗 + 2 种拓展仗），切换功能牌套装；
-- 右栏可随时切换 8 项手感与规则开关（补到 N 张 / 每回合摸 1 张、留 1 张不占名额、N 值、盾倍数、破盾推格、倒计时 4/3、自动帮排、显示精确总伤害）；
-- 点 **「开始试打」** 进入战斗（也可点 **「万发飘字压测」** 直接体验上万发大链）；
-- 实战中点击手牌排进链或马上使用，点链上牌撤回，点怪卡片切换目标；快捷键：空格打出、`Z` 撤回、`Esc` 返回。
+- **大厅**：出发 / 工会 / 招募 / 卡册 / 设置 / 退出。先去工会接任务（最多 3 个）、商店买装备（会磨损，坏了能再买）；招募雇队友（只管一趟，出发前能退）；出发里穿脱装备。
+- **林子**：点地走（WASD 也行）。碰到鬼火开打；角落里一闪一闪的是藏着的东西；带「任」记号的是任务要的。打完出口亮起来，牌子上写打完下一片给什么、一只还是一群、是不是精英、有没有任务的东西。右上角「牌组」看牌组和属性，`Esc` 暂停。
+- **打仗**：**出牌只用拖拽**：手牌拖到上面进链，拖回手里撤回，马上用的牌拖上去就用；点右下圆按钮打出（空格也行）。打的时候点一下画面加速，再点跳过。
+- **回来**：在工会点「提交」才拿钱；做够 3 个 C 级任务出升级任务。
+- **设置 → 试打台**：只打一仗，挑仗、开关摸牌规则和盾的倍数、带哪些加成队友、万发压测。那里改的开关，出发也照着用。
 
-各模块独立演示页也可直接从本地服务打开：
-- `/modules/battle-view/demo.html`（假数据战斗画面演示）
-- `/modules/shared/demo.html`
-- `/modules/render/demo.html`
-- `/modules/render/blocks/demo.html`
-- `/modules/ui/demo.html`
+## 跑检查
 
-## 怎么跑单测、模拟器与截图
+- `npm test`：全部单测（不开浏览器），含解耦边界和禁用字检查。
+- `npm run sim`：阶段 1 假玩家（一仗）。
+- `node tools/sim-run.js`：阶段 4 假玩家（整趟 + 金币），结果在 `阶段4-假玩家结果.md`。
+- `npm run shot`：截全套图到 `shots/`（同时检查页面有没有报错）。
 
-- **跑全部单测（不开浏览器，含解耦边界与禁字检查）**：
-  ```bash
-  npm test
-  ```
-- **跑假玩家模拟器（4 种假玩家 × 5 种核心仗 + 8 种功能牌陷阱对照 + 排法分量 + 万发压测）**：
-  ```bash
-  npm run sim
-  ```
-- **自动截图（内置临时服务 + 本机无头 Chrome，检错并截全套图存入 `shots/`）**：
-  ```bash
-  npm run shot
-  ```
-
-## 目录说明
+## 目录
 
 | 位置 | 是什么 |
 |---|---|
-| `启动.command` | Mac 双击启动脚本 |
-| `package.json` | 仅声明 `"type": "module"` 与 `start` / `test` / `sim` / `shot` 命令，零依赖 |
-| `README.md` / `进度.md` / `偏离.md` | 使用说明、当前进度与设计差异记录 |
-| `app/` | 唯一组装处：`index.html`、`main.js`、主循环、场景切换、大厅 `lobby.js`、实战组装 `battle-scene.js` |
-| `modules/shared/` | 色环七色、时机与动作表、可指定种子随机数、战斗四样约定及校验函数 |
-| `modules/content/` | 29 张固定宝石牌、8 种功能牌、5 种核心仗 + 2 种拓展仗与开战包构造 |
-| `modules/battle-rules/` | 一仗的完整规则引擎、每个动作独立小函数、自动帮排算法（纯逻辑零 DOM） |
-| `modules/battle-view/` | 战斗色块画面、鼠标交互与飘字演出（只读快照/预览/事件，自己不算规则） |
-| `modules/render/` | 统一绘制接口入口（转发 `blocks/`，阶段 5 换 `stack/` 时只改此处） |
-| `modules/ui/` | 公共界面小件（按钮、文字、纯数字、面板、提示框、无 DOM 交互层） |
-| `tools/` | `serve.js` 本地小服务、`test.js` 一键单测、`boundary.test.js` 解耦守卫、`sim.js` 假玩家模拟器、`shot.js` 自动截图 |
-| `shots/` | 自动截图工具生成的验收截图 |
+| `app/` | 唯一组装处：`main.js`、主循环、场景切换；`scenes/` 里是大厅 `hub-scene.js`、走一趟 `run-scene.js`、打仗 `battle-scene.js`、试打台 `lobby.js`；`session.js` 放跨场景的这一趟和存档 |
+| `modules/shared/` | 色环七色、时机和动作表、随机数、战斗的约定和校验 |
+| `modules/content/` | 内容数据：牌、怪和仗、加成、队友、地点、事件、任务、装备；拼开战包、拼给 run-rules 的内容包 |
+| `modules/battle-rules/` | 一仗的规则（不碰画面） |
+| `modules/battle-view/` | 一仗的画面和拖拽操作 |
+| `modules/run-rules/` | 一趟的规则（区、层、片、出口、奖励、任务进度、回去、死了）和回来以后的结算 |
+| `modules/explore-view/` | 一片空地的画面和操作 |
+| `modules/save/` | 存档（浏览器里存 localStorage） |
+| `modules/guild/`、`recruit/`、`depart/`、`album/` | 工会、招募、出发、卡册，各自 `rules/` 和 `view/` |
+| `modules/hub/` | 大厅，只摆入口 |
+| `modules/render/` | 画东西的接口；`blocks/` 是现在的色块，`blocks/looks.js` 是「样子」表 |
+| `modules/ui/` | 公共小件：文字、按钮、牌、心、板 |
+| `tools/` | 本地小服务、单测、边界守卫、两个假玩家、截图 |
+
+## 以后换上像素堆叠美术
+
+每个会动的东西（怪、主角、队友）都带一个 `look` 编号（怪的编号写在 `content/monsters/encounters.js`），画面模块只调 `render.drawActor({ look, x, y, size, state, t })`。换美术时：
+
+1. 在 `modules/render/` 下加 `stack/`，实现同样的 `drawActor`，按 `look` 编号找用户在 `美术/像素堆叠生物工坊/` 做的怪（工坊里每只怪是 `createInstance` → `update` → `buildPartList`，由 `StackRenderer` 画）；
+2. `render/blocks/looks.js` 的 `art` 一栏填上工坊里怪的 id（比如 `slime_jelly`）；
+3. `modules/render/index.js` 换成 `stack/` 的实现。
+
+战斗、空地、大厅、卡册的代码都不用改。

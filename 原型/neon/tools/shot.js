@@ -30,21 +30,48 @@ const CHROME_CANDIDATES = [
 
 const DEFAULT_JOBS = [
   {
-    name: '大厅（森林 + 左边文字按钮）',
-    path: '/app/',
+    name: '大厅（只摆入口）',
+    path: '/app/?fresh=1',
     out: 'shots/app.png',
     width: 1040,
     height: 600,
     full: false,
   },
   {
-    name: '大厅·挑这一仗',
-    path: '/app/',
+    name: '大厅·工会任务板',
+    path: '/app/?fresh=1&panel=guild',
+    out: 'shots/app-guild.png',
+    width: 1040,
+    height: 600,
+    full: false,
+    clicks: [{ x: 10, y: 10, frames: 20 }],
+  },
+  {
+    name: '大厅·出发',
+    path: '/app/?fresh=1&panel=depart',
+    out: 'shots/app-depart.png',
+    width: 1040,
+    height: 600,
+    full: false,
+    clicks: [{ x: 10, y: 10, frames: 20 }],
+  },
+  {
+    name: '走一趟·第一片空地',
+    path: '/app/?fresh=1&run=1&seed=shot-run-1',
+    out: 'shots/explore.png',
+    width: 1040,
+    height: 600,
+    full: false,
+    clicks: [{ x: 10, y: 590, frames: 30 }],
+  },
+  {
+    name: '试打台·挑这一仗',
+    path: '/app/?scene=trial',
     out: 'shots/app-start.png',
     width: 1040,
     height: 600,
     full: false,
-    clicks: [{ x: 110, y: 282, frames: 20 }], // 点「开始游戏」滑出挑仗板
+    clicks: [{ x: 110, y: 302, frames: 20 }], // 点「试打一仗」滑出挑仗板
   },
   {
     name: '实战·双色盾（自动帮排预览）',
@@ -128,7 +155,55 @@ const DEFAULT_JOBS = [
     width: 1040,
     height: 640,
     full: false,
+  },  {
+    name: 'explore-view 空地演示页',
+    path: '/modules/explore-view/demo.html',
+    out: 'shots/explore-view-demo.png',
+    width: 1040,
+    height: 640,
+    full: false,
   },
+  {
+    name: 'guild 工会演示页',
+    path: '/modules/guild/demo.html',
+    out: 'shots/guild-demo.png',
+    width: 1040,
+    height: 640,
+    full: false,
+  },
+  {
+    name: 'recruit 招募演示页',
+    path: '/modules/recruit/demo.html',
+    out: 'shots/recruit-demo.png',
+    width: 1040,
+    height: 640,
+    full: false,
+  },
+  {
+    name: 'depart 出发演示页',
+    path: '/modules/depart/demo.html',
+    out: 'shots/depart-demo.png',
+    width: 1040,
+    height: 640,
+    full: false,
+  },
+  {
+    name: 'album 卡册演示页',
+    path: '/modules/album/demo.html',
+    out: 'shots/album-demo.png',
+    width: 1040,
+    height: 640,
+    full: false,
+  },
+  {
+    name: 'hub 大厅演示页',
+    path: '/modules/hub/demo.html',
+    out: 'shots/hub-demo.png',
+    width: 1040,
+    height: 640,
+    full: false,
+  },
+
 ];
 
 async function findChrome() {

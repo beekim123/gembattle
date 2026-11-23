@@ -11,7 +11,7 @@ import { createRunScene } from './scenes/run-scene.js';
 import { createHubScene } from './scenes/hub-scene.js';
 import { createSaveStore } from '../modules/save/index.js';
 import { session } from './session.js';
-import { DEFAULT_ALLY_IDS, DEFAULT_BUFF_IDS } from '../modules/content/index.js';
+import { DEFAULT_ALLY_IDS, DEFAULT_BUFF_IDS, QUEST_DEFS, buildHeroLoadout } from '../modules/content/index.js';
 
 const LOGICAL_WIDTH = 960;
 const LOGICAL_HEIGHT = 540;
@@ -54,8 +54,25 @@ if (directEncounter) {
     buffs: params.get('bare') === '1' ? [] : [...DEFAULT_BUFF_IDS],
     allies: params.get('bare') === '1' ? [] : [...DEFAULT_ALLY_IDS],
   });
+} else if (params.get('run') === '1') {
+  // 截图、调试用：穿 C 级武器、带两个 C 级任务直接进林子
+  const save = session.saveStore.get();
+  session.save = save;
+  session.onSettled = (next) => session.saveStore.replace(next);
+  const lo = buildHeroLoadout({ weapon: 'gear_c_weapon_1', armor: null, trinket: null });
+  sceneManager.switchTo('run', {
+    depart: {
+      schemaVersion: SCHEMA_VERSION,
+      seed: params.get('seed') || 'direct-run',
+      zoneId: 'forest',
+      player: { ...lo, extraCards: [], buffs: [], allies: ['ally_assassin_break'] },
+      quests: [{ ...QUEST_DEFS.q_c_gather }, { ...QUEST_DEFS.q_c_hunt }],
+    },
+  });
+} else if (params.get('scene') === 'trial') {
+  sceneManager.switchTo('trial');
 } else {
-  sceneManager.switchTo('home');
+  sceneManager.switchTo('home', params.get('panel') ? { panel: params.get('panel') } : null);
 }
 
 const loop = createGameLoop({
