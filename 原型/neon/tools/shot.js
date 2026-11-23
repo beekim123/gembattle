@@ -6,7 +6,7 @@
 //   node tools/shot.js
 //
 // 指定单页截取：
-//   node tools/shot.js /modules/ui/demo.html --out shots/custom.png --width 1120 --height 680 [--full] [--click-canvas 480,292]
+//   node tools/shot.js /modules/battle-view/demo.html --out shots/custom.png --width 1040 --height 640
 
 import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -30,7 +30,7 @@ const CHROME_CANDIDATES = [
 
 const DEFAULT_JOBS = [
   {
-    name: '游戏入口空画面',
+    name: '试打选仗台（阶段 1 入口）',
     path: '/app/',
     out: 'shots/app.png',
     width: 1040,
@@ -38,13 +38,53 @@ const DEFAULT_JOBS = [
     full: false,
   },
   {
-    name: '游戏入口（点击试打后）',
-    path: '/app/',
-    out: 'shots/app-clicked.png',
+    name: '实战·双色盾（自动帮排预览）',
+    path: '/app/?encounter=dual_shield&seed=shot-dual-1',
+    out: 'shots/battle-dual-shield.png',
     width: 1040,
     height: 600,
     full: false,
-    clickCanvas: { x: 480, y: 292 },
+    clicks: [{ x: 750, y: 306 }], // 点「自动帮排」看排链和两行算式预览
+  },
+  {
+    name: '实战·一群怪（打出飘纯数字）',
+    path: '/app/?encounter=pack_mixed&seed=shot-pack-1',
+    out: 'shots/battle-pack-cast.png',
+    width: 1040,
+    height: 600,
+    full: false,
+    clicks: [
+      { x: 750, y: 306 }, // 点「自动帮排」
+      { x: 780, y: 260 }, // 点「打出」看飘字与总伤面板
+    ],
+  },
+  {
+    name: '实战·看门的 3 条血',
+    path: '/app/?encounter=gatekeeper_layer2&seed=shot-gate-1',
+    out: 'shots/battle-gatekeeper.png',
+    width: 1040,
+    height: 600,
+    full: false,
+  },
+  {
+    name: '实战·万发飘字压测（12 张大链）',
+    path: '/app/?encounter=dual_shield&stress=1&seed=shot-stress',
+    out: 'shots/battle-stress.png',
+    width: 1040,
+    height: 600,
+    full: false,
+    clicks: [
+      { x: 750, y: 306 }, // 自动帮排 12 张
+      { x: 780, y: 260 }, // 打出上万发
+    ],
+  },
+  {
+    name: 'battle-view 假数据演示页',
+    path: '/modules/battle-view/demo.html',
+    out: 'shots/battle-view-demo.png',
+    width: 1040,
+    height: 640,
+    full: false,
   },
   {
     name: 'shared 演示页',
@@ -86,7 +126,7 @@ async function findChrome() {
       await access(candidate);
       return candidate;
     } catch {
-      // 继续查下一个路径
+      // 继续查下一个
     }
   }
   throw new Error('没找到可用的 Chrome / Chromium。可设置环境变量 CHROME_PATH 指向浏览器可执行文件。');
@@ -100,7 +140,7 @@ function parseCliArgs(argv) {
   let width = 1040;
   let height = 640;
   let full = false;
-  let clickCanvas = null;
+  const clicks = [];
 
   for (let i = 1; i < argv.length; i++) {
     const arg = argv[i];
@@ -110,11 +150,11 @@ function parseCliArgs(argv) {
     else if (arg === '--full') full = true;
     else if (arg === '--click-canvas' && argv[i + 1]) {
       const [x, y] = argv[++i].split(',').map(Number);
-      clickCanvas = { x, y };
+      clicks.push({ x, y });
     }
   }
 
-  return [{ name: pagePath, path: pagePath, out, width, height, full, clickCanvas }];
+  return [{ name: pagePath, path: pagePath, out, width, height, full, clicks }];
 }
 
 function launchChrome(chromePath, userDataDir) {
@@ -245,6 +285,30 @@ async function waitFrames(cdp, count = 3) {
   });
 }
 
+async function clickLogicalCanvas(cdp, lx, ly) {
+  const evalRes = await cdp.send('Runtime.evaluate', {
+    returnByValue: true,
+    expression: `(() => {
+      const c = document.querySelector('canvas');
+      if (!c) return null;
+      const r = c.getBoundingClientRect();
+      const logical = window.__CODE00_APP__?.getLogicalSize?.() || { width: 960, height: 540 };
+      return {
+        x: r.left + (${lx} / logical.width) * r.width,
+        y: r.top + (${ly} / logical.height) * r.height,
+      };
+    })()`,
+  });
+  const pt = evalRes.result?.value;
+  if (!pt) throw new Error('页面没找到 canvas，无法执行点击');
+
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: pt.x, y: pt.y, button: 'none' });
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: pt.x, y: pt.y, button: 'left', clickCount: 1 });
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: pt.x, y: pt.y, button: 'left', clickCount: 1 });
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 12, y: 12, button: 'none' });
+  await waitFrames(cdp, 6);
+}
+
 async function runJob(cdp, origin, job) {
   const errors = [];
   const offException = cdp.on('Runtime.exceptionThrown', (params) => {
@@ -270,29 +334,10 @@ async function runJob(cdp, origin, job) {
     await waitForPageLoad(cdp, targetUrl);
     await waitFrames(cdp, 4);
 
-    if (job.clickCanvas) {
-      const evalRes = await cdp.send('Runtime.evaluate', {
-        returnByValue: true,
-        expression: `(() => {
-          const c = document.querySelector('canvas');
-          if (!c) return null;
-          const r = c.getBoundingClientRect();
-          const logical = window.__CODE00_APP__?.getLogicalSize?.() || { width: 960, height: 540 };
-          return {
-            x: r.left + (${job.clickCanvas.x} / logical.width) * r.width,
-            y: r.top + (${job.clickCanvas.y} / logical.height) * r.height,
-          };
-        })()`,
-      });
-      const pt = evalRes.result?.value;
-      if (!pt) throw new Error(`页面 ${job.path} 没找到 canvas，无法执行点击`);
-
-      await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: pt.x, y: pt.y, button: 'none' });
-      await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: pt.x, y: pt.y, button: 'left', clickCount: 1 });
-      await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: pt.x, y: pt.y, button: 'left', clickCount: 1 });
-      // 点击后移开指针，避免悬停提示框遮挡刚出现的结果反馈
-      await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 16, y: 16, button: 'none' });
-      await waitFrames(cdp, 3);
+    if (Array.isArray(job.clicks)) {
+      for (const pt of job.clicks) {
+        await clickLogicalCanvas(cdp, pt.x, pt.y);
+      }
     }
 
     let captureParams = { format: 'png' };

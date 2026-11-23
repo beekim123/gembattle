@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>code00 · battle-view 假数据演示</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #101218;
+    color: #e4e8f0;
+    font: 13px/1.5 system-ui, -apple-system, "PingFang SC", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  canvas {
+    border: 1px solid #2e364a;
+    border-radius: 8px;
+    max-width: 96vw;
+    height: auto;
+  }
+  .note { color: #9aa6bd; font-size: 12px; }
+</style>
+</head>
+<body>
+  <canvas id="stage" width="960" height="540"></canvas>
+  <div class="note">modules/battle-view/demo.html · 仅用假快照与假演出事件独立运行（不依赖 battle-rules）</div>
+
+<script type="module">
+  import { createRenderer } from '../render/index.js';
+  import { BATTLE_EVENT_TYPES, CHAIN_RELATIONS, SCHEMA_VERSION, createEmptyDrawPileByColor } from '../shared/index.js';
+  import { createBattleView } from './index.js';
+
+  const canvas = document.getElementById('stage');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const renderer = createRenderer(canvas, { width: 960, height: 540, dpr });
+
+  const byColor = createEmptyDrawPileByColor();
+  byColor.red = 4;
+  byColor.yellow = 3;
+  byColor.green = 5;
+  byColor.cyan = 3;
+  byColor.blue = 4;
+  byColor.purple = 4;
+  byColor.white = 2;
+
+  const fakeSnapshot = {
+    schemaVersion: SCHEMA_VERSION,
+    turn: 3,
+    phase: 'player_input',
+    outcome: null,
+    currentColor: 'yellow',
+    recordedColors: ['red', 'yellow', 'green', 'cyan', 'blue'],
+    selectedTargetUid: 'm-1',
+    player: {
+      hearts: 2.5,
+      maxHearts: 3,
+      drawTarget: 4,
+      maxHandSize: 12,
+      stats: { attack: 140, damageBonus: 0.3, critRate: 0.15, critDamage: 1.8 },
+      blocks: { thisTurn: 0, untilConsumed: 1, allyCharges: 0 },
+      gemLevels: {
+        red: { level: 2, exp: 4, nextExp: 20 },
+        green: { level: 1, exp: 8, nextExp: 10 },
+        blue: { level: 1, exp: 6, nextExp: 10 },
+      },
+      buffs: [],
+      allies: [],
+      gearTraits: [],
+    },
+    hand: [
+      { uid: 'h1', hidden: false, defId: 'gem_green', kind: 'gem', usage: 'chain', color: 'green', gems: ['green'], relationToCurrent: CHAIN_RELATIONS.CONNECT, label: '绿宝石', description: '带 1 颗绿宝石', enhanced: false },
+      { uid: 'h2', hidden: false, defId: 'gem_blue', kind: 'gem', usage: 'chain', color: 'blue', gems: ['blue'], relationToCurrent: CHAIN_RELATIONS.COMPLEMENT, label: '蓝宝石', description: '与黄成补色，触发合白', enhanced: false },
+      { uid: 'h3', hidden: false, defId: 'gem_purple', kind: 'gem', usage: 'chain', color: 'purple', gems: ['red', 'blue'], relationToCurrent: CHAIN_RELATIONS.BREAK, label: '紫宝石', description: '带红+蓝两颗宝石', enhanced: false },
+      { uid: 'h4', hidden: false, defId: 'fn_shred_shield_2', kind: 'function', usage: 'instant', color: 'colorless', gems: [], relationToCurrent: CHAIN_RELATIONS.INSTANT, label: '削目标盾 2 格', description: '马上用，用完补摸 1 张', enhanced: false, drawAfterPlay: 1 },
+      { uid: 'h5', hidden: true, color: null, gems: null, relationToCurrent: CHAIN_RELATIONS.HIDDEN, label: '已遮住' },
+    ],
+    chain: [
+      { uid: 'c1', hidden: false, defId: 'gem_red', kind: 'gem', usage: 'chain', color: 'red', gems: ['red'], label: '红宝石', enhanced: false },
+      { uid: 'c2', hidden: false, defId: 'gem_yellow', kind: 'gem', usage: 'chain', color: 'yellow', gems: ['red', 'green'], label: '黄宝石', enhanced: false },
+    ],
+    drawPileCount: 25,
+    drawPileByColor: byColor,
+    discardPileCount: 4,
+    monsters: [
+      {
+        uid: 'm-1',
+        defId: 'monster_gatekeeper_outer',
+        tier: 'gatekeeper',
+        label: '外头区看门的（假数据）',
+        alive: true,
+        barIndex: 0,
+        totalBars: 3,
+        hp: 14620,
+        maxHp: 20000,
+        shields: [{ color: 'red', current: 3, max: 7 }],
+        shieldBroken: false,
+        countdown: 2,
+        attacksDone: 0,
+        attackDamage: 0.5,
+        intentLabel: '2 回合后打 0.5 心',
+        activeTraits: [{ id: 'shift', label: '每回合盾换一种颜色' }],
+      },
+    ],
+  };
+
+  const fakePreview = {
+    schemaVersion: SCHEMA_VERSION,
+    chainLength: 2,
+    steps: [
+      { cardUid: 'c1', resolvedColor: 'red', relation: CHAIN_RELATIONS.CONNECT, multiplierAfter: 2, hits: 2, triggersComplementWhite: false, triggersRainbow: false },
+      { cardUid: 'c2', resolvedColor: 'yellow', relation: CHAIN_RELATIONS.CONNECT, multiplierAfter: 4, hits: 8, triggersComplementWhite: false, triggersRainbow: false },
+    ],
+    finalMultiplier: 4,
+    hasComplementWhite: false,
+    willTriggerRainbow: false,
+    colorsNeededForRainbow: 1,
+    shieldShred: { red: 2, green: 1, blue: 0 },
+    expectedBreakUids: [],
+    estimatedHits: 10,
+    estimatedDamage: 1580,
+    formulaLines: ['发数：2 张排链 · 链尾倍率 ×4 = 预计 10 发', '每发：攻 140 × 1.3 × 盾 ≈ 均 158'],
+  };
+
+  const fakeEvents = [
+    { seq: 1, type: BATTLE_EVENT_TYPES.DAMAGE_PACKET, payload: { targetUid: 'm-1', damage: 280, perHitDamage: 140, hitsInPacket: 2, isCrit: false, color: 'red' } },
+    { seq: 2, type: BATTLE_EVENT_TYPES.DAMAGE_PACKET, payload: { targetUid: 'm-1', damage: 504, perHitDamage: 252, hitsInPacket: 2, isCrit: true, color: 'yellow' } },
+  ];
+
+  const view = createBattleView({
+    allowAutoArrange: true,
+    callbacks: {
+      onCommitChain: () => {
+        view.setState({ snapshot: fakeSnapshot, preview: fakePreview, events: fakeEvents });
+      },
+    },
+  });
+
+  view.setState({ snapshot: fakeSnapshot, preview: fakePreview, events: fakeEvents });
+
+  function toLogical(ev) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((ev.clientX - rect.left) / rect.width) * 960,
+      y: ((ev.clientY - rect.top) / rect.height) * 540,
+    };
+  }
+  canvas.addEventListener('pointermove', (ev) => {
+    const pt = toLogical(ev);
+    const r = view.onPointer({ type: 'move', ...pt });
+    canvas.style.cursor = r.cursor;
+  });
+  canvas.addEventListener('pointerdown', (ev) => view.onPointer({ type: 'down', ...toLogical(ev) }));
+  canvas.addEventListener('pointerup', (ev) => view.onPointer({ type: 'up', ...toLogical(ev) }));
+  canvas.addEventListener('pointerleave', () => view.onPointer({ type: 'leave', x: -1, y: -1 }));
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    view.update(dt);
+    view.render(renderer);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+</script>
+</body>
+</html>

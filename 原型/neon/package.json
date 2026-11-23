@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node tools/serve.js --open",
     "test": "node tools/test.js",
+    "sim": "node tools/sim.js",
     "shot": "node tools/shot.js"
   }
 }
