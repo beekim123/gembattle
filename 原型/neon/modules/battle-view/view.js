@@ -9,9 +9,9 @@
 import { COLOR_META, COLOR_RING, BATTLE_EVENT_TYPES as E } from '../shared/index.js';
 import {
   F, LANE, T, bold, buffIcon, chainJoint, colorRing, fnCard, gemCard, gemDot, hearts, rainbowText,
-  smallButton, stackSprite, swatch, txt,
+  ellipse, forest, smallButton, stackSprite, swatch, txt,
 } from './draw.js';
-import { REGIONS, W, H, chainInsertIndex, chainSlots, fanSlots, hitRotated, monsterSlots } from './layout.js';
+import { REGIONS, W, H, castListSlots, chainInsertIndex, chainSlots, fanSlots, hitRotated, monsterSlots } from './layout.js';
 import { buildPlayback } from './playback.js';
 
 const R = REGIONS;
@@ -26,12 +26,6 @@ const life = (t, t0, dur) => (t - t0) / dur;
 const inRect = (b, x, y) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
 const TIER = { normal: '普通', elite: '精英', gatekeeper: '看门的' };
 
-function ellipse(r, cx, cy, rx, ry, o) {
-  const pts = [];
-  for (let i = 0; i < 36; i++) { const a = (i / 36) * Math.PI * 2; pts.push({ x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry }); }
-  r.polygon({ points: pts, ...o });
-}
-
 function heartIcon(r, x, y, s, fill) {
   const pts = [];
   for (let i = 0; i <= 20; i++) {
@@ -39,23 +33,6 @@ function heartIcon(r, x, y, s, fill) {
     pts.push({ x: x + (16 * Math.sin(t) ** 3 * s) / 34, y: y - ((13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) * s) / 34 });
   }
   r.polygon({ points: pts, fill });
-}
-
-function forest(r) {
-  r.clear('#141b14');
-  r.rect({ x: 0, y: 0, w: W, h: H, fill: '#1a2419' });
-  [[200, 300, 260, 90, '#1f2b1d'], [700, 330, 300, 100, '#1f2b1d'], [480, 200, 380, 120, '#202d1e'], [480, 420, 420, 110, '#1d281b'], [120, 180, 150, 60, '#1d281b'], [850, 170, 140, 50, '#1d281b']]
-    .forEach(([x, y, rx, ry, c]) => ellipse(r, x, y, rx, ry, { fill: c }));
-  for (let i = 0; i < 70; i++) {
-    const x = (i * 137) % W;
-    const y = 60 + ((i * 89) % 440);
-    r.rect({ x, y, w: 3, h: 6, fill: i % 3 ? '#2b3a27' : '#33452d' });
-  }
-  [[40, 40, 70], [150, 10, 80], [290, 0, 70], [420, -20, 70], [560, -18, 72], [690, 2, 76], [820, 14, 80], [930, 46, 72], [-10, 170, 70], [970, 190, 70], [-20, 330, 80], [980, 350, 80]]
-    .forEach(([x, y, rr]) => {
-      r.circle({ x, y, r: rr, fill: '#132414' });
-      r.circle({ x: x - rr * 0.25, y: y - rr * 0.2, r: rr * 0.6, fill: '#183019' });
-    });
 }
 
 const ALLY_COLORS = ['#9a78c2', '#86d6a6', '#86b4dc', '#e09a62'];
@@ -239,7 +216,7 @@ export function createBattleView(options = {}) {
   function outcomeButtons() {
     return [
       { id: 'retry', x: 360, y: 300, w: 110, h: 36, label: '再打一次' },
-      { id: 'back', x: 490, y: 300, w: 110, h: 36, label: '回选仗台' },
+      { id: 'back', x: 490, y: 300, w: 110, h: 36, label: '回大厅' },
     ];
   }
 
@@ -316,7 +293,16 @@ export function createBattleView(options = {}) {
     allies.forEach((al, i) => { if (!actOf(al)) drawAlly(al, i); });
     const heroHit = pb?.attacks.find((a) => !a.blocked && now - a.t - 0.15 >= 0 && now - a.t - 0.15 < 0.3);
     const heroBlock = pb?.attacks.find((a) => a.blocked && now - a.t - 0.15 >= 0 && now - a.t - 0.15 < 0.5);
-    stackSprite(r, R.hero.cx, R.hero.base, R.hero.size, { hue: '#7a6a4e', top: '#e8cfa0', eyes: null, slot: false });
+    // 主角施法：每张牌亮起来，他往上一顶，手上一圈那张牌的颜色
+    const castFire = pb?.fires.slice().reverse().find((f) => now - f.t >= 0 && now - f.t < 0.3);
+    const heroLift = castFire ? Math.sin(clamp((now - castFire.t) / 0.3, 0, 1) * Math.PI) * 7 : 0;
+    stackSprite(r, R.hero.cx, R.hero.base - heroLift, R.hero.size, { hue: '#7a6a4e', top: '#e8cfa0', eyes: null, slot: false });
+    if (castFire) {
+      const kk = (now - castFire.t) / 0.3;
+      const hy = R.hero.base - R.hero.size - 8 - heroLift;
+      r.circle({ x: R.hero.cx, y: hy, r: 5 + kk * 20, stroke: swatch(castFire.color), lineWidth: 4 * (1 - kk) + 1, alpha: 1 - kk });
+      r.circle({ x: R.hero.cx, y: hy, r: 6 * (1 - kk) + 2, fill: swatch(castFire.color), alpha: 1 - kk * 0.5 });
+    }
     if (heroHit) stackSprite(r, R.hero.cx, R.hero.base, R.hero.size, { eyes: null, slot: false, flash: true, alpha: 0.45 });
     if (heroBlock) ellipse(r, R.hero.cx, R.hero.base - 30, 46, 44, { stroke: '#6dc9ff', lineWidth: 3, alpha: 1 - (now - heroBlock.t - 0.15) / 0.5 });
 
@@ -395,7 +381,7 @@ export function createBattleView(options = {}) {
     for (let i = notes.length - 1; i >= 0; i--) {
       const k = (clock - notes[i].t) / 1.4;
       if (k > 1) { notes.splice(i, 1); continue; }
-      bold(r, notes[i].text, R.hero.cx, R.hero.base - 76 - k * 18 - i * 0, { size: F.m, color: '#c8fbff', align: 'center', alpha: k < 0.7 ? 1 : (1 - k) / 0.3 });
+      bold(r, notes[i].text, R.hero.cx, R.hero.base - 76 - k * 18 - (notes.length - 1 - i) * 24, { size: F.m, color: '#c8fbff', align: 'center', alpha: k < 0.7 ? 1 : (1 - k) / 0.3 });
     }
 
     // 鼠标在怪身上：细节
@@ -560,20 +546,69 @@ export function createBattleView(options = {}) {
     else if (!snap.chain.length && snapshot.phase === 'player_input') txt(r, '把牌拖到上面排成链', 480, 330, { size: F.s, align: 'center', color: T.text3, alpha: 0.8 });
   }
 
+  const REL_WORD = { start: ['起手', '#c8d0e0'], connect: ['接上 ×2', T.connect], complement: ['补色 · 合白', T.complement], break: ['断色', T.danger] };
+
   function drawChain(r, snap, pb, now) {
     const chain = snap.chain;
     if (!chain.length) return;
-    const bxChain = lastBoxes.chain;
-    const fade = pb && pb.totalAt > 0 ? clamp(1 - (now - pb.totalAt) / 0.3, 0, 1) : 1;
-    if (fade <= 0) return;
-    r.withAlpha(fade, () => bxChain.forEach((sl, i) => {
-      const step = (pb ? castPreview : preview)?.steps?.find((s) => s.cardUid === sl.uid);
-      const fired = pb && i <= pb.fired;
-      const kick = pb && pb.fired === i ? 1 - clamp((now - i * pb.interval) / 0.15, 0, 1) : 0;
+    if (pb) { drawCastList(r, snap, pb, now); return; }
+    lastBoxes.chain.forEach((sl, i) => {
+      const step = preview?.steps?.find((s) => s.cardUid === sl.uid);
       const mult = step ? `×${step.multiplierAfter}` : null;
-      gemCard(r, { x: sl.x, y: sl.y - kick * 6, w: sl.w, h: sl.h, color: step?.resolvedColor || sl.card.color, gems: sl.card.gems || [sl.card.color], mult, fired, multSize: sl.w + R.chain.gap < 50 ? 10 : F.xs });
+      gemCard(r, { x: sl.x, y: sl.y, w: sl.w, h: sl.h, color: step?.resolvedColor || sl.card.color, gems: sl.card.gems || [sl.card.color], mult, multSize: sl.w + R.chain.gap < 50 ? 10 : F.xs });
       if (i > 0 && step) chainJoint(r, sl.x - R.chain.gap / 2, sl.cy, step.relation === 'break' ? 'break' : step.relation);
-    }));
+    });
+  }
+
+  /** 打出去以后：链收到最左边竖成一列，当前这张亮，打完的变暗（D1） */
+  function drawCastList(r, snap, pb, now) {
+    const chain = snap.chain;
+    const n = chain.length;
+    const from = chainSlots(n);
+    const to = castListSlots(n);
+    const endFade = clamp((playback.duration - now) / 0.3, 0, 1);
+    r.withAlpha(endFade, () => {
+      // 底：一条竖着的淡板，上面写「施法顺序」
+      const last = to[n - 1];
+      const k0 = easeOut(now / Math.max(0.01, pb.lead));
+      r.rect({ x: R.castList.x - 6, y: R.castList.top - 22, w: 132, h: last.y + last.h - R.castList.top + 30, radius: 10, fill: '#05070a', alpha: 0.55 * k0 });
+      txt(r, '施法顺序', R.castList.x, R.castList.top - 11, { size: F.xs, color: T.text3, alpha: k0 });
+      chain.forEach((c, i) => {
+        const step = castPreview?.steps?.find((s) => s.cardUid === c.uid);
+        const fire = pb.fires.find((f) => f.step === i);
+        const k = easeOut((now - i * 0.025) / Math.max(0.01, pb.lead));
+        const A = from[i];
+        const B = to[i];
+        const cur = fire && pb.fired === i;
+        const done = fire && pb.fired > i;
+        const pulse = cur ? pop(clamp((now - fire.t) / 0.25, 0, 1)) : 1;
+        const x = lerp(A.x, B.x, k) + (cur ? 10 : 0);
+        const y = lerp(A.y, B.y, k);
+        const w = lerp(A.w, B.w, k);
+        const h = lerp(A.h, B.h, k);
+        const alpha = done ? 0.35 : 1;
+        r.withAlpha(alpha, () => r.transform({ x: x + w / 2, y: y + h / 2, scale: cur ? 1.12 * pulse : 1 }, () => {
+          gemCard(r, { x: -w / 2, y: -h / 2, w, h, color: step?.resolvedColor || c.color, gems: c.gems || [c.color], fired: Boolean(fire) });
+          if (cur) r.rect({ x: -w / 2 - 3, y: -h / 2 - 3, w: w + 6, h: h + 6, radius: 7, stroke: T.gold, lineWidth: 2 });
+        }));
+        if (k < 1) return;
+        // 右边：倍率；当前这张再写一句是怎么接的
+        const mult = fire?.multiplier ?? step?.multiplierAfter;
+        if (mult != null) txt(r, `×${mult}`, B.x + B.w + (cur ? 18 : 8), B.cy, { size: cur ? F.m : F.xs, weight: 'bold', color: cur ? T.gold : T.text2, alpha });
+        if (cur) {
+          const rel = REL_WORD[fire.relation] || null;
+          const kk = clamp((now - fire.t) / 0.6, 0, 1);
+          if (rel && kk < 1) txt(r, rel[0], B.x + B.w + 18, B.cy + 16, { size: F.xs, weight: 'bold', color: rel[1], alpha: kk < 0.7 ? 1 : (1 - kk) / 0.3 });
+        }
+      });
+    });
+  }
+
+  /** 顺序表上某一张的右边（合白、彩虹这些字冒在这里） */
+  function castRowAnchor(snap, step) {
+    const to = castListSlots(snap.chain.length);
+    const s = to[clamp(step, 0, to.length - 1)];
+    return s ? { x: s.x + s.w + 100, y: s.cy } : { x: 120, y: 240 };
   }
 
   function drawPreview(r, snap) {
@@ -594,15 +629,14 @@ export function createBattleView(options = {}) {
 
   function drawCastFx(r, snap, pb, now, ms, mons) {
     const slotOf = (uid) => ms[snap.monsters.findIndex((m) => m.uid === uid)] || ms[0];
-    const chainB = chainSlots(snap.chain.length);
-    // 飞出去的宝石
+    // 飞出去的宝石：从主角手上打出去（施法的是主角，牌只是顺序，D1）
     pb.shots.forEach((sh) => {
       const k = (now - sh.t) / (sh.land - sh.t);
       if (k < 0 || k > 1) return;
-      const from = chainB[sh.step] ? { x: chainB[sh.step].cx, y: chainB[sh.step].y } : { x: 480, y: 270 };
+      const from = { x: R.hero.cx, y: R.hero.base - R.hero.size - 8 };
       const tg = slotOf(sh.uid);
       const to = { x: tg.x, y: tg.y - tg.s * 0.5 };
-      const ctl = { x: (from.x + to.x) / 2 + (sh.step % 2 ? 50 : -50), y: Math.min(from.y, to.y) - 40 };
+      const ctl = { x: (from.x + to.x) / 2 + (sh.step % 2 ? 70 : -70), y: (from.y + to.y) / 2 - 30 };
       for (let tr = 3; tr >= 0; tr--) {
         const u = clamp(easeOut(k) - tr * 0.06, 0, 1);
         const p = { x: (1 - u) ** 2 * from.x + 2 * (1 - u) * u * ctl.x + u * u * to.x, y: (1 - u) ** 2 * from.y + 2 * (1 - u) * u * ctl.y + u * u * to.y };
@@ -622,11 +656,15 @@ export function createBattleView(options = {}) {
     });
     // 合白：每只怪脚下一圈白浪
     pb.whites.forEach((t0) => {
+      // 白浪打在怪脚下；「合白」两个字跟着顺序表上当前那张
       const k = life(now, t0, 0.45);
       if (k < 0 || k > 1) return;
       mons.forEach((m, i) => { if (m.alive || m.deadAt >= t0) ellipse(r, ms[i].x, ms[i].y - 4, ms[i].s * (0.3 + k * 0.5), ms[i].s * (0.08 + k * 0.14), { stroke: '#ffffff', lineWidth: 4 * (1 - k), alpha: 1 - k }); });
       r.rect({ x: 0, y: 0, w: W, h: H, fill: '#ffffff', alpha: 0.1 * (1 - k) });
-      if (k < 0.9) bold(r, '合白', 480, 244, { size: F.l, color: '#ffffff', outline: '#1d4a8a', align: 'center', alpha: 1 - k });
+      if (k < 0.9) {
+        const an = castRowAnchor(snap, pb.fired);
+        bold(r, '合白', an.x, an.y - 2 - k * 8, { size: F.l, color: '#ffffff', outline: '#1d4a8a', align: 'center', alpha: 1 - k });
+      }
     });
     // 破盾：盾条碎开 + 血条右边弹「破盾！」
     pb.breaks.forEach((b) => {
@@ -674,7 +712,8 @@ export function createBattleView(options = {}) {
       if (k >= 0 && k <= 1) {
         const tg = ms[Math.max(0, snap.monsters.findIndex((m) => m.uid === snap.selectedTargetUid))] || ms[0];
         COLOR_RING.forEach((c, j) => ellipse(r, tg.x, tg.y - 4, 30 + k * 150 + j * 6, 8 + k * 40 + j * 2, { stroke: swatch(c), lineWidth: 3, alpha: (1 - k) * 0.9 }));
-        r.transform({ x: Math.min(tg.x + tg.s * 0.5 + 72, 880), y: tg.y - tg.s * 0.45, scale: pop(k * 2) }, () => rainbowText(r, '彩虹 ×3', 0, 0, F.xl));
+        const an = castRowAnchor(snap, snap.chain.length - 1);
+        r.transform({ x: an.x + 10, y: an.y - 30, scale: pop(k * 2) }, () => rainbowText(r, '彩虹 ×3', 0, 0, F.xl));
       }
     }
     // 飘字：一发一个数（设计稿 5.3）
@@ -704,7 +743,7 @@ export function createBattleView(options = {}) {
       const k = life(now, tx.t, 1.2);
       if (k < 0 || k > 1) return;
       if (buffLabels.has(tx.source)) return; // 加成的字在右上角它的图标下面冒
-      bold(r, tx.text, R.hero.cx, R.hero.base - 80 - k * 16 - (i % 3) * 18, { size: F.s, color: '#c8fbff', align: 'center', alpha: k < 0.7 ? 1 : (1 - k) / 0.3 });
+      bold(r, tx.text, R.hero.cx, R.hero.base - 84 - k * 16 - (i % 3) * 24, { size: F.s, color: '#c8fbff', align: 'center', alpha: k < 0.7 ? 1 : (1 - k) / 0.3 });
     });
     // 总数
     {

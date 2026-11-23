@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { createRenderer } from '../../modules/render/index.js';
 import { createGameLoop } from '../loop.js';
 import { createSceneManager } from '../scene-manager.js';
-import { createTrySetupScene } from '../scenes/try-setup.js';
+import { createLobbyScene } from '../scenes/lobby.js';
 import { createBattleScene } from '../scenes/battle-scene.js';
 
 function makeFakeRenderer() {
@@ -90,19 +90,43 @@ test('createSceneManager 正确触发 onExit/onEnter 并拦住未注册场景', 
   assert.throws(() => sm.switchTo('not_exist'), /未注册的场景/);
 });
 
-test('试打大厅点「开始试打」能切进实战场景并打出一回合', () => {
+test('大厅点「开始游戏」→ 挑仗板点「出发」能进实战，拖一张牌打出一回合', () => {
   const { renderer, texts } = makeFakeRenderer();
   const sm = createSceneManager();
-  sm.register('home', createTrySetupScene);
+  sm.register('home', createLobbyScene);
   sm.register('battle', createBattleScene);
 
   sm.switchTo('home');
   sm.render(renderer);
-  assert.ok(texts.includes('开始试打'));
+  assert.ok(texts.includes('开始游戏'));
+  assert.ok(texts.includes('code00'));
 
-  // 点击「开始试打」按钮（x: 38..356, y: 462..510）
-  sm.dispatchPointer({ type: 'down', x: 180, y: 486 });
-  sm.dispatchPointer({ type: 'up', x: 180, y: 486 });
+  const lobby = sm.getCurrentScene();
+  const click = (id) => {
+    const b = lobby.getHitBoxes().find((x) => x.id === id);
+    assert.ok(b, `找不到 ${id}`);
+    sm.dispatchPointer({ type: 'move', x: b.x + b.w / 2, y: b.y + b.h / 2 });
+    sm.dispatchPointer({ type: 'down', x: b.x + b.w / 2, y: b.y + b.h / 2 });
+    sm.dispatchPointer({ type: 'up', x: b.x + b.w / 2, y: b.y + b.h / 2 });
+    sm.update(0.3);
+    sm.render(renderer);
+  };
+
+  // 设置、卡册能打开
+  click('settings');
+  assert.equal(lobby.getPanel(), 'settings');
+  assert.ok(texts.includes('试玩调整'));
+  click('album');
+  assert.equal(lobby.getPanel(), 'album');
+  click('tab-allies');
+  assert.ok(texts.includes('补刀'));
+
+  // 开始游戏 → 挑一群怪 → 出发
+  click('start');
+  assert.equal(lobby.getPanel(), 'start');
+  click('enc-pack_mixed');
+  assert.equal(lobby.getSelectedEncounterId(), 'pack_mixed');
+  click('go');
   assert.equal(sm.getCurrentName(), 'battle');
 
   const battleScene = sm.getCurrentScene();

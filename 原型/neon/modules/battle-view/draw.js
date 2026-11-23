@@ -478,3 +478,27 @@ export function formula(r, x, y, w, p, { compact = false } = {}) {
   }
   return ly;
 }
+
+export function ellipse(r, cx, cy, rx, ry, o) {
+  const pts = [];
+  for (let i = 0; i < 36; i++) { const a = (i / 36) * Math.PI * 2; pts.push({ x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry }); }
+  r.polygon({ points: pts, ...o });
+}
+
+/** 森林空地：战斗和大厅共用的背景（色块） */
+export function forest(r, W = 960, H = 540) {
+  r.clear('#141b14');
+  r.rect({ x: 0, y: 0, w: W, h: H, fill: '#1a2419' });
+  [[200, 300, 260, 90, '#1f2b1d'], [700, 330, 300, 100, '#1f2b1d'], [480, 200, 380, 120, '#202d1e'], [480, 420, 420, 110, '#1d281b'], [120, 180, 150, 60, '#1d281b'], [850, 170, 140, 50, '#1d281b']]
+    .forEach(([x, y, rx, ry, c]) => ellipse(r, x, y, rx, ry, { fill: c }));
+  for (let i = 0; i < 70; i++) {
+    const x = (i * 137) % W;
+    const y = 60 + ((i * 89) % 440);
+    r.rect({ x, y, w: 3, h: 6, fill: i % 3 ? '#2b3a27' : '#33452d' });
+  }
+  [[40, 40, 70], [150, 10, 80], [290, 0, 70], [420, -20, 70], [560, -18, 72], [690, 2, 76], [820, 14, 80], [930, 46, 72], [-10, 170, 70], [970, 190, 70], [-20, 330, 80], [980, 350, 80]]
+    .forEach(([x, y, rr]) => {
+      r.circle({ x, y, r: rr, fill: '#132414' });
+      r.circle({ x: x - rr * 0.25, y: y - rr * 0.2, r: rr * 0.6, fill: '#183019' });
+    });
+}

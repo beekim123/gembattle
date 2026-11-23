@@ -5,7 +5,7 @@ import { SCHEMA_VERSION } from '../modules/shared/index.js';
 import { RENDER_BACKEND, createRenderer } from '../modules/render/index.js';
 import { createGameLoop } from './loop.js';
 import { createSceneManager } from './scene-manager.js';
-import { createTrySetupScene } from './scenes/try-setup.js';
+import { createLobbyScene } from './scenes/lobby.js';
 import { createBattleScene } from './scenes/battle-scene.js';
 import { DEFAULT_ALLY_IDS, DEFAULT_BUFF_IDS } from '../modules/content/index.js';
 
@@ -25,7 +25,7 @@ const sceneManager = createSceneManager({
   renderBackend: RENDER_BACKEND,
 });
 
-sceneManager.register('home', createTrySetupScene);
+sceneManager.register('home', createLobbyScene);
 sceneManager.register('battle', createBattleScene);
 
 // 支持通过 URL 参数直达指定仗（方便调试与自动截图，例如 ?encounter=gatekeeper_layer2）

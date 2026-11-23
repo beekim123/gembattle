@@ -11,10 +11,13 @@ const SPREAD = 0.22; // 一张牌的几发在多长时间里冒完
 
 /** 一张牌最多冒几个数：链越长越少，同屏不糊 */
 function floaterBudget(steps) {
-  if (steps <= 6) return 8;
-  if (steps <= 10) return 5;
-  return 4;
+  if (steps <= 6) return 6;
+  if (steps <= 10) return 4;
+  return 3;
 }
+
+/** 打出去先留这么久：链收到左边排成顺序表 */
+export const CAST_LEAD = 0.35;
 
 /** 从一堆包里挑 n 个显示：暴击的优先，其余均匀挑 */
 function pickPackets(list, n) {
@@ -122,7 +125,7 @@ export function buildPlayback(events, prevSnap, nextSnap, opts = {}) {
       const hitT = fireT + FLIGHT;
       const head = g.events[0]?.type === E.CHAIN_STEP ? g.events[0] : null;
       if (head) {
-        ops.push({ t: fireT, kind: 'fire', step: g.step, color: head.payload.color, multiplier: head.payload.multiplier });
+        ops.push({ t: fireT, kind: 'fire', step: g.step, color: head.payload.color, multiplier: head.payload.multiplier, relation: head.payload.relation });
         const target = g.events.find((e) => e.type === E.DAMAGE_PACKET)?.payload.targetUid;
         ops.push({ t: fireT, kind: 'shot', step: g.step, color: head.payload.color, uid: target, land: hitT });
       }
@@ -175,7 +178,10 @@ export function buildPlayback(events, prevSnap, nextSnap, opts = {}) {
     t = Math.max(t, lastHitT) + 1.6;
   }
   ops.sort((a, b) => a.t - b.t);
-  const duration = Math.max(t, lastHitT) + 0.7;
+  // 整体往后挪一点：先让链收到左边
+  const lead = steps.length ? (opts.lead ?? CAST_LEAD) : 0;
+  ops.forEach((o) => { o.t += lead; if (o.land != null) o.land += lead; });
+  const duration = Math.max(t, lastHitT) + 0.7 + lead;
 
   // ── 播放状态 ──
   const nextCd = new Map((nextSnap?.monsters || []).map((m) => [m.uid, m.countdown]));
@@ -198,13 +204,15 @@ export function buildPlayback(events, prevSnap, nextSnap, opts = {}) {
     monAt: -10,
     chainCount: n,
     interval: iv,
+    lead,
+    fires: [], // 每张牌亮起来的时间：{ step, t, color, multiplier, relation }
   };
   let cursor = 0;
   const byUid = (uid) => state.monsters.find((m) => m.uid === uid);
 
   function apply(op) {
     switch (op.kind) {
-      case 'fire': state.fired = op.step; break;
+      case 'fire': state.fired = op.step; state.fires.push({ step: op.step, t: op.t, color: op.color, multiplier: op.multiplier, relation: op.relation }); break;
       case 'shot': state.shots.push(op); break;
       case 'damage': {
         const m = byUid(op.uid);

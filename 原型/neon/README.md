@@ -57,7 +57,7 @@
 | `启动.command` | Mac 双击启动脚本 |
 | `package.json` | 仅声明 `"type": "module"` 与 `start` / `test` / `sim` / `shot` 命令，零依赖 |
 | `README.md` / `进度.md` / `偏离.md` | 使用说明、当前进度与设计差异记录 |
-| `app/` | 唯一组装处：`index.html`、`main.js`、主循环、场景切换、试打选仗页 `try-setup.js`、实战组装 `battle-scene.js` |
+| `app/` | 唯一组装处：`index.html`、`main.js`、主循环、场景切换、大厅 `lobby.js`、实战组装 `battle-scene.js` |
 | `modules/shared/` | 色环七色、时机与动作表、可指定种子随机数、战斗四样约定及校验函数 |
 | `modules/content/` | 29 张固定宝石牌、8 种功能牌、5 种核心仗 + 2 种拓展仗与开战包构造 |
 | `modules/battle-rules/` | 一仗的完整规则引擎、每个动作独立小函数、自动帮排算法（纯逻辑零 DOM） |

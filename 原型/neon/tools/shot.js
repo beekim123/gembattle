@@ -30,12 +30,21 @@ const CHROME_CANDIDATES = [
 
 const DEFAULT_JOBS = [
   {
-    name: '试打选仗台（阶段 1 入口）',
+    name: '大厅（森林 + 左边文字按钮）',
     path: '/app/',
     out: 'shots/app.png',
     width: 1040,
     height: 600,
     full: false,
+  },
+  {
+    name: '大厅·挑这一仗',
+    path: '/app/',
+    out: 'shots/app-start.png',
+    width: 1040,
+    height: 600,
+    full: false,
+    clicks: [{ x: 110, y: 282, frames: 20 }], // 点「开始游戏」滑出挑仗板
   },
   {
     name: '实战·双色盾（自动帮排预览）',
@@ -55,7 +64,7 @@ const DEFAULT_JOBS = [
     full: false,
     clicks: [
       { x: 742, y: 447 }, // 点「自动帮排」
-      { x: 884, y: 478, frames: 1, waitMs: 900 }, // 点圆按钮「打出」看飘字和总数
+      { x: 884, y: 478, frames: 1, waitMs: 1100 }, // 点圆按钮「打出」：链收到左边，主角施法，飘字
     ],
     freeze: true,
   },

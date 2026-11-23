@@ -14,13 +14,16 @@ export const REGIONS = Object.freeze({
     4: [{ x: 420, y: 238, s: 120 }, { x: 240, y: 212, s: 88 }, { x: 600, y: 216, s: 88 }, { x: 760, y: 204, s: 88 }],
   },
   overhead: { gap: 12, barH: 6, toughH: 4, minW: 64, maxW: 112 },
-  chain: { cx: 480, y: 262, h: 46, maxCard: 36, gap: 12, maxW: 560, dropTop: 150, dropBottom: 340 },
-  ring: { cx: 118, cy: 292, rad: 17, dot: 6 },
+  chain: { cx: 480, y: 254, h: 60, maxCard: 46, gap: 12, maxW: 576, dropTop: 150, dropBottom: 340 },
+  // 打出去以后，链收到最左边竖成一列：施法的顺序表（用户 2026-11-23 定的，D1）
+  castList: { x: 18, top: 66, bottom: 416, cardW: 40, cardH: 46, gap: 6 },
+  // 集色环：左边让给顺序表，挪到左下牌堆旁边
+  ring: { cx: 214, cy: 460, rad: 17, dot: 6 },
   preview: { x: 772, y: 254, w: 176, h: 74 },
   total: { cx: 480, cy: 288 },
-  hero: { cx: 480, base: 398, size: 60 },
-  allies: [{ cx: 392, base: 392, size: 48 }, { cx: 568, base: 392, size: 48 }, { cx: 316, base: 386, size: 46 }],
-  hand: { cx: 480, pivotY: 1105, radius: 650, cw: 78, ch: 108, stepDeg: 7, maxSpreadDeg: 36, crowd: 8, crowdScale: 0.86, zoneTop: 404 },
+  hero: { cx: 480, base: 388, size: 58 },
+  allies: [{ cx: 392, base: 382, size: 46 }, { cx: 568, base: 382, size: 46 }, { cx: 316, base: 376, size: 44 }],
+  hand: { cx: 480, pivotY: 1100, radius: 650, cw: 78, ch: 108, stepDeg: 7, maxSpreadDeg: 36, crowd: 8, crowdScale: 0.86, zoneTop: 404 },
   pile: { x: 16, y: 436 },
   cast: { cx: 884, cy: 478, r: 42 },
   buttons: { auto: { x: 704, y: 434, w: 76, h: 26 }, clear: { x: 704, y: 466, w: 76, h: 26 }, back: { x: 884, y: 4, w: 40, h: 22 } },
@@ -61,6 +64,19 @@ export function chainSlots(n) {
     const x = sx + i * (cw + C.gap);
     const y = C.y + (C.h - ch);
     return { x, y, w: cw, h: ch, cx: x + cw / 2, cy: y + ch / 2 };
+  });
+}
+
+/** 施法顺序表上每张的位置：从上往下，张数多了自动缩 */
+export function castListSlots(n) {
+  const L = REGIONS.castList;
+  if (n <= 0) return [];
+  const rowH = Math.min(L.cardH + L.gap, (L.bottom - L.top) / n);
+  const h = Math.min(L.cardH, rowH - 3);
+  const w = Math.min(L.cardW, h * 0.87);
+  return Array.from({ length: n }, (_, i) => {
+    const y = L.top + i * rowH;
+    return { x: L.x, y, w, h, cx: L.x + w / 2, cy: y + h / 2 };
   });
 }
 
