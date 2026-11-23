@@ -259,3 +259,18 @@ export function buildDeck(extraCardDefIds = []) {
   }
   return deck;
 }
+
+/**
+ * 功能牌强化以后什么样（设计稿 6.3：数变大，比如摸 2 张变成摸 3 张）。
+ * params 盖到这张牌每个效果的参数上。
+ */
+export const FUNCTION_ENHANCE = Object.freeze({
+  fn_draw_2: Object.freeze({ params: { count: 3 }, label: '马上摸 3 张', description: '马上用：立刻摸 3 张牌（强化过）' }),
+  fn_hit_percent_50: Object.freeze({ params: { value: 0.8 }, label: '本回合每发 +80%', description: '马上用：这回合每发伤害 +80%，用完补摸 1 张（强化过）' }),
+  fn_mult_x2_blue: Object.freeze({ params: { value: 3 }, label: '蓝 · 倍率 ×3', description: '排进链：带 1 颗蓝宝石，接链出伤后倍率再 ×3（强化过）' }),
+  fn_to_complement: Object.freeze({ params: {}, drawAfterPlay: 1, label: '变成补色，再摸 1 张', description: '排进链：变成当前色的补色（造合白），打出后补摸 1 张（强化过）' }),
+  fn_record_neighbors: Object.freeze({ params: { count: 3 }, label: '记 3 种颜色', description: '马上用：顺着当前色记 3 种颜色，用完补摸 1 张（强化过）' }),
+  fn_shred_shield_2: Object.freeze({ params: { amount: 3 }, label: '削目标盾 3 格', description: '马上用：削选中那只怪的盾 3 格，用完补摸 1 张（强化过）' }),
+  fn_block_next: Object.freeze({ params: { count: 2 }, label: '挡下两次攻击', description: '马上用：挡掉怪的下两次攻击，用完补摸 1 张（强化过）' }),
+  fn_delay_countdown_1: Object.freeze({ params: { delta: 2 }, label: '怪倒计时 +2', description: '马上用：选中那只怪的倒计时往后推 2 格，用完补摸 1 张（强化过）' }),
+});

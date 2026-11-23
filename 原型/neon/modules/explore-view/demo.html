@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><title>explore-view 演示（假数据）</title>
+<style>body{margin:0;background:#0b0d12;display:flex;justify-content:center;align-items:center;height:100vh}canvas{width:960px;height:540px}</style></head>
+<body>
+<canvas id="c"></canvas>
+<script type="module">
+import { createRenderer } from '../render/index.js';
+import { createExploreView } from './index.js';
+import { FAKE_CATALOG, fakeExits, fakeRunState } from './test/fake.js';
+
+const canvas = document.getElementById('c');
+const r = createRenderer(canvas, { width: 960, height: 540, dpr: Math.min(2, window.devicePixelRatio || 1) });
+let state = fakeRunState();
+const view = createExploreView({
+  catalog: FAKE_CATALOG,
+  callbacks: {
+    onFight() { state = { ...state, clearing: { ...state.clearing, needsFight: false, exits: fakeExits } }; view.setState(state); },
+    onExit() { state = fakeRunState({ clearing: { ...fakeRunState().clearing, id: 'cl-' + Math.random() } }); view.setState(state); },
+    onTakeHidden() { state = { ...state, gold: { ...state.gold, risky: state.gold.risky + 12 }, clearing: { ...state.clearing, hidden: { ...state.clearing.hidden, taken: true } } }; view.setState(state); },
+    onGather(id) { state = { ...state, clearing: { ...state.clearing, gathers: state.clearing.gathers.map((g) => g.id === id ? { ...g, taken: true } : g) } }; view.setState(state); },
+    onChoose() { state = { ...state, pending: null }; view.setState(state); },
+  },
+});
+view.setState(state);
+const pt = (ev) => { const b = canvas.getBoundingClientRect(); return { x: (ev.clientX - b.left) / b.width * 960, y: (ev.clientY - b.top) / b.height * 540 }; };
+['move', 'down', 'up'].forEach((t) => canvas.addEventListener('pointer' + t, (ev) => { const out = view.onPointer({ type: t, ...pt(ev) }); canvas.style.cursor = out?.cursor || 'default'; }));
+addEventListener('keydown', (e) => view.onKey(e.key, true));
+addEventListener('keyup', (e) => view.onKey(e.key, false));
+let last = performance.now();
+function frame(now) { view.update(Math.min(0.05, (now - last) / 1000)); last = now; view.render(r); requestAnimationFrame(frame); }
+requestAnimationFrame(frame);
+window.__showPick = () => { state = { ...state, pending: { type: 'pick_buff', options: ['b1', 'b2', 'b3'], source: '出口' } }; view.setState(state); };
+</script>
+</body>
+</html>

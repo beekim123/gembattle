@@ -16,12 +16,12 @@ const ALLOWED_MODULE_DEPS = {
   render: ['shared'],
   ui: ['shared', 'render'],
   'battle-view': ['shared', 'render', 'ui'],
-  app: ['shared', 'content', 'battle-rules', 'render', 'ui', 'battle-view'],
+  'run-rules': ['shared'],
+  'explore-view': ['shared', 'render', 'ui'],
+  app: ['shared', 'content', 'battle-rules', 'render', 'ui', 'battle-view', 'run-rules', 'explore-view'],
 };
 
 const FORBIDDEN_FUTURE_MODULES = [
-  'run-rules',
-  'explore-view',
   'save',
   'guild',
   'recruit',
@@ -86,7 +86,7 @@ function extractModuleScripts(html) {
   return blocks;
 }
 
-test('模块目录齐全，且不提前创建阶段 2 以后的空目录', async () => {
+test('模块目录齐全，且不提前创建阶段 3 以后的空目录', async () => {
   const requiredModules = [
     { path: 'modules/shared', needDemo: true },
     { path: 'modules/content', needDemo: false },
@@ -95,6 +95,8 @@ test('模块目录齐全，且不提前创建阶段 2 以后的空目录', async
     { path: 'modules/render/blocks', needDemo: true },
     { path: 'modules/ui', needDemo: true },
     { path: 'modules/battle-view', needDemo: true },
+    { path: 'modules/run-rules', needDemo: false },
+    { path: 'modules/explore-view', needDemo: true },
   ];
 
   for (const unit of requiredModules) {
@@ -111,7 +113,7 @@ test('模块目录齐全，且不提前创建阶段 2 以后的空目录', async
     assert.equal(
       await exists(join(ROOT, 'modules', futureMod)),
       false,
-      `阶段 1 不应提前创建未来目录：modules/${futureMod}`,
+      `阶段 2 不应提前创建未来目录：modules/${futureMod}`,
     );
   }
 });

@@ -5,6 +5,7 @@ import {
   ACTIONS,
   ACTION_DURATIONS,
   BATTLE_EVENT_TYPES,
+  COLOR_META,
   COLOR_RING,
   PRIMARY_GEMS,
 } from '../shared/index.js';
@@ -120,7 +121,7 @@ export const ACTION_HANDLERS = Object.freeze({
       meta.monster.turnHalvedColor = picked;
       ctx.emit(BATTLE_EVENT_TYPES.EFFECT_TRIGGERED, {
         source: meta.monster.uid,
-        label: `本回合 ${picked} 色牌伤害减半`,
+        label: `本回合${COLOR_META[picked]?.label || picked}牌伤害减半`,
         halvedColor: picked,
       });
       return;

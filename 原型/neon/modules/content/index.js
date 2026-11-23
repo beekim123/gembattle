@@ -8,9 +8,14 @@ import {
   FUNCTION_CARD_LIST,
   GEM_CARD_DEFS,
   JUNK_CARD_DEFS,
+  FUNCTION_ENHANCE,
   buildDeck,
   instantiateCard,
 } from './cards/cards.js';
+import { ZONES } from './zones/forest.js';
+import { EVENT_DEFS, EVENT_LIST } from './events/events.js';
+import { HIDDEN_QUEST, QUEST_BOARD, QUEST_DEFS } from './quests/quests.js';
+import { FREE_GEAR, GEAR_DEFS, GEAR_LIST, HERO_BASE } from './gear/gear.js';
 import {
   ALL_ENCOUNTERS,
   ENCOUNTERS,
@@ -18,7 +23,7 @@ import {
   STAGE1_CORE_ENCOUNTERS,
 } from './monsters/encounters.js';
 import { BUFF_DEFS, BUFF_LIST } from './buffs/buffs.js';
-import { ALLY_DEFS, ALLY_LIST } from './allies/allies.js';
+import { ALLY_DEFS, ALLY_LIST, STAGE1_ALLY_IDS } from './allies/allies.js';
 
 export {
   GEM_CARD_DEFS,
@@ -36,11 +41,22 @@ export {
   BUFF_LIST,
   ALLY_DEFS,
   ALLY_LIST,
+  FUNCTION_ENHANCE,
+  ZONES,
+  EVENT_DEFS,
+  EVENT_LIST,
+  QUEST_DEFS,
+  QUEST_BOARD,
+  HIDDEN_QUEST,
+  GEAR_DEFS,
+  GEAR_LIST,
+  FREE_GEAR,
+  HERO_BASE,
 };
 
 /** 加成、队友试打默认带哪些（claude 的倾向，用户还没拍板，试打台上能换） */
 export const DEFAULT_BUFF_IDS = Object.freeze(BUFF_LIST.map((b) => b.id));
-export const DEFAULT_ALLY_IDS = Object.freeze(ALLY_LIST.map((a) => a.id));
+export const DEFAULT_ALLY_IDS = STAGE1_ALLY_IDS;
 
 function cloneEffects(effects) {
   return (effects || []).map((ef) => ({
@@ -109,6 +125,7 @@ function cloneMonsters(monsters, initialCountdownOverride) {
     defId: m.defId,
     tier: m.tier,
     label: m.label,
+    look: m.look || null,
     attackDamage: m.attackDamage,
     // 只有原本是标准倒计时 4 的怪，受全局 4/3 开关调整；倒计时短的特化怪保持自身短倒计时
     initialCountdown: (initialCountdownOverride && m.initialCountdown === 4)
@@ -182,4 +199,60 @@ export function createBattlePacket({
     },
     monsters: cloneMonsters(encounter.monsters, mergedConfig.initialCountdown),
   };
+}
+
+/** 29 张宝石牌的 defId（照固定牌组的顺序） */
+export const BASE_DECK_DEF_IDS = Object.freeze(buildDeck([]).map((c) => c.defId));
+
+/**
+ * 给 run-rules 的内容包（纯数据）：run-rules 不认识 content，由 app/ 拼好传进去。
+ */
+export function createRunContent() {
+  return {
+    zones: ZONES,
+    cardDefs: ALL_CARD_DEFS,
+    baseDeck: BASE_DECK_DEF_IDS,
+    functionCardList: FUNCTION_CARD_LIST,
+    functionEnhance: FUNCTION_ENHANCE,
+    junkCardId: Object.keys(JUNK_CARD_DEFS)[0],
+    buffDefs: BUFF_DEFS,
+    buffList: BUFF_LIST,
+    allyDefs: ALLY_DEFS,
+    encounters: ENCOUNTERS,
+    events: EVENT_DEFS,
+    eventList: EVENT_LIST,
+    hiddenQuest: HIDDEN_QUEST,
+    gearDefs: GEAR_DEFS,
+    defaultRules: {
+      drawMode: DEFAULT_RULES_CONFIG.drawMode,
+      freeKeepCount: DEFAULT_RULES_CONFIG.freeKeepCount,
+      shieldActiveMultiplier: DEFAULT_RULES_CONFIG.shieldActiveMultiplier,
+      shieldBrokenMultiplier: DEFAULT_RULES_CONFIG.shieldBrokenMultiplier,
+      shieldBreakPush: DEFAULT_RULES_CONFIG.shieldBreakPush,
+      initialCountdown: DEFAULT_RULES_CONFIG.initialCountdown,
+      maxHandSize: DEFAULT_RULES_CONFIG.maxHandSize,
+    },
+  };
+}
+
+/**
+ * 照穿的装备算出主角的属性（设计稿 6.5、9.2）：底子 + 每件装备的数；小特性变成开战包的 gearTraits。
+ * @param {{weapon?:string|null, armor?:string|null, trinket?:string|null}} equipped
+ */
+export function buildHeroLoadout(equipped = FREE_GEAR) {
+  const stats = { attack: HERO_BASE.attack, damageBonus: HERO_BASE.damageBonus, critRate: HERO_BASE.critRate, critDamage: HERO_BASE.critDamage };
+  let hearts = HERO_BASE.hearts;
+  const gearTraits = [];
+  for (const slot of ['weapon', 'armor', 'trinket']) {
+    const id = equipped?.[slot];
+    if (!id) continue;
+    const g = GEAR_DEFS[id];
+    if (!g) continue;
+    for (const [k, v] of Object.entries(g.stats || {})) {
+      if (k === 'hearts') hearts += v;
+      else stats[k] = Math.round((stats[k] + v) * 1000) / 1000;
+    }
+    if (g.trait) gearTraits.push({ gearId: g.id, slot: g.slot, label: g.trait.label, effects: cloneEffects(g.trait.effects) });
+  }
+  return { stats, hearts, maxHearts: hearts, drawTarget: HERO_BASE.drawTarget, gearTraits };
 }

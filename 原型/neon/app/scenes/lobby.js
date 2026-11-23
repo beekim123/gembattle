@@ -17,8 +17,10 @@ import {
   DEFAULT_RULES_CONFIG,
   FUNCTION_CARD_LIST,
   GEM_CARD_DEFS,
+  QUEST_DEFS,
+  buildHeroLoadout,
 } from '../../modules/content/index.js';
-import { COLOR_META, SEVEN_COLORS } from '../../modules/shared/index.js';
+import { COLOR_META, SCHEMA_VERSION, SEVEN_COLORS } from '../../modules/shared/index.js';
 import { F, LANE, T, bold, buffIcon, fnCard, forest, gemCard, stackSprite, txt } from '../../modules/battle-view/index.js';
 
 const W = 960;
@@ -29,10 +31,11 @@ const N_VALUES = [4, 5, 6, 8];
 const CREAM = '#efe2c4';
 const GOLD = '#ffd79a';
 const MENU = [
-  { id: 'start', label: '开始游戏', y: 282, size: 30 },
-  { id: 'album', label: '卡册', y: 334, size: 22 },
-  { id: 'settings', label: '设置', y: 374, size: 22 },
-  { id: 'quit', label: '退出', y: 414, size: 22 },
+  { id: 'run', label: '走一趟', y: 272, size: 30 },
+  { id: 'start', label: '试打一仗', y: 322, size: 22 },
+  { id: 'album', label: '卡册', y: 360, size: 22 },
+  { id: 'settings', label: '设置', y: 398, size: 22 },
+  { id: 'quit', label: '退出', y: 436, size: 22 },
 ];
 const PANEL = { x: 392, y: 26, w: 544, h: 488 };
 const ROLE_COLOR = { assassin: '#9a78c2', support: '#86d6a6', tank: '#86b4dc', warrior: '#e09a62' };
@@ -59,6 +62,7 @@ export function createLobbyScene(context) {
   let buffIds = new Set(DEFAULT_BUFF_IDS);
   let allyIds = new Set(DEFAULT_ALLY_IDS);
   let battleCounter = 1;
+  let runCounter = 0;
 
   let panel = null; // null | 'start' | 'album' | 'settings'
   let panelT = 0; // 板滑出来过了多久
@@ -83,6 +87,22 @@ export function createLobbyScene(context) {
     });
   }
 
+  /** 阶段 2：直接带两个 C 级任务、穿 C 级装备进林子（阶段 3 换成工会接任务、出发） */
+  function startRunFromLobby() {
+    runCounter++;
+    const gear = buildHeroLoadout({ weapon: 'gear_c_weapon_1', armor: null, trinket: null });
+    context.switchTo('run', {
+      depart: {
+        schemaVersion: SCHEMA_VERSION,
+        seed: `run-${Date.now() % 100000}-${runCounter}`,
+        zoneId: 'forest',
+        player: { ...gear, extraCards: [], buffs: [], allies: ALLY_LIST.map((a) => a.id).filter((id) => allyIds.has(id)) },
+        quests: [QUEST_DEFS.q_c_gather, QUEST_DEFS.q_c_hunt].map((q) => ({ ...q })),
+        rulesConfig: { ...rulesConfig },
+      },
+    });
+  }
+
   function openPanel(id) {
     if (panel === id) { panel = null; return; }
     panel = id;
@@ -102,7 +122,7 @@ export function createLobbyScene(context) {
 
     // 标题
     bold(r, 'code00', 64, 168, { size: 60, color: CREAM, outline: '#0b0d12' });
-    txt(r, '原型 · 阶段 1', 68, 212, { size: F.s, color: '#a9b7b2' });
+    txt(r, '原型 · 阶段 2', 68, 212, { size: F.s, color: '#a9b7b2' });
 
     // 菜单：没有框的文字，鼠标放上去变金色
     MENU.forEach((m) => {
@@ -123,6 +143,7 @@ export function createLobbyScene(context) {
   }
 
   function menuClick(id) {
+    if (id === 'run') { startRunFromLobby(); return; }
     if (id === 'quit') { toast = { text: '原型在浏览器里，关掉这个标签页就退出了', t: clock }; panel = null; return; }
     openPanel(id);
   }

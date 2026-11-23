@@ -21,6 +21,7 @@ export const ENCOUNTERS = Object.freeze({
       Object.freeze({
         uid: 'm-dual-1',
         defId: 'monster_dual_shield',
+        look: 'mon_dual_shield',
         tier: 'normal',
         label: '双色盾普通怪',
         attackDamage: 0.5,
@@ -50,6 +51,7 @@ export const ENCOUNTERS = Object.freeze({
       Object.freeze({
         uid: 'm-rec-1',
         defId: 'monster_recorded_down',
+        look: 'mon_recorded_down',
         tier: 'normal',
         label: '集色减伤普通怪',
         attackDamage: 0.5,
@@ -91,6 +93,7 @@ export const ENCOUNTERS = Object.freeze({
       Object.freeze({
         uid: 'm-fast-1',
         defId: 'monster_fast_countdown',
+        look: 'mon_fast',
         tier: 'normal',
         label: '倒计时短普通怪',
         attackDamage: 0.5,
@@ -125,6 +128,7 @@ export const ENCOUNTERS = Object.freeze({
       Object.freeze({
         uid: 'm-pack-tank',
         defId: 'monster_pack_heavy',
+        look: 'mon_pack_tank',
         tier: 'normal',
         label: '血厚单色盾怪',
         attackDamage: 0.5,
@@ -142,6 +146,7 @@ export const ENCOUNTERS = Object.freeze({
       Object.freeze({
         uid: 'm-pack-small-1',
         defId: 'monster_pack_small',
+        look: 'mon_pack_small',
         tier: 'normal',
         label: '血少快攻小怪 A',
         attackDamage: 0.5,
@@ -159,6 +164,7 @@ export const ENCOUNTERS = Object.freeze({
       Object.freeze({
         uid: 'm-pack-small-2',
         defId: 'monster_pack_small',
+        look: 'mon_pack_small',
         tier: 'normal',
         label: '血少快攻小怪 B',
         attackDamage: 0.5,
@@ -187,6 +193,7 @@ export const ENCOUNTERS = Object.freeze({
       Object.freeze({
         uid: 'm-gate-1',
         defId: 'monster_gatekeeper_outer',
+        look: 'mon_gatekeeper',
         tier: 'gatekeeper',
         label: '外头区看门的',
         attackDamage: 0.5,
@@ -269,6 +276,7 @@ export const ENCOUNTERS = Object.freeze({
       Object.freeze({
         uid: 'm-halve-1',
         defId: 'monster_halve_color',
+        look: 'mon_halve',
         tier: 'normal',
         label: '挑色减半普通怪',
         attackDamage: 0.5,
@@ -310,6 +318,7 @@ export const ENCOUNTERS = Object.freeze({
       Object.freeze({
         uid: 'm-elite-1',
         defId: 'monster_elite_first_hits',
+        look: 'mon_elite',
         tier: 'elite',
         label: '前 12 发不掉血精英',
         attackDamage: 1,

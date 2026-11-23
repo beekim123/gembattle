@@ -3,5 +3,6 @@
 export {
   RENDER_BACKEND,
   DEFAULT_FONT_FAMILY,
+  LOOKS,
   createBlockRenderer,
 } from './canvas-blocks.js';

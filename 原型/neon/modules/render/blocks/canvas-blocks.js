@@ -1,7 +1,10 @@
 // 色块渲染后端（Canvas 2D）。
 // 不直接引用全局 document / window，既可在浏览器跑，也可在 Node 单测中注入假 2D 上下文验证。
 
+import { getLook, LOOKS } from './looks.js';
+
 export const RENDER_BACKEND = 'blocks';
+export { LOOKS };
 export const DEFAULT_FONT_FAMILY = 'system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
 
 function buildFontString({ size = 16, weight = 'normal', font = DEFAULT_FONT_FAMILY } = {}) {
@@ -359,6 +362,51 @@ export function createBlockRenderer(target, options = {}) {
     }
   }
 
+  /**
+   * 画一个会动的东西（怪、主角、队友）。画面模块只给 look 编号和姿势，长什么样由后端定。
+   * 色块后端：一摞往上叠的色块；以后堆叠后端照同一个 look 编号换成工坊里的怪。
+   * @param {object} o
+   * @param {string} o.look look 编号（见 looks.js）
+   * @param {number} o.x 脚下中心 x
+   * @param {number} o.y 脚下 y
+   * @param {number} o.size 基准高（像素）
+   * @param {string} [o.state] idle / walk / hit / attack / dead
+   * @param {number} [o.t] 动画时间（秒）
+   * @param {number} [o.alpha]
+   * @param {boolean} [o.flash] 挨打一闪
+   * @param {boolean} [o.shadow=true]
+   */
+  function drawActor({ look, x, y, size, state = 'idle', t = 0, alpha = 1, flash = false, shadow = true, tint = null }) {
+    const L = getLook(look);
+    const s = size * (L.size || 1);
+    const bob = state === 'walk' ? Math.abs(Math.sin(t * 9)) * s * 0.08 : Math.sin(t * 2.2) * s * 0.025;
+    if (shadow) {
+      ctx.save();
+      ctx.globalAlpha = 0.38 * alpha;
+      ctx.fillStyle = '#000000';
+      ctx.beginPath();
+      if (ctx.ellipse) ctx.ellipse(x, y, s * 0.4, s * 0.1, 0, 0, Math.PI * 2);
+      else ctx.arc(x, y, s * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    const hue = tint || L.hue;
+    const n = 6;
+    for (let i = 0; i < n; i++) {
+      const k = i / (n - 1);
+      const lw = s * (0.74 - k * 0.2);
+      const lh = s * 0.2;
+      const ly = y - bob - s * 0.1 - i * s * 0.135 - lh / 2;
+      rect({ x: x - lw / 2, y: ly, w: lw, h: lh, radius: lh * 0.35, fill: flash ? '#ffffff' : (i === n - 1 ? L.top : hue), alpha: alpha * (flash ? 0.9 : 0.55 + k * 0.45) });
+    }
+    if (L.eyes && state !== 'dead') {
+      const ey = y - bob - s * 0.1 - (n - 1) * s * 0.135;
+      circle({ x: x - s * 0.1, y: ey, r: Math.max(1.5, s * 0.035), fill: L.eyes, alpha });
+      circle({ x: x + s * 0.1, y: ey, r: Math.max(1.5, s * 0.035), fill: L.eyes, alpha });
+    }
+    return { top: y - bob - s * 0.95, height: s };
+  }
+
   return {
     backend: RENDER_BACKEND,
     getSize,
@@ -375,5 +423,6 @@ export function createBlockRenderer(target, options = {}) {
     group,
     transform,
     spriteSlot,
+    drawActor,
   };
 }

@@ -6,3 +6,4 @@ export { formatNumber, wrapText, splitWrapTokens, drawText, drawNumber, drawPane
 export { hitTestRect, createButton, drawButton } from './button.js';
 export { layoutTooltip, drawTooltip } from './tooltip.js';
 export { createUiLayer } from './manager.js';
+export * from './kit.js';

@@ -7,6 +7,7 @@ import { createGameLoop } from './loop.js';
 import { createSceneManager } from './scene-manager.js';
 import { createLobbyScene } from './scenes/lobby.js';
 import { createBattleScene } from './scenes/battle-scene.js';
+import { createRunScene } from './scenes/run-scene.js';
 import { DEFAULT_ALLY_IDS, DEFAULT_BUFF_IDS } from '../modules/content/index.js';
 
 const LOGICAL_WIDTH = 960;
@@ -27,6 +28,7 @@ const sceneManager = createSceneManager({
 
 sceneManager.register('home', createLobbyScene);
 sceneManager.register('battle', createBattleScene);
+sceneManager.register('run', createRunScene);
 
 // 支持通过 URL 参数直达指定仗（方便调试与自动截图，例如 ?encounter=gatekeeper_layer2）
 const params = new URLSearchParams(window.location.search);
@@ -75,8 +77,14 @@ window.addEventListener('keydown', (ev) => {
   const scene = sceneManager.getCurrentScene();
   if (scene && typeof scene.onKeyDown === 'function') {
     if (ev.key === ' ') ev.preventDefault();
+    if (ev.key === 'Tab') ev.preventDefault();
     scene.onKeyDown(ev.key);
   }
+});
+
+window.addEventListener('keyup', (ev) => {
+  const scene = sceneManager.getCurrentScene();
+  if (scene && typeof scene.onKeyUp === 'function') scene.onKeyUp(ev.key);
 });
 
 sceneManager.render(renderer);

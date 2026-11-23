@@ -24,7 +24,8 @@ export function createBattleScene(context) {
 
   function startFromConfig(config) {
     lastConfig = config;
-    const packet = createBattlePacket({
+    // 走一趟里的仗：开战包由 run-rules 给（app/scenes/run-scene.js），打完交回去
+    const packet = config.runPacket ? config.runPacket : createBattlePacket({
       encounterId: config.encounterId || 'dual_shield',
       extraCards: config.extraCards || [],
       drawTarget: config.drawTarget ?? 4,
@@ -54,6 +55,7 @@ export function createBattleScene(context) {
 
     view = createBattleView({
       allowAutoArrange: config.rulesConfig?.allowAutoArrange ?? true,
+      outcomeMode: config.runPacket ? 'run' : 'single',
       callbacks: {
         onSelectTarget(uid) {
           if (battle.selectTarget(uid)) syncView();
@@ -93,6 +95,11 @@ export function createBattleScene(context) {
           });
         },
         onBack() {
+          if (config.runPacket) {
+            const result = battle.getResult();
+            if (result) context.switchTo('run', { battleResult: result });
+            return;
+          }
           context.switchTo('home', {
             encounterId: lastConfig.encounterId,
             rulesConfig: lastConfig.rulesConfig,
@@ -130,7 +137,7 @@ export function createBattleScene(context) {
         syncView(out.events, out.result);
       } else if (key === 'z' || key === 'Z') {
         if (battle.undoLast()) syncView();
-      } else if (key === 'Escape') {
+      } else if (key === 'Escape' && !lastConfig.runPacket) {
         context.switchTo('home', {
           encounterId: lastConfig.encounterId,
           rulesConfig: lastConfig.rulesConfig,

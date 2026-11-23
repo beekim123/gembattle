@@ -9,7 +9,7 @@
 import { COLOR_META, COLOR_RING, BATTLE_EVENT_TYPES as E } from '../shared/index.js';
 import {
   F, LANE, T, bold, buffIcon, chainJoint, colorRing, fnCard, gemCard, gemDot, hearts, rainbowText,
-  ellipse, forest, smallButton, stackSprite, swatch, txt,
+  ellipse, forest, smallButton, swatch, txt,
 } from './draw.js';
 import { REGIONS, W, H, castListSlots, chainInsertIndex, chainSlots, fanSlots, hitRotated, monsterSlots } from './layout.js';
 import { buildPlayback } from './playback.js';
@@ -143,7 +143,7 @@ export function createBattleView(options = {}) {
       { id: 'cast', x: C.cx - C.r, y: C.cy - C.r, w: C.r * 2, h: C.r * 2 },
       ...(allowAutoArrange ? [{ id: 'auto', ...R.buttons.auto }] : []),
       { id: 'clear', ...R.buttons.clear },
-      { id: 'back', ...R.buttons.back },
+      ...(options.outcomeMode === 'run' ? [] : [{ id: 'back', ...R.buttons.back }]), // 走一趟里的仗不能半路走
     ];
     lastBoxes = { hand, chain, monsters, buttons };
     return lastBoxes;
@@ -246,6 +246,10 @@ export function createBattleView(options = {}) {
   }
 
   function outcomeButtons() {
+    // 走一趟里打的仗：只有一个「接着走」（死了是「看看这一趟」），不能再打一次
+    if (options.outcomeMode === 'run') {
+      return [{ id: 'back', x: 410, y: 300, w: 140, h: 36, label: snapshot?.outcome === 'win' ? '接着走' : '看看这一趟' }];
+    }
     return [
       { id: 'retry', x: 360, y: 300, w: 110, h: 36, label: '再打一次' },
       { id: 'back', x: 490, y: 300, w: 110, h: 36, label: '回大厅' },
@@ -284,19 +288,21 @@ export function createBattleView(options = {}) {
     [...mons.keys()].sort((a, b) => ms[a].y - ms[b].y).forEach((i) => {
       const m = mons[i];
       const sl = ms[i];
-      const look = m.tier === 'gatekeeper' ? { hue: '#463a7e', top: '#8f7ae8', eyes: '#ff6b6b' } : m.tier === 'elite' ? { hue: '#6a4a2e', top: '#d8a25a', eyes: '#ffe27a' } : { hue: '#5b4f7e', top: '#9d8ad6', eyes: '#ffe27a' };
+      // 样子只给 look 编号，长什么样由 render 后端定（以后换成堆叠美术，这里不改）
+      const lookId = m.look || (m.tier === 'gatekeeper' ? 'mon_gatekeeper' : m.tier === 'elite' ? 'mon_elite' : 'mon_dual_shield');
       let a = 1;
       if (!m.alive) a = m.deadAt != null && m.deadAt >= 0 ? Math.max(0, 1 - (now - m.deadAt) / 0.5) : 0;
       if (a <= 0) return;
       const recoil = pb ? Math.max(0, 1 - (now - m.flashAt) / 0.15) * 4 : 0;
       const dy = lungeOf(m.uid) - recoil;
-      stackSprite(r, sl.x, sl.y + dy, sl.s, { ...look, alpha: a, slot: false });
-      if (pb && now - m.flashAt < 0.1) stackSprite(r, sl.x, sl.y + dy, sl.s, { ...look, eyes: null, alpha: 0.3, slot: false, flash: true });
+      const flashing = pb && now - m.flashAt < 0.1;
+      r.drawActor({ look: lookId, x: sl.x, y: sl.y + dy, size: sl.s, t: clock, alpha: a, state: m.alive ? 'idle' : 'dead' });
+      if (flashing) r.drawActor({ look: lookId, x: sl.x, y: sl.y + dy, size: sl.s, t: clock, alpha: 0.3, flash: true, shadow: false });
       if (!m.alive) {
         const p = (now - m.deadAt) / 0.5;
         for (let k = 0; k < 10; k++) {
           const ang = (k / 10) * Math.PI * 2;
-          r.rect({ x: sl.x + Math.cos(ang) * p * 40, y: sl.y - sl.s * 0.5 + Math.sin(ang) * p * 30 - p * 20, w: 5, h: 5, fill: look.top, alpha: a });
+          r.rect({ x: sl.x + Math.cos(ang) * p * 40, y: sl.y - sl.s * 0.5 + Math.sin(ang) * p * 30 - p * 20, w: 5, h: 5, fill: '#cfc4f0', alpha: a });
         }
       }
     });
@@ -313,8 +319,9 @@ export function createBattleView(options = {}) {
       const dash = act ? Math.sin(clamp((now - act.t) / 0.6, 0, 1) * Math.PI) * 0.55 : 0;
       const ox = dash * (tgt.x - P.cx);
       const oy = dash * (tgt.y + 10 - P.base);
-      if (act) for (let g = 1; g <= 3; g++) stackSprite(r, P.cx + ox * (1 - g * 0.25), P.base + oy * (1 - g * 0.25), P.size, { hue: '#3a3550', top: col, eyes: null, slot: false, alpha: 0.18 });
-      stackSprite(r, P.cx + ox, P.base + oy, P.size, { hue: '#3a3550', top: col, eyes: null, slot: false });
+      const allyLook = `ally_${al.role || 'support'}`;
+      if (act) for (let g = 1; g <= 3; g++) r.drawActor({ look: allyLook, x: P.cx + ox * (1 - g * 0.25), y: P.base + oy * (1 - g * 0.25), size: P.size / 0.85, t: clock, alpha: 0.18, shadow: false });
+      r.drawActor({ look: allyLook, x: P.cx + ox, y: P.base + oy, size: P.size / 0.85, t: clock, state: act ? 'attack' : 'idle' });
       r.circle({ x: P.cx, y: P.base + 10, r: 9, fill: '#0b0d12', stroke: col, lineWidth: 1.5 });
       txt(r, (al.roleTag || al.label || '友').slice(0, 1), P.cx, P.base + 10, { size: 10, weight: 'bold', align: 'center', color: col });
       if (act) {
@@ -328,14 +335,14 @@ export function createBattleView(options = {}) {
     // 主角施法：每张牌亮起来，他往上一顶，手上一圈那张牌的颜色
     const castFire = pb?.fires.slice().reverse().find((f) => now - f.t >= 0 && now - f.t < 0.3);
     const heroLift = castFire ? Math.sin(clamp((now - castFire.t) / 0.3, 0, 1) * Math.PI) * 7 : 0;
-    stackSprite(r, R.hero.cx, R.hero.base - heroLift, R.hero.size, { hue: '#7a6a4e', top: '#e8cfa0', eyes: null, slot: false });
+    r.drawActor({ look: 'hero', x: R.hero.cx, y: R.hero.base - heroLift, size: R.hero.size, t: clock, state: castFire ? 'attack' : 'idle' });
     if (castFire) {
       const kk = (now - castFire.t) / 0.3;
       const hy = R.hero.base - R.hero.size - 8 - heroLift;
       r.circle({ x: R.hero.cx, y: hy, r: 5 + kk * 20, stroke: swatch(castFire.color), lineWidth: 4 * (1 - kk) + 1, alpha: 1 - kk });
       r.circle({ x: R.hero.cx, y: hy, r: 6 * (1 - kk) + 2, fill: swatch(castFire.color), alpha: 1 - kk * 0.5 });
     }
-    if (heroHit) stackSprite(r, R.hero.cx, R.hero.base, R.hero.size, { eyes: null, slot: false, flash: true, alpha: 0.45 });
+    if (heroHit) r.drawActor({ look: 'hero', x: R.hero.cx, y: R.hero.base, size: R.hero.size, flash: true, alpha: 0.45, shadow: false });
     if (heroBlock) ellipse(r, R.hero.cx, R.hero.base - 30, 46, 44, { stroke: '#6dc9ff', lineWidth: 3, alpha: 1 - (now - heroBlock.t - 0.15) / 0.5 });
 
     // 怪头顶
@@ -370,7 +377,7 @@ export function createBattleView(options = {}) {
       if (!busy() && pointer.y >= 4 && pointer.y <= 26 && pointer.x >= bxp && pointer.x <= bxp + 22) hoverTip(r, bxp - 200, 34, [b.label, ...(b.description ? [b.description] : [])]);
       bxp += 26;
     });
-    smallButton(r, R.buttons.back.x, R.buttons.back.y, R.buttons.back.w, R.buttons.back.h, '≡');
+    if (options.outcomeMode !== 'run') smallButton(r, R.buttons.back.x, R.buttons.back.y, R.buttons.back.w, R.buttons.back.h, '≡');
 
     // 集色
     colorRing(r, R.ring.cx, R.ring.cy, R.ring.rad, pb && pb.totalAt > 0 ? (snapshot.recordedColors || []) : (snap.recordedColors || []), snap.currentColor, R.ring.dot);

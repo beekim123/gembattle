@@ -5,6 +5,7 @@
 export {
   RENDER_BACKEND,
   DEFAULT_FONT_FAMILY,
+  LOOKS,
   createBlockRenderer,
   createBlockRenderer as createRenderer,
 } from './blocks/index.js';

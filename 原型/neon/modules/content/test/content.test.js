@@ -54,7 +54,7 @@ test('牌的名字里不写换行符：排版交给画面按宽度换行', () =>
 
 test('4 个加成、2 个队友带进开战包：契约校验通过，辅助塞的 3 张牌进了牌组', () => {
   assert.equal(BUFF_LIST.length, 4);
-  assert.equal(ALLY_LIST.length, 2);
+  assert.equal(ALLY_LIST.length, 4);
   const plain = createBattlePacket({ encounterId: 'dual_shield', seed: 't' });
   const packet = createBattlePacket({
     encounterId: 'dual_shield',
@@ -65,7 +65,7 @@ test('4 个加成、2 个队友带进开战包：契约校验通过，辅助塞�
   const res = validateBattleStartPacket(packet);
   assert.equal(res.ok, true, res.errors.join('\n'));
   assert.equal(packet.player.buffs.length, 4);
-  assert.equal(packet.player.allies.length, 2);
+  assert.equal(packet.player.allies.length, 4);
   assert.equal(packet.player.deck.length, plain.player.deck.length + 3);
   // 改开战包里的不会改到原始数据
   packet.player.buffs[0].effects[0].params.target = 'x';
