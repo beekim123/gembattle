@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>depart 演示（假数据）</title>
+<style>body{margin:0;background:#0b0d12;display:flex;justify-content:center;align-items:center;height:100vh}canvas{width:960px;height:540px}</style></head>
+<body><canvas id="c"></canvas>
+<script type="module">
+import { createRenderer } from '../render/index.js';
+import { forest } from '../ui/index.js';
+import { createDepartView, cycleGear } from './index.js';
+const GEAR = { w1: { id: 'w1', slot: 'weapon', label: '武器：攻击 +50' }, a1: { id: 'a1', slot: 'armor', label: '护身：心 +1' } };
+const QUESTS = { q1: { id: 'q1', count: 3, label: '第 1 层采 3 个' } };
+const ALLIES = { a: { roleTag: '刺', label: '补刀', explore: { label: '标出藏着的东西' } } };
+let save = { gold: 40, rank: 'C', hired: ['a'], quests: { taken: [{ id: 'q1', progress: 1, done: false }] }, gear: { owned: [{ id: 'w1', wear: 2 }, { id: 'a1', wear: 7 }], equipped: { weapon: 'w1', armor: null, trinket: null } } };
+const loadout = { stats: { attack: 80, damageBonus: 0, critRate: 0.1, critDamage: 1.5 }, hearts: 3, maxHearts: 3, drawTarget: 4, gearTraits: [] };
+const canvas = document.getElementById('c');
+const r = createRenderer(canvas, { width: 960, height: 540, dpr: Math.min(2, devicePixelRatio || 1) });
+const P = { x: 392, y: 26, w: 544, h: 488 };
+const set = () => view.setState({ save, gear: GEAR, quests: QUESTS, allies: ALLIES, loadout, zoneLabel: '森林·外头区' });
+const view = createDepartView({ callbacks: { onCycle: (slot, d) => { save = cycleGear(save, slot, d, GEAR).save; set(); }, onGo: () => alert('出发') } });
+set();
+const pt = (ev) => { const b = canvas.getBoundingClientRect(); return { x: (ev.clientX - b.left) / b.width * 960, y: (ev.clientY - b.top) / b.height * 540 }; };
+['move', 'down', 'up'].forEach((t) => canvas.addEventListener('pointer' + t, (ev) => { canvas.style.cursor = view.onPointer({ type: t, ...pt(ev) }).cursor; }));
+(function frame() { forest(r); r.rect({ ...P, radius: 14, fill: '#0b0e13', alpha: 0.92 }); view.render(r, P); requestAnimationFrame(frame); })();
+</script></body></html>

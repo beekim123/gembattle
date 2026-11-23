@@ -7,3 +7,4 @@ export { hitTestRect, createButton, drawButton } from './button.js';
 export { layoutTooltip, drawTooltip } from './tooltip.js';
 export { createUiLayer } from './manager.js';
 export * from './kit.js';
+export { CREAM, GOLD, panelButton, tabRow, sectionTitle, inRect } from './panel-kit.js';

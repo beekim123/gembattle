@@ -7,7 +7,16 @@ import { createSceneManager } from '../scene-manager.js';
 import { createLobbyScene } from '../scenes/lobby.js';
 import { createBattleScene } from '../scenes/battle-scene.js';
 import { createRunScene } from '../scenes/run-scene.js';
+import { createHubScene } from '../scenes/hub-scene.js';
+import { createSaveStore } from '../../modules/save/index.js';
 import { session } from '../session.js';
+
+function memoryStore() {
+  const m = new Map();
+  const store = createSaveStore({ getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, v) });
+  store.load();
+  return store;
+}
 
 function makeFakeRenderer() {
   const texts = [];
@@ -95,12 +104,12 @@ test('createSceneManager 正确触发 onExit/onEnter 并拦住未注册场景', 
 test('大厅点「试打一仗」→ 挑仗板点「出发」能进实战，拖一张牌打出一回合', () => {
   const { renderer, texts } = makeFakeRenderer();
   const sm = createSceneManager();
-  sm.register('home', createLobbyScene);
+  sm.register('trial', createLobbyScene);
   sm.register('battle', createBattleScene);
 
-  sm.switchTo('home');
+  sm.switchTo('trial');
   sm.render(renderer);
-  assert.ok(texts.includes('走一趟') && texts.includes('试打一仗'));
+  assert.ok(texts.includes('试打一仗') && texts.includes('回大厅'));
   assert.ok(texts.includes('code00'));
 
   const lobby = sm.getCurrentScene();
@@ -163,17 +172,41 @@ test('大厅点「试打一仗」→ 挑仗板点「出发」能进实战，拖�
   assert.ok(texts.some((t) => t.includes('第 2 回合') || t.includes('这一仗打赢了')));
 });
 
-test('走一趟：大厅点「走一趟」进空地，碰鬼火进战斗，自动帮排打完回到空地，挑奖励、出口亮了', () => {
+test('一整圈：大厅 → 工会接任务、买武器 → 出发 → 空地 → 碰鬼火打一仗 → 回空地挑奖励 → 不走了 → 结算进存档', () => {
   const { renderer, texts } = makeFakeRenderer();
+  session.saveStore = memoryStore();
+  session.run = null;
+  session.summary = null;
   const sm = createSceneManager();
-  sm.register('home', createLobbyScene);
+  sm.register('home', createHubScene);
   sm.register('battle', createBattleScene);
   sm.register('run', createRunScene);
   sm.switchTo('home');
   sm.render(renderer);
-  const lobby = sm.getCurrentScene();
-  const b = lobby.getHitBoxes().find((x) => x.id === 'run');
-  sm.dispatchPointer({ type: 'up', x: b.x + 5, y: b.y + 5 });
+  assert.ok(texts.includes('工会') && texts.includes('出发'));
+
+  const hubScene = sm.getCurrentScene();
+  const clickBox = (boxes, id) => {
+    const b = boxes.find((x) => x.id === id);
+    assert.ok(b, `找不到 ${id}`);
+    sm.dispatchPointer({ type: 'move', x: b.x + 3, y: b.y + 3 });
+    sm.dispatchPointer({ type: 'up', x: b.x + 3, y: b.y + 3 });
+    sm.update(0.3);
+    sm.render(renderer);
+  };
+  // 工会：接一个任务、去商店买一把武器
+  clickBox(hubScene.getHub().getBoxes(), 'guild');
+  assert.equal(hubScene.getPanel(), 'guild');
+  clickBox(hubScene.getPanelView().getBoxes(), 'take-q_c_hunt');
+  assert.equal(hubScene.getSave().quests.taken[0].id, 'q_c_hunt');
+  hubScene.getPanelView().setTab('shop');
+  sm.render(renderer);
+  clickBox(hubScene.getPanelView().getBoxes(), 'buy-gear_c_weapon_1');
+  assert.equal(hubScene.getSave().gear.equipped.weapon, 'gear_c_weapon_1');
+  assert.equal(hubScene.getSave().gold, 120 - 85);
+  // 出发
+  clickBox(hubScene.getHub().getBoxes(), 'depart');
+  clickBox(hubScene.getPanelView().getBoxes(), 'go');
   assert.equal(sm.getCurrentName(), 'run');
   sm.render(renderer);
   assert.ok(texts.some((t) => String(t).includes('第 1 层')));
@@ -184,6 +217,7 @@ test('走一趟：大厅点「走一趟」进空地，碰鬼火进战斗，自�
   runScene.getView().debugPlaceHero(w.x, w.y + 20);
   for (let i = 0; i < 30 && sm.getCurrentName() === 'run'; i++) sm.update(1 / 30);
   assert.equal(sm.getCurrentName(), 'battle');
+  assert.equal(sm.getCurrentScene().getBattle().getSnapshot().player.stats.attack, 80, '主角底子 30 + 武器 50');
 
   // 每回合自动帮排、打出，直到打完
   const bs = sm.getCurrentScene();
@@ -196,19 +230,26 @@ test('走一趟：大厅点「走一趟」进空地，碰鬼火进战斗，自�
   const result = bs.getBattle().getResult();
   assert.ok(result);
   sm.render(renderer);
-  const back = bs.getView().getLayoutBoxes ? null : null;
-  void back;
-  // 点结算框里的「接着走」
-  sm.dispatchPointer({ type: 'up', x: 480, y: 318 });
+  sm.dispatchPointer({ type: 'up', x: 480, y: 318 }); // 结算框里的「接着走」
   assert.equal(sm.getCurrentName(), 'run');
-  const st = session.run.getState();
   if (result.outcome === 'win') {
-    assert.ok(st.pending, '打完第一片要挑一张功能牌');
+    const st = session.run.getState();
     assert.equal(st.pending.type, 'pick_card');
+    assert.equal(st.quests[0].have, 1);
     session.run.choose(st.pending.options[0]);
     while (session.run.getState().pending) session.run.choose(null);
     assert.ok(session.run.getState().clearing.exits.length >= 2);
-  } else {
-    assert.ok(session.run.isEnded());
+    // 不走了（当死了算）→ 结算
+    session.run.debugEnd('dead');
   }
+  // 结束了：结算进存档，点「回大厅」
+  sm.update(0.5);
+  assert.ok(session.summary);
+  sm.update(0.5);
+  sm.dispatchPointer({ type: 'up', x: 480, y: 419 });
+  assert.equal(sm.getCurrentName(), 'home');
+  const after = sm.getCurrentScene().getSave();
+  assert.equal(after.runs, 1);
+  assert.equal(after.gear.owned[0].wear, 6, '出一趟磨 1 点');
+  assert.ok(after.album.monsters.length >= 1, '碰到过的怪进卡册');
 });

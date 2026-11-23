@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>recruit 演示（假数据）</title>
+<style>body{margin:0;background:#0b0d12;display:flex;justify-content:center;align-items:center;height:100vh}canvas{width:960px;height:540px}</style></head>
+<body><canvas id="c"></canvas>
+<script type="module">
+import { createRenderer } from '../render/index.js';
+import { forest } from '../ui/index.js';
+import { createRecruitView, hireAlly, refundAlly } from './index.js';
+const ALLIES = {
+  a: { id: 'a', role: 'assassin', roleTag: '刺', label: '补刀', description: '刺客：破盾那一下补一刀', hireCost: 30, unlockRank: 'C', explore: { label: '标出藏着的东西' } },
+  b: { id: 'b', role: 'support', roleTag: '辅', label: '塞牌', description: '辅助：牌组里多 3 张', hireCost: 25, unlockRank: 'C', explore: { label: '歇脚多一个选项' } },
+  t: { id: 't', role: 'tank', roleTag: '坦', label: '推后', description: '坦克：破盾多推一格', hireCost: 30, unlockRank: 'C', explore: { label: '事件扣心少一半' } },
+  w: { id: 'w', role: 'warrior', roleTag: '战', label: '削盾', description: '战士：每回合削 1 格', hireCost: 35, unlockRank: 'B', explore: { label: '精英多给金币' } },
+};
+const canvas = document.getElementById('c');
+const r = createRenderer(canvas, { width: 960, height: 540, dpr: Math.min(2, devicePixelRatio || 1) });
+let save = { gold: 100, rank: 'C', hired: [] };
+const P = { x: 392, y: 26, w: 544, h: 488 };
+const view = createRecruitView({ callbacks: { onHire: (id) => { save = hireAlly(save, id, ALLIES).save; view.setState({ save, allies: ALLIES }); }, onRefund: (id) => { save = refundAlly(save, id, ALLIES).save; view.setState({ save, allies: ALLIES }); } } });
+view.setState({ save, allies: ALLIES });
+const pt = (ev) => { const b = canvas.getBoundingClientRect(); return { x: (ev.clientX - b.left) / b.width * 960, y: (ev.clientY - b.top) / b.height * 540 }; };
+['move', 'down', 'up'].forEach((t) => canvas.addEventListener('pointer' + t, (ev) => { canvas.style.cursor = view.onPointer({ type: t, ...pt(ev) }).cursor; }));
+(function frame() { forest(r); r.rect({ ...P, radius: 14, fill: '#0b0e13', alpha: 0.92 }); view.render(r, P); requestAnimationFrame(frame); })();
+</script></body></html>

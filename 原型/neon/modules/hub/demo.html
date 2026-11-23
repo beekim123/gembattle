@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>hub 演示（假数据）</title>
+<style>body{margin:0;background:#0b0d12;display:flex;justify-content:center;align-items:center;height:100vh}canvas{width:960px;height:540px}</style></head>
+<body><canvas id="c"></canvas>
+<script type="module">
+import { createRenderer } from '../render/index.js';
+import { createHubView } from './index.js';
+const canvas = document.getElementById('c');
+const r = createRenderer(canvas, { width: 960, height: 540, dpr: Math.min(2, devicePixelRatio || 1) });
+let active = null;
+const v = createHubView({ entries: [{ id: 'depart', label: '出发' }, { id: 'guild', label: '工会' }, { id: 'recruit', label: '招募' }, { id: 'album', label: '卡册' }, { id: 'settings', label: '设置' }, { id: 'quit', label: '退出' }], callbacks: { onSelect: (id) => { active = id; v.setState({ active }); } } });
+v.setState({ gold: 120, rank: 'C', badges: { guild: 1 }, allies: ['assassin'], subtitle: '原型 · 演示' });
+const pt = (ev) => { const b = canvas.getBoundingClientRect(); return { x: (ev.clientX - b.left) / b.width * 960, y: (ev.clientY - b.top) / b.height * 540 }; };
+['move', 'down', 'up'].forEach((t) => canvas.addEventListener('pointer' + t, (ev) => { canvas.style.cursor = v.onPointer({ type: t, ...pt(ev) }).cursor; }));
+let last = performance.now();
+(function frame(now = last) { v.update((now - last) / 1000); last = now; v.render(r); if (active) v.panelFrame(r, 1); requestAnimationFrame(frame); })();
+</script></body></html>

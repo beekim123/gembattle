@@ -8,6 +8,9 @@ import { createSceneManager } from './scene-manager.js';
 import { createLobbyScene } from './scenes/lobby.js';
 import { createBattleScene } from './scenes/battle-scene.js';
 import { createRunScene } from './scenes/run-scene.js';
+import { createHubScene } from './scenes/hub-scene.js';
+import { createSaveStore } from '../modules/save/index.js';
+import { session } from './session.js';
 import { DEFAULT_ALLY_IDS, DEFAULT_BUFF_IDS } from '../modules/content/index.js';
 
 const LOGICAL_WIDTH = 960;
@@ -26,12 +29,18 @@ const sceneManager = createSceneManager({
   renderBackend: RENDER_BACKEND,
 });
 
-sceneManager.register('home', createLobbyScene);
+// 存档存在浏览器里（以后 Electron 换成存文件，只改这一句传进去的 storage）
+session.saveStore = createSaveStore(window.localStorage);
+session.saveStore.load();
+
+sceneManager.register('home', createHubScene);
+sceneManager.register('trial', createLobbyScene); // 试打台：只打一仗、测手感
 sceneManager.register('battle', createBattleScene);
 sceneManager.register('run', createRunScene);
 
 // 支持通过 URL 参数直达指定仗（方便调试与自动截图，例如 ?encounter=gatekeeper_layer2）
 const params = new URLSearchParams(window.location.search);
+if (params.get('fresh') === '1') session.saveStore.reset(); // 截图、测试用：新档
 const directEncounter = params.get('encounter');
 if (directEncounter) {
   sceneManager.switchTo('battle', {

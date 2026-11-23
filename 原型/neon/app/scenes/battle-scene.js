@@ -100,7 +100,7 @@ export function createBattleScene(context) {
             if (result) context.switchTo('run', { battleResult: result });
             return;
           }
-          context.switchTo('home', {
+          context.switchTo('trial', {
             encounterId: lastConfig.encounterId,
             rulesConfig: lastConfig.rulesConfig,
             buffs: lastConfig.buffs,
@@ -138,7 +138,7 @@ export function createBattleScene(context) {
       } else if (key === 'z' || key === 'Z') {
         if (battle.undoLast()) syncView();
       } else if (key === 'Escape' && !lastConfig.runPacket) {
-        context.switchTo('home', {
+        context.switchTo('trial', {
           encounterId: lastConfig.encounterId,
           rulesConfig: lastConfig.rulesConfig,
           buffs: lastConfig.buffs,

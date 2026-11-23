@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>guild 演示（假数据）</title>
+<style>body{margin:0;background:#0b0d12;display:flex;justify-content:center;align-items:center;height:100vh}canvas{width:960px;height:540px}</style></head>
+<body><canvas id="c"></canvas>
+<script type="module">
+import { createRenderer } from '../render/index.js';
+import { forest } from '../ui/index.js';
+import { buyGear, createGuildView, refreshBoard, submitAll, submitQuest, takeQuest, abandonQuest } from './index.js';
+import { FAKE_GUILD_CONTENT as C, fakeSave } from './test/fake.js';
+const canvas = document.getElementById('c');
+const r = createRenderer(canvas, { width: 960, height: 540, dpr: Math.min(2, devicePixelRatio || 1) });
+let save = refreshBoard(fakeSave({ quests: { board: [], taken: [{ id: 'q3', progress: 2, done: true }], failed: [] } }), C);
+const P = { x: 392, y: 26, w: 544, h: 488 };
+const set = (out) => { save = refreshBoard(out.save, C); view.setState({ save, content: C }); };
+const view = createGuildView({ callbacks: {
+  onTake: (id) => set(takeQuest(save, id, C)), onAbandon: (id) => set(abandonQuest(save, id)),
+  onSubmit: (id) => set(submitQuest(save, id, C)), onSubmitAll: () => set(submitAll(save, C)), onBuy: (id) => set(buyGear(save, id, C)),
+} });
+view.setState({ save, content: C });
+const pt = (ev) => { const b = canvas.getBoundingClientRect(); return { x: (ev.clientX - b.left) / b.width * 960, y: (ev.clientY - b.top) / b.height * 540 }; };
+['move', 'down', 'up'].forEach((t) => canvas.addEventListener('pointer' + t, (ev) => { canvas.style.cursor = view.onPointer({ type: t, ...pt(ev) }).cursor; }));
+(function frame() { forest(r); r.rect({ ...P, radius: 14, fill: '#0b0e13', alpha: 0.92 }); view.render(r, P); requestAnimationFrame(frame); })();
+</script></body></html>

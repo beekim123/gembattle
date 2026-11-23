@@ -110,6 +110,7 @@ export function createRunScene(context) {
 
     onUpdate(dt) {
       clock += dt;
+      if (run()?.isEnded() && !session.summary) { sync(); }
       if (view) view.update(dt);
     },
 

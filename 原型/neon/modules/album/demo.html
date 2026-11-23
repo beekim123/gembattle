@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>album 演示（假数据）</title>
+<style>body{margin:0;background:#0b0d12;display:flex;justify-content:center;align-items:center;height:100vh}canvas{width:960px;height:540px}</style></head>
+<body><canvas id="c"></canvas>
+<script type="module">
+import { createRenderer } from '../render/index.js';
+import { forest } from '../ui/index.js';
+import { createAlbumView } from './index.js';
+const DATA = {
+  cards: ['red', 'yellow', 'green', 'cyan', 'blue', 'purple', 'white'].map((c) => ({ id: c, label: c, kind: 'gem', color: c, gems: ['red'] })),
+  buffs: [{ id: 'b1', label: '破盾时全体吃一轮白', description: '……', lane: 'break' }, { id: 'b2', label: '彩虹再多打一遍', description: '……', lane: 'rainbow', locked: true }],
+  allies: [{ id: 'a', role: 'assassin', label: '补刀', roleTag: '刺', unlockRank: 'C', description: '刺客' }],
+  monsters: [{ defId: 'm1', look: 'mon_dual_shield', label: '双色盾普通怪', info: '1 条血' }, { defId: 'm2', look: 'mon_gatekeeper', label: '看门的', info: '3 条血' }],
+  gear: [{ id: 'f', label: '基础武器', grade: 'free' }],
+};
+const canvas = document.getElementById('c');
+const r = createRenderer(canvas, { width: 960, height: 540, dpr: Math.min(2, devicePixelRatio || 1) });
+const P = { x: 392, y: 26, w: 544, h: 488 };
+const view = createAlbumView();
+view.setState({ save: { rank: 'C', unlocks: { buffs: [] }, album: { monsters: ['m1'], loot: [] } }, data: DATA });
+const pt = (ev) => { const b = canvas.getBoundingClientRect(); return { x: (ev.clientX - b.left) / b.width * 960, y: (ev.clientY - b.top) / b.height * 540 }; };
+['move', 'down', 'up'].forEach((t) => canvas.addEventListener('pointer' + t, (ev) => { canvas.style.cursor = view.onPointer({ type: t, ...pt(ev) }).cursor; }));
+let last = performance.now();
+(function frame(now = last) { view.update((now - last) / 1000); last = now; forest(r); r.rect({ ...P, radius: 14, fill: '#0b0e13', alpha: 0.92 }); view.render(r, P); requestAnimationFrame(frame); })();
+</script></body></html>
