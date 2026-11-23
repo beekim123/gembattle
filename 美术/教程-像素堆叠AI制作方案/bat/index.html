@@ -1,0 +1,2169 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>魔物蝙蝠 · 翼手飞行骨骼像素堆叠 360° 演示</title>
+<style>
+  :root {
+    --bg: #100e17;
+    --panel: rgba(18, 16, 26, 0.86);
+    --border: rgba(168, 134, 214, 0.30);
+    --text: #f3effa;
+    --muted: #b0a6c4;
+    --accent: #a678e2;
+    --hot: #ffd859;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    user-select: none;
+  }
+  canvas#view {
+    display: block; width: 100vw; height: 100vh;
+    cursor: grab; image-rendering: pixelated;
+  }
+  canvas#view:active { cursor: grabbing; }
+  .hud {
+    position: fixed; left: 16px; top: 16px; z-index: 10;
+    display: flex; flex-direction: column; gap: 8px;
+    pointer-events: none;
+  }
+  .card {
+    pointer-events: auto;
+    background: var(--panel);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 9px 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.48);
+    max-width: 420px;
+  }
+  .title {
+    font-size: 16px; font-weight: 700; letter-spacing: 0.3px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .badge {
+    font-size: 11px; font-weight: 700; color: #191124;
+    background: linear-gradient(135deg, var(--hot), var(--accent));
+    border-radius: 99px; padding: 1px 8px;
+  }
+  .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .row-label {
+    font-size: 11px; color: var(--muted); margin-top: 8px; margin-bottom: 4px;
+    letter-spacing: 0.4px;
+  }
+  .controls { display: flex; flex-wrap: wrap; gap: 6px; }
+  button {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: var(--text); border-radius: 8px;
+    padding: 5px 10px; font: inherit; font-size: 12px;
+    cursor: pointer; transition: all 0.14s ease;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  button:hover { background: rgba(255, 255, 255, 0.14); }
+  button.on {
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
+    border-color: var(--accent);
+    color: #fbf7ff;
+  }
+  button.skill-btn.active {
+    background: color-mix(in srgb, var(--hot) 34%, transparent);
+    border-color: var(--hot);
+    color: #fffbe8;
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  .swatch {
+    width: 9px; height: 9px; border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.50);
+    display: inline-block; flex-shrink: 0;
+  }
+  .stats {
+    margin-top: 9px; padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--muted); font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    display: flex; flex-wrap: wrap; gap: 10px;
+  }
+  .stats b { color: #ece5fa; font-weight: 600; }
+  .banner {
+    position: fixed; right: 18px; top: 18px; z-index: 10;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 8px 14px;
+    font-size: 13px; color: #f6eeff; font-weight: 600;
+    opacity: 0; transform: translateY(-6px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    pointer-events: none;
+  }
+  .banner.show { opacity: 1; transform: translateY(0); }
+  .hint {
+    position: fixed; left: 16px; bottom: 16px; z-index: 10;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 7px 12px;
+    color: var(--muted); font-size: 12px;
+  }
+  .hint b { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div class="hud">
+  <div class="card">
+    <div class="title">魔物蝙蝠 <span class="badge" id="skinBadge">深紫褐 · 洞窟原版</span></div>
+    <div class="sub">翼根锁枢轴振翅 · 下拍升力滞后 · 拍翼滑翔巡航 · 整体轮廓 120fps</div>
+
+    <div class="row-label">翼膜色系（快捷键 C 零重建模切换）</div>
+    <div class="controls" id="skinBar"></div>
+
+    <div class="row-label">蝙蝠技能（快捷键 1~4）</div>
+    <div class="controls" id="skillBar"></div>
+
+    <div class="row-label">常驻洞窟生态</div>
+    <div class="controls">
+      <button id="btnHover" class="on">低空扑翼悬停</button>
+      <button id="btnGlide">滑翔俯冲巡航 (S)</button>
+    </div>
+
+    <div class="row-label">视角与渲染</div>
+    <div class="controls">
+      <button id="btnSpin">自动旋转</button>
+      <button id="btnOutline" class="on">整体描边</button>
+      <button id="btnMode" class="on">模式：游戏缓存</button>
+      <button id="btnExport">导出长条 PNG</button>
+      <button id="btnReset">重置视角</button>
+    </div>
+    <div class="stats" id="stats">初始化中...</div>
+  </div>
+</div>
+
+<div class="banner" id="banner"></div>
+
+<div class="hint">
+  <b>鼠标拖动</b> 360° 旋转 · <b>Q / E</b> 转 45° · <b>滚轮</b> 缩放 · <b>C</b> 换色 · <b>S</b> 滑翔巡航 · <b>1~4</b> 技能
+</div>
+
+<script>
+// === BAT_VOXEL_CORE_START ===
+'use strict';
+
+/*
+===============================================================================
+第 0 步：魔物蝙蝠翼手飞行骨骼架构 & 模块化部件空间坐标预算表（正面 +Y）
+===============================================================================
+核心升级（v3 翼手振翅飞行型 + actorBuf 整体外轮廓）：
+1. 【13 个轻量模块化部件（总建模 < 22ms）+ 翼根严格锁枢轴】：
+   - torso（毛绒圆躯+胸腹浅毛+短尾）、head / headScreech（短翘鼻+双尖牙+2×2 自亮大眼，0 遮挡）、
+     earL / earR（独立雷达抖动大尖耳，外厚≥2.2格+内耳槽）、claws（腹下收放弯爪）、
+     wingL/R × 4 姿态（up / mid / down / glide，翼根局部枢轴严格锁死在肩关节 ±3.8 处，
+     大幅挥拍与后掠俯冲 0 脱节 0 挤捏缝！）。
+2. 【真实蝙蝠飞行运动学（杜绝浮空平移感）】：
+   - 低空扑翼悬停：宽膜翼强力上下挥拍，身体升沉相位滞后于翼下拍 ~0.75 rad（下拍瞬间产生升力托举！），
+     双耳独立雷达式微转侦听，腹下双爪轻收轻展；
+   - 高空滑翔俯冲巡航 (S)：真实「拍两下 → 展翼滑翔（Flap-and-Glide）」节律，大半径压弯盘旋并伴随
+     拉升/俯冲高度起伏（lift 10↔27），翼尖拉出气流尾丝，地面双层暗斑随高度剧烈缩放淡化！
+3. 【actorBuf(260×240) 整体 1px 外轮廓】：
+   - 全部 13 个部件裸图缓存于 BAKE_SCALE=2.5，每帧按深度拼合后统一做 1 次整体 1px 描边，
+     翼膜与躯干交界浑然一体，120fps 丝滑满帧。
+
+【模块化体素部件预算表】
+-------------------------------------------------------------------------------
+部件名            | 盒尺寸 W×D×H | 局部锚点与翼根锁枢轴约束
+-------------------------------------------------------------------------------
+torso             | 14 × 14 × 13 | 毛绒圆躯 + 浅色胸腹毛 + 后短尾（肩关节 ±3.8, 0.2, 7.2）
+head/headScreech  | 14 × 14 × 12 | 额前 2×2 亮目(+Y/0.6 零遮挡) + 翘鼻 + 两颗洁白尖牙
+earL / earR       | 10 ×  8 × 12 | 独立大尖耳（外厚≥2.2格 + 内耳槽 Crease AO），枢轴在耳根 (0,0)
+wingL/R (4 态)    | 22 × 16 × 16 | 锯齿弧边厚翼膜(≥2.4格)+3辐射指骨，局部翼根锚点 (-s*7.8, 0.8) 锁死肩位
+claws             | 10 ×  8 ×  7 | 腹下双弯爪（收拢/俯冲前探）
+miniBatUp/Down    | 20 × 14 × 12 | 技能 3 唤出小蝠群（共享色表同步换色）
+dummy             | 16 × 16 × 30 | 立于 (0, +46) 的训练靶桩
+===============================================================================
+*/
+
+// ---------------------------------------------------------------------------
+// 1. 统一调色板（37 色，严格 ≤ 48 色，零重色，自亮 2 色物理隔离）
+// ---------------------------------------------------------------------------
+const PAL = {
+  furDark:     '#241a29',
+  furMid:      '#42304a',
+  furHi:       '#695075',
+  bellyDark:   '#382a3d',
+  bellyMid:    '#5b4563',
+  bellyHi:     '#84698f',
+  earInDark:   '#6b4e5c',
+  earInMid:    '#a3798c',
+  earInHi:     '#d9afc2',
+  wingDark:    '#2e263d',
+  wingMid:     '#504366',
+  wingHi:      '#796896',
+  spotDark:    '#3c314f',
+  spotMid:     '#635380',
+  spotHi:      '#8e7ab0',
+  boneDark:    '#1c1521',
+  boneMid:     '#352a3d',
+  boneHi:      '#574863',
+  mouthDark:   '#1a0c14',
+  fangWhite:   '#f7f9fc',
+  eyeGlow:     '#ffd224',
+  eyeCore:     '#fff8b8',
+  slateDeep:   '#171c26',
+  slateDark:   '#262e3d',
+  slateMid:    '#3a4659',
+  slateHi:     '#54647a',
+  mossDark:    '#233b36',
+  mossMid:     '#375c52',
+  woodDark:    '#452b1c',
+  woodMid:     '#784c30',
+  woodHi:      '#a8724b',
+  ironDark:    '#2c3340',
+  ironMid:     '#566275',
+  ironHi:      '#8a99b0',
+  targetRed:   '#cf2d2d',
+  targetCream: '#ede1c8',
+  rockHi:      '#6c7c94'
+};
+
+const PAL_KEYS = Object.keys(PAL);
+const KEY_TO_ID = Object.create(null);
+const ID_TO_KEY = [null];
+const ID_TO_RGBA = [null];
+const GLOW_KEY_SET = new Set(['eyeGlow', 'eyeCore']);
+const GLOW_ID_SET = new Set();
+
+for (let i = 0; i < PAL_KEYS.length; i++) {
+  const k = PAL_KEYS[i];
+  const id = i + 1;
+  KEY_TO_ID[k] = id;
+  ID_TO_KEY[id] = k;
+  const n = parseInt(PAL[k].slice(1), 16);
+  ID_TO_RGBA[id] = [(n >> 16) & 255, (n >> 8) & 255, n & 255, 255];
+  if (GLOW_KEY_SET.has(k)) GLOW_ID_SET.add(id);
+}
+
+// ---------------------------------------------------------------------------
+// 1b. 4 套翼膜色系（完整保留原有 4 色系 + 全技能/气流特效联动）
+// ---------------------------------------------------------------------------
+const SKINS = [
+  {
+    id: 'cave', name: '深紫褐', tag: '深紫褐 · 洞窟原版', dot: '#7d5696', outline: '#0d0b14',
+    pal: {},
+    fx: {
+      sonicOuter: '#9e6be6', sonicMid: '#cca3ff', sonicCore: '#f4e8ff',
+      slashOuter: '#8d5cd4', slashCore: '#f2e0ff',
+      sparkA: '#ffd224', sparkB: '#c89bff',
+      windOuter: '#b89be0', windCore: '#eee3ff',
+      groundRippleRGB: '196, 152, 245',
+      debris: '#54647a', leaf: '#796896',
+      skyTop: '#0d0c18', skyMid: '#1b172c', skyBot: '#2d2342',
+      skyHalo: 'rgba(154, 108, 224, 0.20)'
+    },
+    ui: { accent: '#a678e2', hot: '#ffd859', border: 'rgba(168, 134, 214, 0.30)' }
+  },
+  {
+    id: 'crimson', name: '猩红', tag: '猩红 · 精锐', dot: '#d9323a', outline: '#16090c',
+    pal: {
+      furDark:   '#1e1618', furMid:   '#36272a', furHi:   '#574045',
+      bellyDark: '#2e1f23', bellyMid: '#4d353b', bellyHi: '#735159',
+      earInDark: '#7a1922', earInMid: '#bd2b38', earInHi: '#f25c66',
+      wingDark:  '#63131c', wingMid:  '#a6212f', wingHi:  '#de4550',
+      spotDark:  '#4a0e16', spotMid:  '#851b27', spotHi:  '#bf3441',
+      boneDark:  '#171012', boneMid:  '#2e2024', boneHi:  '#4d363c',
+      eyeGlow:   '#ff382e', eyeCore:  '#ffd4c9'
+    },
+    fx: {
+      sonicOuter: '#b81d2a', sonicMid: '#f24952', sonicCore: '#ffd6d6',
+      slashOuter: '#c41e2e', slashCore: '#ff8a80',
+      sparkA: '#ff4238', sparkB: '#ffad70',
+      windOuter: '#d44852', windCore: '#ffcfcf',
+      groundRippleRGB: '235, 72, 82',
+      debris: '#4d363c', leaf: '#a6212f',
+      skyTop: '#14090d', skyMid: '#261117', skyBot: '#3d1920',
+      skyHalo: 'rgba(224, 58, 68, 0.22)'
+    },
+    ui: { accent: '#e04550', hot: '#ff9c66', border: 'rgba(235, 96, 104, 0.32)' }
+  },
+  {
+    id: 'frost', name: '冰蓝白耳', tag: '冰蓝白耳', dot: '#5ec9f2', outline: '#091320',
+    pal: {
+      furDark:   '#28394d', furMid:   '#45617d', furHi:   '#6f91b3',
+      bellyDark: '#4d657d', bellyMid: '#7995b0', bellyHi: '#abc7e0',
+      earInDark: '#96aec2', earInMid: '#cfe1f0', earInHi: '#f0f8ff',
+      wingDark:  '#285f78', wingMid:  '#489db8', wingHi:  '#85daf0',
+      spotDark:  '#35738f', spotMid:  '#5fb5cf', spotHi:  '#a6ebfc',
+      boneDark:  '#1d2b3b', boneMid:  '#364d66', boneHi:  '#597796',
+      eyeGlow:   '#2bf0ff', eyeCore:  '#defeff'
+    },
+    fx: {
+      sonicOuter: '#2d96d6', sonicMid: '#6be0ff', sonicCore: '#e8fcff',
+      slashOuter: '#35a6e0', slashCore: '#d9faff',
+      sparkA: '#42f2ff', sparkB: '#c4f4ff',
+      windOuter: '#8fdcf5', windCore: '#f0fbff',
+      groundRippleRGB: '115, 224, 255',
+      debris: '#6f91b3', leaf: '#cfe1f0',
+      skyTop: '#08121f', skyMid: '#12243b', skyBot: '#1d3a59',
+      skyHalo: 'rgba(82, 206, 250, 0.22)'
+    },
+    ui: { accent: '#54c4f0', hot: '#a8f6ff', border: 'rgba(116, 212, 245, 0.32)' }
+  },
+  {
+    id: 'venom', name: '墨青毒绿', tag: '墨青毒绿', dot: '#5cd93b', outline: '#081410',
+    pal: {
+      furDark:   '#162922', furMid:   '#25473b', furHi:   '#3d705e',
+      bellyDark: '#20382e', bellyMid: '#345e4d', bellyHi: '#538c74',
+      earInDark: '#426b26', earInMid: '#72b03b', earInHi: '#b0eb65',
+      wingDark:  '#1d4d27', wingMid:  '#34873c', wingHi:  '#66c955',
+      spotDark:  '#5c851c', spotMid:  '#9ad62b', spotHi:  '#dbff52',
+      boneDark:  '#101d19', boneMid:  '#1f362f', boneHi:  '#37574d',
+      eyeGlow:   '#d2ff24', eyeCore:  '#f8ffc4'
+    },
+    fx: {
+      sonicOuter: '#2fa83b', sonicMid: '#78ed45', sonicCore: '#ebffbd',
+      slashOuter: '#42bf39', slashCore: '#d9ff66',
+      sparkA: '#b8ff2e', sparkB: '#4de062',
+      windOuter: '#6ad964', windCore: '#d9ffc2',
+      groundRippleRGB: '118, 235, 84',
+      debris: '#375c52', leaf: '#72b03b',
+      skyTop: '#081410', skyMid: '#10261e', skyBot: '#1a3b2c',
+      skyHalo: 'rgba(104, 224, 72, 0.20)'
+    },
+    ui: { accent: '#5cd93b', hot: '#d2ff4d', border: 'rgba(118, 224, 96, 0.32)' }
+  }
+];
+
+function buildRgbaTable(skin) {
+  const tbl = ID_TO_RGBA.slice();
+  if (skin && skin.pal) {
+    for (const k in skin.pal) {
+      const id = KEY_TO_ID[k];
+      if (!id) continue;
+      const n = parseInt(skin.pal[k].slice(1), 16);
+      tbl[id] = [(n >> 16) & 255, (n >> 8) & 255, n & 255, 255];
+    }
+  }
+  return tbl;
+}
+
+function recolorAsset(asset, rgbaTable) {
+  const { w, d, h, grid, activeLayers, glowLayers, glowSlot, strip, glowStrip, sim, eim } = asset;
+  const stripW = w * h;
+  const glowW = w * glowLayers.length;
+  const sData = sim.data;
+  const eData = eim ? eim.data : null;
+
+  for (let li = 0; li < activeLayers.length; li++) {
+    const z = activeLayers[li];
+    const gxOff = z * w;
+    const gSlot = glowSlot[z];
+    const zBase = z * d * w;
+    for (let y = 0; y < d; y++) {
+      const row = zBase + y * w;
+      const sRow = y * stripW + gxOff;
+      const eRow = gSlot >= 0 ? (y * glowW + gSlot * w) : -1;
+      for (let x = 0; x < w; x++) {
+        const id = grid[row + x];
+        if (!id) continue;
+        const rgba = rgbaTable[id];
+        const si = (sRow + x) * 4;
+        sData[si] = rgba[0]; sData[si + 1] = rgba[1]; sData[si + 2] = rgba[2]; sData[si + 3] = 255;
+        if (eData && eRow >= 0 && GLOW_ID_SET.has(id)) {
+          const ei = (eRow + x) * 4;
+          eData[ei] = rgba[0]; eData[ei + 1] = rgba[1]; eData[ei + 2] = rgba[2]; eData[ei + 3] = 255;
+        }
+      }
+    }
+  }
+  strip.getContext('2d').putImageData(sim, 0, 0);
+  if (glowStrip && eim) glowStrip.getContext('2d').putImageData(eim, 0, 0);
+}
+
+const PART_NAMES = [
+  'none',
+  'body', 'belly', 'tail', 'head', 'snout', 'mouth', 'fang', 'eye',
+  'earOuter', 'earInner', 'wingBone', 'wingMem', 'wingSpot', 'leg', 'claw',
+  'dummyBase', 'dummyPost', 'dummyIron', 'dummyBoard'
+];
+const PART_ID = Object.create(null);
+for (let i = 0; i < PART_NAMES.length; i++) PART_ID[PART_NAMES[i]] = i;
+
+const NUM_PARTS = PART_NAMES.length;
+const NO_CREASE_LUT = new Uint8Array(NUM_PARTS * NUM_PARTS);
+for (const [a, b] of [
+  ['eye', 'head'], ['eye', 'snout'],
+  ['fang', 'mouth'], ['fang', 'snout'], ['fang', 'head'],
+  ['mouth', 'snout'], ['mouth', 'head'],
+  ['head', 'body'], ['body', 'belly'], ['body', 'tail'],
+  ['wingMem', 'wingSpot'],
+  ['dummyPost', 'dummyIron']
+]) {
+  const ia = PART_ID[a], ib = PART_ID[b];
+  NO_CREASE_LUT[ia * NUM_PARTS + ib] = 1;
+  NO_CREASE_LUT[ib * NUM_PARTS + ia] = 1;
+}
+
+const MATERIAL_KEYS = [null, 'fur', 'belly', 'earIn', 'wing', 'spot', 'bone', 'slate', 'wood', 'iron'];
+const MAT_ID = Object.create(null);
+for (let i = 1; i < MATERIAL_KEYS.length; i++) MAT_ID[MATERIAL_KEYS[i]] = i;
+const MAT_BASE = 128;
+const mat = name => MAT_BASE + MAT_ID[name];
+
+const RAMPS_BY_MAT = {
+  [MAT_ID.fur]:   [KEY_TO_ID.furDark,   KEY_TO_ID.furMid,   KEY_TO_ID.furHi],
+  [MAT_ID.belly]: [KEY_TO_ID.bellyDark, KEY_TO_ID.bellyMid, KEY_TO_ID.bellyHi],
+  [MAT_ID.earIn]: [KEY_TO_ID.earInDark, KEY_TO_ID.earInMid, KEY_TO_ID.earInHi],
+  [MAT_ID.wing]:  [KEY_TO_ID.wingDark,  KEY_TO_ID.wingMid,  KEY_TO_ID.wingHi],
+  [MAT_ID.spot]:  [KEY_TO_ID.spotDark,  KEY_TO_ID.spotMid,  KEY_TO_ID.spotHi],
+  [MAT_ID.bone]:  [KEY_TO_ID.boneDark,  KEY_TO_ID.boneMid,  KEY_TO_ID.boneHi],
+  [MAT_ID.slate]: [KEY_TO_ID.slateDark, KEY_TO_ID.slateMid, KEY_TO_ID.slateHi],
+  [MAT_ID.wood]:  [KEY_TO_ID.woodDark,  KEY_TO_ID.woodMid,  KEY_TO_ID.woodHi],
+  [MAT_ID.iron]:  [KEY_TO_ID.ironDark,  KEY_TO_ID.ironMid,  KEY_TO_ID.ironHi]
+};
+
+// ---------------------------------------------------------------------------
+// 2. 数学原语与周期噪声
+// ---------------------------------------------------------------------------
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smoothstep = (e0, e1, x) => {
+  const t = clamp((x - e0) / (e1 - e0), 0, 1);
+  return t * t * (3 - 2 * t);
+};
+const smin = (a, b, k) => {
+  const h = clamp(0.5 + 0.5 * (b - a) / k, 0, 1);
+  return lerp(b, a, h) - k * h * (1 - h);
+};
+function localToWorldXY(rx, ry, yaw, lx, ly) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  return [rx + cy * lx - sy * ly, ry + sy * lx + cy * ly];
+}
+function hash2i(ix, iy, seed) {
+  let h = (ix * 374761393 + iy * 668265263 + seed * 1442695041) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+function periodicNoise2(x, y, periodX, periodY, cell, seed) {
+  const gx = x / cell, gy = y / cell;
+  const px = Math.max(1, Math.round(periodX / cell));
+  const py = Math.max(1, Math.round(periodY / cell));
+  const ix = Math.floor(gx), iy = Math.floor(gy);
+  const fx = gx - ix, fy = gy - iy;
+  const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+  const wMod = (v, m) => ((v % m) + m) % m;
+  const x0 = wMod(ix, px), x1 = wMod(ix + 1, px);
+  const y0 = wMod(iy, py), y1 = wMod(iy + 1, py);
+  return lerp(
+    lerp(hash2i(x0, y0, seed), hash2i(x1, y0, seed), ux),
+    lerp(hash2i(x0, y1, seed), hash2i(x1, y1, seed), ux),
+    uy
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 3. 高性能体素网格
+// ---------------------------------------------------------------------------
+class VoxelModel {
+  constructor(w, d, h) {
+    this.w = w; this.d = d; this.h = h;
+    const len = w * d * h;
+    this.grid = new Uint8Array(len);
+    this.parts = new Uint8Array(len);
+  }
+  idx(x, y, z) { return (z * this.d + y) * this.w + x; }
+  inB(x, y, z) { return x >= 0 && y >= 0 && z >= 0 && x < this.w && y < this.d && z < this.h; }
+  getId(x, y, z) { return this.inB(x, y, z) ? this.grid[this.idx(x, y, z)] : 0; }
+  getPartId(x, y, z) { return this.inB(x, y, z) ? this.parts[this.idx(x, y, z)] : 0; }
+  setRaw(x, y, z, val, partId) {
+    if (!this.inB(x, y, z)) return;
+    const i = this.idx(x, y, z);
+    this.grid[i] = val; this.parts[i] = partId;
+  }
+  fillAABB(X0, X1, Y0, Y1, Z0, Z1, fn) {
+    const hw = this.w * 0.5 - 0.5, hd = this.d * 0.5 - 0.5;
+    const x0 = clamp(Math.floor(X0 + hw), 0, this.w - 1);
+    const x1 = clamp(Math.ceil(X1 + hw),  0, this.w - 1);
+    const y0 = clamp(Math.floor(Y0 + hd), 0, this.d - 1);
+    const y1 = clamp(Math.ceil(Y1 + hd),  0, this.d - 1);
+    const z0 = clamp(Math.floor(Z0),      0, this.h - 1);
+    const z1 = clamp(Math.ceil(Z1),       0, this.h - 1);
+    for (let z = z0; z <= z1; z++) {
+      for (let y = y0; y <= y1; y++) {
+        const Y = y - hd;
+        for (let x = x0; x <= x1; x++) fn(x, y, z, x - hw, Y);
+      }
+    }
+  }
+  paintCapsule(ax, ay, az, bx, by, bz, r0, r1, val, partId, overwrite = true) {
+    const pad = Math.max(r0, r1) + 0.6;
+    const hw = this.w * 0.5 - 0.5, hd = this.d * 0.5 - 0.5;
+    const x0 = clamp(Math.floor(Math.min(ax, bx) - pad + hw), 0, this.w - 1);
+    const x1 = clamp(Math.ceil(Math.max(ax, bx) + pad + hw),  0, this.w - 1);
+    const y0 = clamp(Math.floor(Math.min(ay, by) - pad + hd), 0, this.d - 1);
+    const y1 = clamp(Math.ceil(Math.max(ay, by) + pad + hd),  0, this.d - 1);
+    const z0 = clamp(Math.floor(Math.min(az, bz) - pad),      0, this.h - 1);
+    const z1 = clamp(Math.ceil(Math.max(az, bz) + pad),       0, this.h - 1);
+    const abx = bx - ax, aby = by - ay, abz = bz - az;
+    const invDenom = 1 / (abx * abx + aby * aby + abz * abz || 1);
+    const dr = r1 - r0;
+    const { w, d, grid, parts } = this;
+    const wd = w * d;
+    for (let z = z0; z <= z1; z++) {
+      const apz = z - az, zOff = z * wd;
+      for (let y = y0; y <= y1; y++) {
+        const apy = (y - hd) - ay, row = zOff + y * w;
+        const apyz = apy * aby + apz * abz;
+        for (let x = x0; x <= x1; x++) {
+          const i = row + x;
+          if (!overwrite && grid[i]) continue;
+          const apx = (x - hw) - ax;
+          let t = (apx * abx + apyz) * invDenom;
+          if (t < 0) t = 0; else if (t > 1) t = 1;
+          const dx = apx - abx * t, dy = apy - aby * t, dz = apz - abz * t;
+          const r = r0 + dr * t;
+          if (dx * dx + dy * dy + dz * dz <= r * r) { grid[i] = val; parts[i] = partId; }
+        }
+      }
+    }
+  }
+  paintEllipsoid(cx, cy, cz, rx, ry, rz, val, partId, overwrite = true) {
+    this.fillAABB(cx - rx - 0.5, cx + rx + 0.5, cy - ry - 0.5, cy + ry + 0.5, cz - rz - 0.5, cz + rz + 0.5, (x, y, z, X, Y) => {
+      const i = this.idx(x, y, z);
+      if (!overwrite && this.grid[i]) return;
+      const dx = (X - cx) / rx, dy = (Y - cy) / ry, dz = (z - cz) / rz;
+      if (dx * dx + dy * dy + dz * dz <= 1.0) { this.grid[i] = val; this.parts[i] = partId; }
+    });
+  }
+  paintWingQuad(p00, p10, p11, p01, halfThick, val, partId, scallop = 0, spotVal = 0, spotPart = 0) {
+    const hw = this.w * 0.5 - 0.5, hd = this.d * 0.5 - 0.5;
+    const minX = Math.min(p00[0], p10[0], p11[0], p01[0]);
+    const maxX = Math.max(p00[0], p10[0], p11[0], p01[0]);
+    const x0 = clamp(Math.floor(minX - 0.6 + hw), 0, this.w - 1);
+    const x1 = clamp(Math.ceil(maxX + 0.6 + hw),  0, this.w - 1);
+    const ux = p10[0] - p00[0];
+    const uSign = ux >= 0 ? 1 : -1;
+    const invSpanX = 1 / Math.max(0.5, Math.abs(ux));
+    const { w, d, h, grid, parts } = this;
+    const wd = w * d;
+
+    for (let x = x0; x <= x1; x++) {
+      const X = x - hw;
+      const u = clamp(uSign > 0 ? (X - p00[0]) * invSpanX : (p00[0] - X) * invSpanX, 0, 1);
+      const ly = p00[1] + (p10[1] - p00[1]) * u;
+      const lz = p00[2] + (p10[2] - p00[2]) * u;
+      const ty = p01[1] + (p11[1] - p01[1]) * u + scallop * Math.sin(u * Math.PI);
+      const tz = p01[2] + (p11[2] - p01[2]) * u;
+      const yLo = Math.min(ly, ty) - 0.35, yHi = Math.max(ly, ty) + 0.35;
+      const y0 = clamp(Math.floor(yLo + hd), 0, d - 1), y1 = clamp(Math.ceil(yHi + hd), 0, d - 1);
+      const invSpanY = 1 / Math.max(0.5, ly - ty);
+      const uInSpot = spotVal && u > 0.25 && u < 0.78;
+      const duSpot = (u - 0.52) * 3.0, duSpot2 = duSpot * duSpot;
+
+      for (let y = y0; y <= y1; y++) {
+        const Y = y - hd;
+        if (Y < yLo || Y > yHi) continue;
+        const v = clamp((ly - Y) * invSpanY, 0, 1);
+        const surfZ = lz + (tz - lz) * v;
+        const z0 = clamp(Math.ceil(surfZ - halfThick), 0, h - 1);
+        const z1 = clamp(Math.floor(surfZ + halfThick), 0, h - 1);
+        let isSpot = false;
+        if (uInSpot && v > 0.25 && v < 0.72) {
+          const dv = (v - 0.48) * 3.0;
+          if (duSpot2 + dv * dv < 0.3844) isSpot = true;
+        }
+        const writeVal = isSpot ? spotVal : val;
+        const writePart = isSpot ? spotPart : partId;
+        const xyOff = y * w + x;
+        for (let z = z0; z <= z1; z++) {
+          const i = z * wd + xyOff;
+          if (!grid[i]) { grid[i] = writeVal; parts[i] = writePart; }
+        }
+      }
+    }
+  }
+  despeckle() {
+    const src = this.grid.slice(), prt = this.parts;
+    const { w, d, h } = this;
+    const wd = w * d;
+    const pEye = PART_ID.eye, pFang = PART_ID.fang;
+    for (let z = 0; z < h; z++) {
+      const zOff = z * wd;
+      for (let y = 0; y < d; y++) {
+        const row = zOff + y * w;
+        for (let x = 0; x < w; x++) {
+          const i = row + x;
+          if (!src[i]) continue;
+          const p = prt[i];
+          if (p === pEye || p === pFang) continue;
+          if ((x + 1 < w && src[i + 1]) || (x > 0 && src[i - 1]) ||
+              (y + 1 < d && src[i + w]) || (y > 0 && src[i - w]) ||
+              (z + 1 < h && src[i + wd]) || (z > 0 && src[i - wd])) continue;
+          this.grid[i] = 0; this.parts[i] = 0;
+        }
+      }
+    }
+  }
+  applyArtShading(keepSoftBottom = false) {
+    const { w, d, h } = this;
+    const wd = w * d;
+    const src = this.grid.slice(), prt = this.parts;
+    const pMinZ = new Int16Array(NUM_PARTS).fill(999);
+    const pMaxZ = new Int16Array(NUM_PARTS).fill(-1);
+    for (let z = 0; z < h; z++) {
+      const zOff = z * wd;
+      for (let i = zOff, end = zOff + wd; i < end; i++) {
+        const p = prt[i];
+        if (p) { if (z < pMinZ[p]) pMinZ[p] = z; if (z > pMaxZ[p]) pMaxZ[p] = z; }
+      }
+    }
+    const headId = PART_ID.head;
+    for (let z = 0; z < h; z++) {
+      const zOff = z * wd;
+      const hasUp = z + 1 < h, hasDn = z > 0;
+      for (let y = 0; y < d; y++) {
+        const row = zOff + y * w;
+        for (let x = 0; x < w; x++) {
+          const i = row + x;
+          const v = src[i];
+          if (v < MAT_BASE) continue;
+          const ramp = RAMPS_BY_MAT[v - MAT_BASE];
+          if (!ramp) continue;
+          const myP = prt[i], lutOff = myP * NUM_PARTS;
+          const topEmpty = !hasUp || !src[i + wd];
+          const botEmpty = hasDn && !src[i - wd];
+
+          let crease = false, np;
+          if (x + 1 < w && (np = prt[i + 1]) && np !== myP && !NO_CREASE_LUT[lutOff + np]) crease = true;
+          else if (x > 0 && (np = prt[i - 1]) && np !== myP && !NO_CREASE_LUT[lutOff + np]) crease = true;
+          else if (y + 1 < d && (np = prt[i + w]) && np !== myP && !NO_CREASE_LUT[lutOff + np]) crease = true;
+          else if (y > 0 && (np = prt[i - w]) && np !== myP && !NO_CREASE_LUT[lutOff + np]) crease = true;
+          else if (hasDn && (np = prt[i - wd]) && np !== myP && !NO_CREASE_LUT[lutOff + np]) crease = true;
+
+          let upperOcc = 0;
+          if (hasUp && !topEmpty) {
+            const up = i + wd;
+            for (let oy = -1; oy <= 1; oy++) {
+              const yy = y + oy;
+              if (yy < 0 || yy >= d) continue;
+              const uRow = up + oy * w;
+              for (let ox = -1; ox <= 1; ox++) {
+                const xx = x + ox;
+                if (xx >= 0 && xx < w && src[uRow + ox]) upperOcc++;
+              }
+            }
+          }
+          const span = Math.max(1, pMaxZ[myP] - pMinZ[myP]);
+          const localZ = (z - pMinZ[myP]) / span;
+          let idx = 1;
+          if (botEmpty || (!keepSoftBottom && z === 0)) idx = 0;
+          else if (crease && !topEmpty) idx = 0;
+          else if (upperOcc >= 8 && localZ < 0.45) idx = 0;
+          else if (topEmpty) idx = (crease || upperOcc >= 8) ? 1 : 2;
+          else if (span >= 14 && localZ < 0.14) idx = 0;
+          else idx = 1;
+
+          if (myP === headId && idx === 2 && z < pMaxZ[myP] - 1) {
+            const edge2d = (x + 1 >= w || !src[i + 1]) || (x === 0 || !src[i - 1]) ||
+                           (y + 1 >= d || !src[i + w]) || (y === 0 || !src[i - w]);
+            if (!edge2d) idx = 1;
+          }
+          this.grid[i] = ramp[clamp(idx, 0, ramp.length - 1)];
+        }
+      }
+    }
+  }
+  toStripAsset(makeCanvas, meta = {}) {
+    const { w, d, h } = this;
+    const activeLayers = [], glowLayers = [];
+    for (let z = 0; z < h; z++) {
+      let hasPx = false, hasGlow = false;
+      const zBase = z * d * w;
+      for (let i = 0; i < d * w; i++) {
+        const id = this.grid[zBase + i];
+        if (!id) continue;
+        hasPx = true;
+        if (GLOW_ID_SET.has(id)) hasGlow = true;
+      }
+      if (hasPx) activeLayers.push(z);
+      if (hasGlow) glowLayers.push(z);
+    }
+    const strip = makeCanvas(w * h, d);
+    const sim = strip.getContext('2d').createImageData(w * h, d);
+    const hasGlow = glowLayers.length > 0;
+    const glowStrip = hasGlow ? makeCanvas(w * glowLayers.length, d) : null;
+    const eim = glowStrip ? glowStrip.getContext('2d').createImageData(w * glowLayers.length, d) : null;
+    const glowSlot = new Int16Array(h).fill(-1);
+    for (let i = 0; i < glowLayers.length; i++) glowSlot[glowLayers[i]] = i;
+
+    const foot = makeCanvas(w, d);
+    const fg = foot.getContext('2d');
+    const fim = fg.createImageData(w, d);
+    for (let y = 0; y < d; y++) for (let x = 0; x < w; x++) {
+      for (let z = 0; z < h; z++) {
+        if (this.grid[(z * d + y) * w + x]) {
+          const fi = (y * w + x) * 4;
+          fim.data[fi] = 10; fim.data[fi + 1] = 12; fim.data[fi + 2] = 20; fim.data[fi + 3] = 255;
+          break;
+        }
+      }
+    }
+    fg.putImageData(fim, 0, 0);
+
+    const asset = {
+      w, d, h, grid: this.grid,
+      strip, glowStrip, sim, eim,
+      glowSlot, activeLayers, glowLayers,
+      footShadow: foot,
+      meta: {
+        footRadius: meta.footRadius || Math.min(w, d) * 0.28,
+        headZ: meta.headZ || (activeLayers.length ? activeLayers[activeLayers.length - 1] + 2 : h),
+        centerZ: meta.centerZ || Math.round(h * 0.5)
+      }
+    };
+    recolorAsset(asset, ID_TO_RGBA);
+    return asset;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 4. 魔物蝙蝠模块化部件（翼根严格锁枢轴 + 独立雷达大耳 + 尖啸双态头）
+// ---------------------------------------------------------------------------
+
+// 4.1 毛绒圆躯 + 浅色胸腹毛 + 后短尾（14×14×13）
+function buildBatTorsoPart() {
+  const W = 14, D = 14, H = 13;
+  const m = new VoxelModel(W, D, H);
+  m.fillAABB(-5.8, 5.8, -6.5, 5.5, 0, 12, (x, y, z, X, Y) => {
+    const dBody = (Math.hypot(X / 5.0, (Y + 0.4) / 4.7, (z - 6.0) / 5.1) - 1) * 4.7;
+    const dTail = (Math.hypot(X / 1.7, (Y + 5.2) / 1.8, (z - 3.4) / 1.4) - 1) * 1.4;
+    if (smin(dBody, dTail, 1.0) <= 0) {
+      if (Y < -4.2 && z < 5.2) m.setRaw(x, y, z, mat('fur'), PART_ID.tail);
+      else {
+        const isBelly = Y > 1.0 && Math.abs(X) < 3.3 && z > 1.8 && z < 9.2;
+        m.setRaw(x, y, z, isBelly ? mat('belly') : mat('fur'), isBelly ? PART_ID.belly : PART_ID.body);
+      }
+    }
+  });
+  m.despeckle();
+  m.applyArtShading(true);
+  return m;
+}
+
+// 4.2 独立蝙蝠头（常规微咧 / 尖啸张口双态，双目齐平贴额 0 遮挡，两颗洁白尖牙）
+function buildBatHeadPart(screech = false) {
+  const W = 14, D = 14, H = 12;
+  const m = new VoxelModel(W, D, H);
+  const hz = 5.4, hy = 0.2;
+  m.paintEllipsoid(0, hy, hz, 4.6, 4.2, 3.8, mat('fur'), PART_ID.head, true);
+  // 翘鼻
+  m.paintEllipsoid(0, hy + 4.2, hz - 0.5, 2.1, 1.4, 1.2, mat('bone'), PART_ID.snout, true);
+  // 下唇与嘴腔
+  const jawZ = hz - 2.4 - (screech ? 0.8 : 0);
+  m.paintEllipsoid(0, hy + 4.0, jawZ, 2.2, 1.4, 1.0, mat('fur'), PART_ID.mouth, true);
+  const mouthZ = Math.round(hz - 1.5 - (screech ? 0.3 : 0));
+  m.fillAABB(-2.0, 2.0, hy + 3.8, hy + 5.4, mouthZ - 1, mouthZ + 1, (x, y, z, X, Y) => {
+    if (Math.abs(X) <= 1.7 && Y >= hy + 4.0 && Y <= hy + 5.2 && z >= mouthZ - (screech ? 1 : 0) && z <= mouthZ) {
+      m.setRaw(x, y, z, KEY_TO_ID.mouthDark, PART_ID.mouth);
+    }
+  });
+  m.despeckle();
+  m.applyArtShading(true);
+
+  // 两颗洁白小尖牙
+  const hw = W * 0.5 - 0.5, hd = D * 0.5 - 0.5;
+  const fangZTop = Math.round(hz - 1.1);
+  const fangY = Math.round(hd + hy + 4.9);
+  for (const s of [-1, 1]) {
+    const fx = Math.round(hw + s * 1.6);
+    m.setRaw(fx, fangY, fangZTop,     KEY_TO_ID.fangWhite, PART_ID.fang);
+    m.setRaw(fx, fangY, fangZTop - 1, KEY_TO_ID.fangWhite, PART_ID.fang);
+  }
+  // 额前 2×2 自亮大眼（严格齐平额前，+Y 与 0.6 俯视 0 遮挡）
+  const eyeZ = Math.round(hz + 0.7);
+  for (const s of [-1, 1]) {
+    const ex0 = Math.round(hw + s * 2.2);
+    const ex1 = ex0 + s;
+    let sy0 = -1;
+    for (let y = D - 2; y >= Math.floor(hd); y--) {
+      if (m.getPartId(ex0, y, eyeZ) === PART_ID.head) { sy0 = y; break; }
+    }
+    if (sy0 < 0) sy0 = Math.round(hd + hy + 3.8);
+    m.setRaw(ex0, sy0, eyeZ,     KEY_TO_ID.eyeCore, PART_ID.eye);
+    m.setRaw(ex0, sy0, eyeZ + 1, KEY_TO_ID.eyeGlow, PART_ID.eye);
+    m.setRaw(ex1, sy0, eyeZ,     KEY_TO_ID.eyeGlow, PART_ID.eye);
+    m.setRaw(ex1, sy0, eyeZ + 1, KEY_TO_ID.eyeCore, PART_ID.eye);
+  }
+  return m;
+}
+
+// 4.3 独立大尖耳（外厚 ≥ 2.2 格防旋转破碎 + 内耳槽 Crease AO，局部耳根枢轴在 (0, 0)）
+function buildBatEarPart(side) {
+  const W = 10, D = 8, H = 12;
+  const m = new VoxelModel(W, D, H);
+  const s = side;
+  const b = [0, 0, 1.4], mid = [s * 2.1, -0.3, 5.4], tip = [s * 3.8, -0.7, 9.6];
+  m.paintCapsule(b[0], b[1], b[2], mid[0], mid[1], mid[2], 2.15, 1.82, mat('fur'), PART_ID.earOuter, true);
+  m.paintCapsule(mid[0], mid[1], mid[2], tip[0], tip[1], tip[2], 1.78, 1.15, mat('fur'), PART_ID.earOuter, true);
+  m.paintCapsule(b[0] + s * 1.0, b[1] - 0.3, b[2] + 0.5, mid[0] + s * 0.8, mid[1] - 0.2, mid[2] - 0.2, 1.32, 1.12, mat('fur'), PART_ID.earOuter, true);
+  // 内耳槽
+  m.paintCapsule(b[0] + s * 0.2, b[1] + 1.0, b[2] + 0.9, mid[0] + s * 0.1, mid[1] + 0.9, mid[2] + 0.4, 1.22, 1.02, mat('earIn'), PART_ID.earInner, true);
+  m.paintCapsule(mid[0] + s * 0.1, mid[1] + 0.9, mid[2] + 0.4, tip[0] - s * 0.5, tip[1] + 0.6, tip[2] - 1.4, 0.98, 0.72, mat('earIn'), PART_ID.earInner, true);
+  m.despeckle();
+  m.applyArtShading(true);
+  return m;
+}
+
+// 4.4 独立宽锯齿膜翼（4 档拍翼/滑翔姿态：up / mid / down / glide）
+// 局部翼根关节锚点固定在 WING_PIVOT = [side * (-8.2), 1.0]，摆放时用 localToWorldXY 锁死肩关节！
+const WING_PIVOT_X = 8.2;
+const WING_PIVOT_Y = 1.0;
+
+function buildBatWingPart(side, pose = 'mid') {
+  const W = 22, D = 16, H = 16;
+  const m = new VoxelModel(W, D, H);
+  const s = side;
+  const rx = -s * WING_PIVOT_X; // 翼根在局部盒内的 X 坐标（靠内侧）
+  const ry = WING_PIVOT_Y;
+  const rz = 6.8;
+
+  // 4 种空气动力学翼姿参数
+  const cfg = {
+    up:    { spread: 0.95, back: -0.6, eZ: 8.8, wZ: 12.2, tZ: 14.0 },
+    mid:   { spread: 1.00, back:  0.0, eZ: 6.6, wZ:  8.4, tZ:  8.0 },
+    down:  { spread: 0.92, back:  0.4, eZ: 4.8, wZ:  4.2, tZ:  2.2 },
+    glide: { spread: 1.04, back: -2.2, eZ: 6.8, wZ:  8.0, tZ:  7.6 }
+  }[pose] || { spread: 1.0, back: 0, eZ: 6.6, wZ: 8.4, tZ: 8.0 };
+
+  const sp = cfg.spread, bk = cfg.back;
+  const pRoot  = [rx,                 ry,                 rz];
+  const pElbow = [rx + s * 5.2 * sp,  ry - 1.4 + bk*0.3,  cfg.eZ];
+  const pWrist = [rx + s * 10.4 * sp, ry + 3.0 + bk*0.7,  cfg.wZ];
+  const pTip   = [rx + s * 17.2 * sp, ry + 0.2 + bk*1.0,  cfg.tZ];
+
+  const pTRoot   = [rx,                 ry - 4.4,           rz - 2.6];
+  const pTRib3   = [rx + s * 5.0 * sp,  ry - 7.4 + bk*0.4,  cfg.eZ - 2.6];
+  const pTRib2   = [rx + s * 10.2 * sp, ry - 8.0 + bk*0.6,  lerp(cfg.wZ, cfg.tZ, 0.35) - 3.0];
+  const pTRib1   = [rx + s * 14.4 * sp, ry - 5.6 + bk*0.8,  cfg.tZ - 2.2];
+  const pTipBack = [rx + s * 16.8 * sp, ry - 2.2 + bk*0.9,  cfg.tZ - 0.9];
+
+  // 厚实锯齿弧边翼膜（≥2.4格防斜角漏缝）+ 斑纹点缀
+  m.paintWingQuad(pRoot,  pElbow, pTRib3,   pTRoot, 1.24, mat('wing'), PART_ID.wingMem, 1.3, mat('spot'), PART_ID.wingSpot);
+  m.paintWingQuad(pElbow, pWrist, pTRib2,   pTRib3, 1.24, mat('wing'), PART_ID.wingMem, 1.4, mat('spot'), PART_ID.wingSpot);
+  m.paintWingQuad(pWrist, pTRib1, pTRib1,   pTRib2, 1.24, mat('wing'), PART_ID.wingMem, 1.6, mat('spot'), PART_ID.wingSpot);
+  m.paintWingQuad(pWrist, pTip,   pTipBack, pTRib1, 1.20, mat('wing'), PART_ID.wingMem, 1.5, mat('spot'), PART_ID.wingSpot);
+
+  // 清晰翼骨框架 + 腕部小翘爪 + 3 根辐射指骨
+  m.paintCapsule(pRoot[0],  pRoot[1],  pRoot[2],  pElbow[0], pElbow[1], pElbow[2], 1.48, 1.32, mat('bone'), PART_ID.wingBone, true);
+  m.paintCapsule(pElbow[0], pElbow[1], pElbow[2], pWrist[0], pWrist[1], pWrist[2], 1.38, 1.32, mat('bone'), PART_ID.wingBone, true);
+  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pTip[0],   pTip[1],   pTip[2],   1.32, 0.98, mat('bone'), PART_ID.wingBone, true);
+  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pWrist[0] + s * 0.8, pWrist[1] + 1.8, pWrist[2] + 1.4, 1.02, 0.78, mat('bone'), PART_ID.claw, true);
+  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pTRib1[0], pTRib1[1], pTRib1[2], 1.12, 0.92, mat('bone'), PART_ID.wingBone, true);
+  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pTRib2[0], pTRib2[1], pTRib2[2], 1.12, 0.92, mat('bone'), PART_ID.wingBone, true);
+  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pTRib3[0], pTRib3[1], pTRib3[2], 1.12, 0.92, mat('bone'), PART_ID.wingBone, true);
+
+  m.despeckle();
+  m.applyArtShading(true);
+  return m;
+}
+
+// 4.5 腹下双弯爪（10×8×7）
+function buildBatClawPart() {
+  const W = 10, D = 8, H = 7;
+  const m = new VoxelModel(W, D, H);
+  for (const s of [-1, 1]) {
+    m.paintCapsule(s * 2.5, -1.0, 5.2, s * 2.7, 0.0, 1.8, 1.3, 1.1, mat('fur'), PART_ID.leg, true);
+    m.paintCapsule(s * 2.7, 0.0, 1.8, s * 2.5, 1.8, 0.8, 1.1, 0.88, mat('bone'), PART_ID.claw, true);
+    m.paintEllipsoid(s * 2.5, 1.2, 0.7, 1.08, 1.18, 0.82, mat('bone'), PART_ID.claw, true);
+  }
+  m.despeckle();
+  m.applyArtShading(true);
+  return m;
+}
+
+// 4.6 迷你小蝙蝠（技能 3 唤出小蝠群，共享色表）
+function buildMiniBatPart(flapUp) {
+  const W = 20, D = 14, H = 12;
+  const m = new VoxelModel(W, D, H);
+  const wz = flapUp ? 7.2 : 2.8;
+  m.paintEllipsoid(0, 0, 4.8, 2.3, 2.3, 2.2, mat('fur'), PART_ID.body, true);
+  for (const s of [-1, 1]) {
+    m.paintCapsule(s * 1.4, 0, 6.4, s * 2.2, -0.3, 8.8, 0.9, 0.6, mat('fur'), PART_ID.earOuter, true);
+    m.paintWingQuad(
+      [s * 1.8, 0.8, 4.8], [s * 7.6, 1.0, wz],
+      [s * 7.0, -2.4, wz - 0.8], [s * 1.8, -2.2, 4.0],
+      1.05, mat('wing'), PART_ID.wingMem, 0.8, 0, 0
+    );
+    m.paintCapsule(s * 1.8, 0.8, 4.8, s * 7.6, 1.0, wz, 1.0, 0.75, mat('bone'), PART_ID.wingBone, true);
+  }
+  m.despeckle();
+  m.applyArtShading(true);
+  for (const s of [-1, 1]) {
+    const ex = Math.round(W / 2 - 0.5 + s * 1.2);
+    const ey = Math.round(D / 2 - 0.5 + 2.4);
+    m.setRaw(ex, ey, 5, KEY_TO_ID.eyeCore, PART_ID.eye);
+  }
+  return m;
+}
+
+// 4.7 训练靶桩 & 洞窟青石板圆台
+function buildTrainingDummy() {
+  const m = new VoxelModel(16, 16, 30);
+  const hw = 7.5, hd = 7.5;
+  for (let z = 0; z < 30; z++) for (let y = 0; y < 16; y++) {
+    const Y = y - hd;
+    for (let x = 0; x < 16; x++) {
+      const X = x - hw, r = Math.hypot(X, Y);
+      if (z < 5 && r <= (z < 2 ? 5.2 : 3.8)) { m.setRaw(x, y, z, mat('slate'), PART_ID.dummyBase); continue; }
+      if ((z === 8 || z === 22) && r <= 2.45) { m.setRaw(x, y, z, mat('iron'), PART_ID.dummyIron); continue; }
+      if (z >= 5 && z <= 27 && r <= 2.05) { m.setRaw(x, y, z, mat('wood'), PART_ID.dummyPost); continue; }
+      if (z === 28 && r <= 1.6) { m.setRaw(x, y, z, mat('iron'), PART_ID.dummyIron); continue; }
+    }
+  }
+  m.fillAABB(-5.6, 5.6, -4.4, -1.6, 13, 25, (x, y, z, X, Y) => {
+    const rd = Math.hypot(X, z - 19);
+    if (rd <= 5.2 && Y >= -4.0 && Y <= -1.8) {
+      if (Y <= -3.0) {
+        const col = rd <= 1.6 ? KEY_TO_ID.targetRed : (rd <= 3.3 ? KEY_TO_ID.targetCream : KEY_TO_ID.targetRed);
+        m.setRaw(x, y, z, col, PART_ID.dummyBoard);
+      } else m.setRaw(x, y, z, mat('wood'), PART_ID.dummyBoard);
+    }
+  });
+  m.despeckle();
+  m.applyArtShading(false);
+  return m;
+}
+
+function buildCavePlatform(makeCanvas, size = 200) {
+  const base = makeCanvas(size, size);
+  const bg = base.getContext('2d');
+  const bim = bg.createImageData(size, size);
+  const half = size * 0.5;
+  const rOuter = size * 0.478, rInner = size * 0.415;
+
+  const rocks = [];
+  for (let k = 0; k < 22; k++) {
+    const a = (k / 22) * Math.PI * 2 + (hash2i(k, 3, 19) - 0.5) * 0.16;
+    const rad = rInner + 2.5 + hash2i(k, 7, 31) * 5.2;
+    rocks.push({ x: Math.cos(a) * rad, y: Math.sin(a) * rad, rx: 3.4 + hash2i(k, 11, 43) * 3.0, ry: 2.6 + hash2i(k, 13, 59) * 2.4 });
+  }
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const dx = x - half, dy = y - half, dist = Math.hypot(dx, dy);
+    if (dist > rOuter) continue;
+    const i = (y * size + x) * 4;
+    let key = null;
+    if (dist > rInner) {
+      let onRock = false, rockTop = false;
+      for (let k = 0; k < rocks.length; k++) {
+        const rk = rocks[k], dR = Math.hypot((dx - rk.x) / rk.rx, (dy - rk.y) / rk.ry);
+        if (dR <= 1.0) { onRock = true; if (dR < 0.58) rockTop = true; break; }
+      }
+      if (onRock) key = rockTop ? 'rockHi' : 'slateMid';
+      else if (dist <= rInner + 6.5) key = dist > rInner + 5.2 ? 'slateDeep' : (periodicNoise2(x, y, 32, 32, 8, 71) > 0.55 ? 'slateDark' : 'slateDeep');
+      else continue;
+    } else {
+      const rowIdx = Math.floor(y / 14), shiftX = (rowIdx & 1) * 9;
+      const seam = (y % 14 === 0) || ((x + shiftX) % 18 === 0);
+      const v = periodicNoise2(x, y, 64, 64, 16, 23) * 0.65 + periodicNoise2(x + 7, y + 11, 32, 32, 8, 67) * 0.35;
+      const moss = periodicNoise2(x + 13, y + 5, 64, 64, 12, 101);
+      if (seam) key = 'slateDeep';
+      else if (Math.abs(dist - 28) < 1.2) key = 'slateDark';
+      else if (moss > 0.77 && dist > 26) key = moss > 0.84 ? 'mossMid' : 'mossDark';
+      else key = v > 0.66 ? 'slateHi' : (v < 0.34 ? 'slateDark' : 'slateMid');
+    }
+    if (!key) continue;
+    const rgba = ID_TO_RGBA[KEY_TO_ID[key]];
+    bim.data[i] = rgba[0]; bim.data[i + 1] = rgba[1]; bim.data[i + 2] = rgba[2]; bim.data[i + 3] = 255;
+  }
+  bg.putImageData(bim, 0, 0);
+  return { size, base, rInner, rOuter };
+}
+// === BAT_VOXEL_CORE_END ===
+
+// ---------------------------------------------------------------------------
+// 5. 满帧像素堆叠渲染器 + actorBuf 整体轮廓 + 拍翼滑翔巡航 + 4 技能演出
+// ---------------------------------------------------------------------------
+(function initApp() {
+  const TILT = 0.6, HS = 0.8, TAU = Math.PI * 2;
+  const BAKE_SCALE = 2.5;
+  const BAKE_STEP = 2;
+  const BAKE_HALF = 1;
+  const ANGLE_QUANT_DEG = 3;
+  const GROUND_SUPERSAMPLE = 2;
+  const DUMMY_POS = { x: 0, y: 46 };
+
+  const ACTOR_W = 260, ACTOR_H = 240;
+  const ACTOR_AX = 130, ACTOR_AY = 166;
+
+  const cv = document.getElementById('view'), dctx = cv.getContext('2d');
+  const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, w); c.height = Math.max(1, h); return c; };
+
+  const bgc = mk(1, 1), bgctx = bgc.getContext('2d');
+  const mc = mk(1, 1), mctx = mc.getContext('2d');
+  const oc = mk(1, 1), octx = oc.getContext('2d');
+  const ec = mk(1, 1), ectx = ec.getContext('2d');
+  const eb = mk(1, 1), ebctx = eb.getContext('2d');
+  const gbuf = mk(200 * GROUND_SUPERSAMPLE, 200 * GROUND_SUPERSAMPLE), gbctx = gbuf.getContext('2d');
+
+  const actorRaw = mk(ACTOR_W, ACTOR_H), arCtx = actorRaw.getContext('2d');
+  const actorSil = mk(ACTOR_W, ACTOR_H), asCtx = actorSil.getContext('2d');
+  const actorOut = mk(ACTOR_W, ACTOR_H), aoCtx = actorOut.getContext('2d');
+  const actorGlow = mk(ACTOR_W, ACTOR_H), agCtx = actorGlow.getContext('2d');
+
+  const scratchRaw = mk(180, 180), srCtx = scratchRaw.getContext('2d');
+  const scratchSil = mk(180, 180), ssCtx = scratchSil.getContext('2d');
+
+  const canvasPool = [];
+  function acquireCanvas(w, h) {
+    const c = canvasPool.pop() || document.createElement('canvas');
+    if (c.width !== w) c.width = w;
+    if (c.height !== h) c.height = h;
+    return c;
+  }
+  function releaseCanvas(c) {
+    if (!c) return;
+    if (canvasPool.length < 320) canvasPool.push(c);
+  }
+
+  // 1. 极速构建全部模块化部件（< 25ms）
+  const tBuild0 = performance.now();
+  const parts = {
+    torso:       buildBatTorsoPart().toStripAsset(mk,      { footRadius: 6.0 }),
+    head:        buildBatHeadPart(false).toStripAsset(mk,  { footRadius: 4.6 }),
+    headScreech: buildBatHeadPart(true).toStripAsset(mk,   { footRadius: 4.6 }),
+    earL:        buildBatEarPart(-1).toStripAsset(mk,      { footRadius: 2.5 }),
+    earR:        buildBatEarPart( 1).toStripAsset(mk,      { footRadius: 2.5 }),
+    claws:       buildBatClawPart().toStripAsset(mk,       { footRadius: 3.2 }),
+    wingL_up:    buildBatWingPart(-1, 'up').toStripAsset(mk,    { footRadius: 8.0 }),
+    wingL_mid:   buildBatWingPart(-1, 'mid').toStripAsset(mk,   { footRadius: 8.0 }),
+    wingL_down:  buildBatWingPart(-1, 'down').toStripAsset(mk,  { footRadius: 8.0 }),
+    wingL_glide: buildBatWingPart(-1, 'glide').toStripAsset(mk, { footRadius: 8.0 }),
+    wingR_up:    buildBatWingPart( 1, 'up').toStripAsset(mk,    { footRadius: 8.0 }),
+    wingR_mid:   buildBatWingPart( 1, 'mid').toStripAsset(mk,   { footRadius: 8.0 }),
+    wingR_down:  buildBatWingPart( 1, 'down').toStripAsset(mk,  { footRadius: 8.0 }),
+    wingR_glide: buildBatWingPart( 1, 'glide').toStripAsset(mk, { footRadius: 8.0 })
+  };
+  const miniBatFrames = [
+    buildMiniBatPart(true).toStripAsset(mk,  { footRadius: 4.0 }),
+    buildMiniBatPart(false).toStripAsset(mk, { footRadius: 4.0 })
+  ];
+  const recolorableAssets = [...Object.values(parts), ...miniBatFrames];
+  const dummyAsset = buildTrainingDummy().toStripAsset(mk, { footRadius: 5.5, headZ: 29, centerZ: 15 });
+  const platform = buildCavePlatform(mk, 200);
+  const buildMs = (performance.now() - tBuild0).toFixed(1);
+
+  let skinIdx = 0;
+  let curSkin = SKINS[0];
+  let skinMs = 0;
+  let baseMode = 'hover'; // 'hover' | 'glide'
+
+  // 2. 定倍角度烘焙 LRU 缓存
+  const spriteCache = new Map();
+  const MAX_CACHE = 960;
+  let cacheHits = 0, cacheMisses = 0;
+
+  function flushBatCache() {
+    for (const [k, entry] of spriteCache.entries()) {
+      if (k.startsWith('dummy|')) continue;
+      releaseCanvas(entry.main);
+      releaseCanvas(entry.glow);
+      spriteCache.delete(k);
+    }
+  }
+
+  function getBakedSprite(asset, assetId, angle, outlineHex, wantOutline, symDeg = 360) {
+    const rawDeg = (((angle * 180 / Math.PI) % symDeg) + symDeg) % symDeg;
+    const slots = Math.max(1, Math.round(symDeg / ANGLE_QUANT_DEG));
+    const degSlot = Math.round(rawDeg / ANGLE_QUANT_DEG) % slots;
+    const qAng = (degSlot * ANGLE_QUANT_DEG) * Math.PI / 180;
+    const key = `${assetId}|${degSlot}|${wantOutline ? outlineHex : 'raw'}`;
+    const hit = spriteCache.get(key);
+    if (hit) {
+      cacheHits++;
+      spriteCache.delete(key);
+      spriteCache.set(key, hit);
+      return hit;
+    }
+    cacheMisses++;
+
+    const { w, d, activeLayers, glowLayers, glowSlot, glowStrip, strip } = asset;
+    const c = Math.cos(qAng), s = Math.sin(qAng);
+    const sc = BAKE_SCALE;
+    const maxZ = activeLayers.length ? activeLayers[activeLayers.length - 1] : 0;
+    const op = wantOutline ? 1 : 0;
+    const pad = op + 2;
+
+    const rxSpan = Math.ceil((Math.abs(c) * w * 0.5 + Math.abs(s) * d * 0.5) * sc);
+    const rySpan = Math.ceil((Math.abs(s) * w * 0.5 + Math.abs(c) * d * 0.5) * TILT * sc);
+    const bw = rxSpan * 2 + pad * 2;
+    const bh = rySpan * 2 + maxZ * BAKE_STEP + pad * 2 + BAKE_STEP;
+    const anchorX = Math.floor(bw / 2);
+    const anchorY = bh - rySpan - pad;
+
+    if (scratchRaw.width < bw) scratchRaw.width = bw;
+    if (scratchRaw.height < bh) scratchRaw.height = bh;
+    srCtx.setTransform(1, 0, 0, 1, 0, 0);
+    srCtx.globalCompositeOperation = 'source-over';
+    srCtx.imageSmoothingEnabled = false;
+    srCtx.clearRect(0, 0, bw, bh);
+
+    const hasGlow = !!glowStrip && glowLayers.length > 0;
+    const minGlowZ = hasGlow ? glowLayers[0] : 9999;
+    const glowC = hasGlow ? acquireCanvas(bw, bh) : null;
+    const glctx = hasGlow ? glowC.getContext('2d') : null;
+    if (glctx) {
+      glctx.setTransform(1, 0, 0, 1, 0, 0);
+      glctx.globalCompositeOperation = 'source-over';
+      glctx.imageSmoothingEnabled = false;
+      glctx.clearRect(0, 0, bw, bh);
+    }
+
+    const cs = c * sc, ss = s * sc, tss = TILT * ss, tcs = TILT * cs;
+    const hw = -w * 0.5, hd = -d * 0.5;
+
+    for (let li = 0; li < activeLayers.length; li++) {
+      const z = activeLayers[li];
+      const yy = anchorY - z * BAKE_STEP;
+      const sx = z * w;
+      srCtx.setTransform(cs, tss, -ss, tcs, anchorX, yy + BAKE_HALF);
+      srCtx.drawImage(strip, sx, 0, w, d, hw, hd, w, d);
+      srCtx.setTransform(cs, tss, -ss, tcs, anchorX, yy);
+      srCtx.drawImage(strip, sx, 0, w, d, hw, hd, w, d);
+
+      if (hasGlow && z >= minGlowZ) {
+        if (z > minGlowZ) {
+          glctx.globalCompositeOperation = 'destination-out';
+          glctx.setTransform(cs, tss, -ss, tcs, anchorX, yy + BAKE_HALF);
+          glctx.drawImage(strip, sx, 0, w, d, hw, hd, w, d);
+          glctx.setTransform(cs, tss, -ss, tcs, anchorX, yy);
+          glctx.drawImage(strip, sx, 0, w, d, hw, hd, w, d);
+        }
+        const gSlot = glowSlot[z];
+        if (gSlot >= 0) {
+          glctx.globalCompositeOperation = 'source-over';
+          glctx.setTransform(cs, tss, -ss, tcs, anchorX, yy);
+          glctx.drawImage(glowStrip, gSlot * w, 0, w, d, hw, hd, w, d);
+        }
+      }
+    }
+
+    const finalC = acquireCanvas(bw, bh);
+    const fctx = finalC.getContext('2d');
+    fctx.setTransform(1, 0, 0, 1, 0, 0);
+    fctx.globalCompositeOperation = 'source-over';
+    fctx.imageSmoothingEnabled = false;
+    fctx.clearRect(0, 0, bw, bh);
+
+    if (wantOutline) {
+      if (scratchSil.width < bw) scratchSil.width = bw;
+      if (scratchSil.height < bh) scratchSil.height = bh;
+      ssCtx.setTransform(1, 0, 0, 1, 0, 0);
+      ssCtx.globalCompositeOperation = 'source-over';
+      ssCtx.clearRect(0, 0, bw, bh);
+      ssCtx.drawImage(scratchRaw, 0, 0, bw, bh, 0, 0, bw, bh);
+      ssCtx.globalCompositeOperation = 'source-in';
+      ssCtx.fillStyle = outlineHex;
+      ssCtx.fillRect(0, 0, bw, bh);
+      fctx.drawImage(scratchSil, 0, 0, bw, bh, -op, 0, bw, bh);
+      fctx.drawImage(scratchSil, 0, 0, bw, bh,  op, 0, bw, bh);
+      fctx.drawImage(scratchSil, 0, 0, bw, bh, 0, -op, bw, bh);
+      fctx.drawImage(scratchSil, 0, 0, bw, bh, 0,  op, bw, bh);
+    }
+    fctx.drawImage(scratchRaw, 0, 0, bw, bh, 0, 0, bw, bh);
+
+    const entry = { main: finalC, glow: glowC, anchorX, anchorY, bw, bh };
+    spriteCache.set(key, entry);
+    if (spriteCache.size > MAX_CACHE) {
+      const oldestKey = spriteCache.keys().next().value;
+      const old = spriteCache.get(oldestKey);
+      spriteCache.delete(oldestKey);
+      releaseCanvas(old.main);
+      releaseCanvas(old.glow);
+    }
+    return entry;
+  }
+
+  // 3. 实时翼手飞行骨骼状态
+  const rig = {
+    x: 0, y: 0, lift: 11.0, yaw: 0,
+    headYaw: 0, headScreech: false,
+    earLYaw: 0, earRYaw: 0,
+    wingPose: 'mid',
+    wingSweepL: 0, wingSweepR: 0,
+    wingZOff: 0,
+    clawFwd: 0,
+    glowBoost: 1.0
+  };
+
+  // 4. 场景、技能与特效状态
+  const MODES = ['cached', 'crisp', 'retro'];
+  const MODE_LABEL = { cached: '游戏缓存', crisp: '高清逐层', retro: '复古低分' };
+  let modeIdx = 0;
+  let CW = 0, CH = 0, EW = 0, EH = 0, DPR = 1, SCALE = 4, zoom = 0;
+  let th = 0.56, thTarget = 0.56;
+  let drag = null, autoSpin = false, useOutline = true;
+
+  let animTime = 0, flapPhase = 0, glideAngle = -Math.PI * 0.5, glideCycle = 0, trailCd = 0;
+  let shakeMag = 0, shakeX = 0, shakeY = 0;
+  let dummyHit = 0, dummyVibr = 0;
+
+  const SKILLS = [
+    { id: 'sonicScreech', name: '声波尖啸',     dur: 1.85 },
+    { id: 'diveSlash',    name: '高空俯冲爪击', dur: 1.95 },
+    { id: 'summonFlock',  name: '唤出小蝠群',   dur: 2.40 },
+    { id: 'whirlwind',    name: '旋风盘旋',     dur: 2.15 }
+  ];
+  let activeAction = null;
+
+  const particles = [];
+  const sonicWaves = [];
+  const slashMarks = [];
+  const miniBats = [];
+  const groundRipples = [];
+  const vortexRings = [];
+  const ambientMotes = Array.from({ length: 16 }, (_, i) => ({
+    x: Math.sin(i * 15.7) * 66,
+    y: Math.cos(i * 12.1) * 66,
+    z: 6 + (i * 7) % 32,
+    sp: 5 + (i % 4) * 2.5,
+    ph: i * 1.3
+  }));
+
+  function spawnParticle(x, y, z, vx, vy, vz, life, sz, color, glow = false, gravity = 0) {
+    if (particles.length > 340) particles.shift();
+    particles.push({ x, y, z, vx, vy, vz, t: 0, life, sz, color, glow, gravity });
+  }
+  function hitDummy(power = 1.0, vibr = 0) {
+    const fx = curSkin.fx;
+    dummyHit = Math.max(dummyHit, power);
+    if (vibr > 0) dummyVibr = Math.max(dummyVibr, vibr);
+    for (let i = 0; i < Math.round(6 * power); i++) {
+      const a = Math.random() * TAU, sp = 14 + Math.random() * 24;
+      spawnParticle(DUMMY_POS.x + (Math.random() - 0.5) * 4, DUMMY_POS.y - 2, 14 + Math.random() * 10,
+        Math.cos(a) * sp, Math.sin(a) * sp, 8 + Math.random() * 16,
+        0.38 + Math.random() * 0.25, 1.8, i & 1 ? fx.sparkA : fx.sparkB, true, 42);
+    }
+  }
+
+  let bannerTimer = 0;
+  function showBanner(msg, dur = 1.5) {
+    const b = document.getElementById('banner');
+    b.textContent = msg;
+    b.classList.add('show');
+    bannerTimer = dur;
+  }
+
+  function applySkin(idx, showTip = true) {
+    const t0 = performance.now();
+    skinIdx = ((idx % SKINS.length) + SKINS.length) % SKINS.length;
+    curSkin = SKINS[skinIdx];
+    const rgbaTable = buildRgbaTable(curSkin);
+    for (let i = 0; i < recolorableAssets.length; i++) recolorAsset(recolorableAssets[i], rgbaTable);
+    flushBatCache();
+    document.documentElement.style.setProperty('--accent', curSkin.ui.accent);
+    document.documentElement.style.setProperty('--hot', curSkin.ui.hot);
+    document.documentElement.style.setProperty('--border', curSkin.ui.border);
+    renderSkyCache();
+    skinMs = Number((performance.now() - t0).toFixed(2));
+    syncUI();
+    if (showTip) showBanner(`翼膜色系 · ${curSkin.tag}`, 1.3);
+  }
+
+  function startSkill(idx) {
+    const sk = SKILLS[idx];
+    if (!sk) return;
+    activeAction = { id: sk.id, t: 0, dur: sk.dur, state: {} };
+    showBanner(`技能演出 · ${sk.name}`, sk.dur);
+    syncUI();
+  }
+
+  function renderSkyCache() {
+    const fx = curSkin.fx;
+    bgc.width = Math.max(1, cv.width);
+    bgc.height = Math.max(1, cv.height);
+    bgctx.setTransform(1, 0, 0, 1, 0, 0);
+    const sky = bgctx.createLinearGradient(0, 0, 0, bgc.height);
+    sky.addColorStop(0, fx.skyTop);
+    sky.addColorStop(0.58, fx.skyMid);
+    sky.addColorStop(1, fx.skyBot);
+    bgctx.fillStyle = sky;
+    bgctx.fillRect(0, 0, bgc.width, bgc.height);
+    const halo = bgctx.createRadialGradient(
+      bgc.width * 0.5, bgc.height * 0.44, 12,
+      bgc.width * 0.5, bgc.height * 0.44, bgc.height * 0.52
+    );
+    halo.addColorStop(0, fx.skyHalo);
+    halo.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    bgctx.fillStyle = halo;
+    bgctx.fillRect(0, 0, bgc.width, bgc.height);
+  }
+
+  function fit() {
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    const cssW = window.innerWidth, cssH = window.innerHeight;
+    cv.width = Math.floor(cssW * DPR);
+    cv.height = Math.floor(cssH * DPR);
+    const logicalScale = Math.max(2, Math.round(cssH / 142) + zoom);
+    SCALE = Math.max(2, Math.round(logicalScale * DPR));
+
+    const mode = MODES[modeIdx];
+    if (mode === 'retro') {
+      CW = Math.ceil(cv.width / SCALE); CH = Math.ceil(cv.height / SCALE);
+    } else {
+      CW = cv.width; CH = cv.height;
+    }
+    if (mode === 'cached') {
+      mc.width = oc.width = 1; mc.height = oc.height = 1;
+    } else {
+      mc.width = oc.width = CW; mc.height = oc.height = CH;
+    }
+    EW = Math.max(1, Math.ceil(cv.width / 4));
+    EH = Math.max(1, Math.ceil(cv.height / 4));
+    ec.width = eb.width = EW; ec.height = eb.height = EH;
+    renderSkyCache();
+  }
+
+  function proj(x, y, z, sc) {
+    const c = Math.cos(th), s = Math.sin(th);
+    const rx = c * x - s * y, ry = s * x + c * y;
+    const mode = MODES[modeIdx];
+    const step = mode === 'retro' ? HS : (mode === 'cached' ? HS * sc : Math.max(1, Math.round(HS * sc)));
+    const sx = mode === 'retro' ? shakeX / SCALE : shakeX;
+    const sy = mode === 'retro' ? shakeY / SCALE : shakeY;
+    return [CW / 2 + rx * sc + sx, CH / 2 + 20 * sc + ry * TILT * sc - z * step + sy, ry];
+  }
+
+  // 根据拍翼值 flapVal ∈ [-1, 1] 选择最贴合的 3 档拍翼部件并叠加连续 Sweep & Z 偏移
+  function pickWingPose(flapVal, isGlide = false) {
+    if (isGlide) return 'glide';
+    if (flapVal > 0.34) return 'up';
+    if (flapVal < -0.34) return 'down';
+    return 'mid';
+  }
+
+  // 5. 120fps 蝙蝠飞行运动学驱动（真实下拍升力滞后 + Flap-and-Glide 滑翔俯冲 + 4 技能）
+  function updateBatRig(dt) {
+    const fx = curSkin.fx;
+    const kSlow = 1 - Math.exp(-dt * 9);
+    const kFast = 1 - Math.exp(-dt * 16);
+
+    flapPhase += dt * 10.8;
+    const hoverFlap = Math.sin(flapPhase);
+    // 真实空气动力学：身体升沉相位滞后于翼下拍 ~0.75 rad（翼刚向下拍完，身体被升力托起！）
+    const hoverLiftBounce = -Math.sin(flapPhase - 0.75) * 1.9;
+
+    let tgtX = 0, tgtY = 0, tgtLift = 11.2 + hoverLiftBounce;
+    let tgtYaw = Math.sin(animTime * 1.6) * 0.08;
+    let tgtHeadYaw = Math.sin(animTime * 2.1) * 0.22;
+    let tgtHeadScreech = false;
+    // 大耳雷达式独立微转侦听
+    const earTwitch = Math.sin(animTime * 4.5) > 0.75 ? Math.sin(animTime * 26) * 0.24 : 0;
+    let tgtEarL = Math.sin(animTime * 1.9) * 0.14 + earTwitch;
+    let tgtEarR = -Math.sin(animTime * 2.3) * 0.14 - earTwitch * 0.8;
+    let tgtWingPose = pickWingPose(hoverFlap, false);
+    let tgtSweepL = hoverFlap * 0.16;
+    let tgtSweepR = -hoverFlap * 0.16;
+    let tgtWingZ = hoverFlap * 0.7;
+    let tgtClawFwd = 0;
+    let glowBoost = 1.0;
+
+    if (!activeAction) {
+      if (baseMode === 'glide') {
+        // =========================================================================
+        // 真实蝙蝠 Flap-and-Glide 节律：强拍 2 下爬升 → 展翼滑翔俯冲拉起！
+        // =========================================================================
+        glideCycle = (glideCycle + dt * 0.42) % 1.0;
+        const isFlapping = glideCycle < 0.40; // 前 40% 强力拍两下爬升，后 60% 展翼滑翔俯冲！
+        const speedMul = isFlapping ? 1.12 : 0.86;
+        glideAngle += dt * 0.82 * speedMul;
+
+        // 宽大压弯椭圆巡航轨道（安全避开靶桩与左上角 HUD）
+        const R = 25.5 + Math.sin(glideAngle * 2.0) * 5.0;
+        tgtX = Math.cos(glideAngle) * R;
+        tgtY = Math.sin(glideAngle) * R - 3.5;
+
+        const vx = -Math.sin(glideAngle) * R + Math.cos(glideAngle) * Math.cos(glideAngle * 2.0) * 10.0;
+        const vy =  Math.cos(glideAngle) * R + Math.sin(glideAngle) * Math.cos(glideAngle * 2.0) * 10.0;
+        tgtYaw = Math.atan2(-vx, vy);
+        tgtHeadYaw = 0.14; // 顺着盘旋内侧提前看路
+
+        if (isFlapping) {
+          const u = glideCycle / 0.40; // 2 个强拍周期
+          const f = Math.sin(u * Math.PI * 4.0);
+          tgtWingPose = pickWingPose(f, false);
+          tgtSweepL = f * 0.22 - 0.10;
+          tgtSweepR = -f * 0.22 + 0.10;
+          tgtWingZ = f * 0.9;
+          tgtLift = lerp(12.5, 25.5, smoothstep(0, 1, u)) - Math.sin(u * Math.PI * 4.0 - 0.7) * 1.4;
+        } else {
+          // 展翼滑翔俯冲再轻拉起
+          const u = (glideCycle - 0.40) / 0.60;
+          tgtWingPose = 'glide';
+          tgtSweepL = -0.22 + Math.sin(u * Math.PI) * 0.08;
+          tgtSweepR =  0.22 - Math.sin(u * Math.PI) * 0.08;
+          tgtWingZ = 0.4;
+          tgtLift = lerp(25.5, 12.5, smoothstep(0, 0.82, u)) + Math.sin(u * Math.PI) * 2.2;
+        }
+
+        // 翼尖气流拖尾粒子
+        trailCd -= dt;
+        if (trailCd <= 0) {
+          trailCd = 0.065;
+          for (const s of [-1, 1]) {
+            const [tx, ty] = localToWorldXY(rig.x, rig.y, rig.yaw, s * 17.5, -2.0);
+            spawnParticle(tx, ty, rig.lift + 9.5, -Math.sin(rig.yaw) * 4, Math.cos(rig.yaw) * 4, -1.5,
+              0.38, 1.35, fx.windCore, true, 0);
+          }
+        }
+      }
+    } else {
+      const act = activeAction;
+      act.t += dt;
+      const t = act.t;
+      const st = act.state;
+
+      if (act.id === 'sonicScreech') {
+        tgtYaw = 0; tgtHeadYaw = 0;
+        if (t < 0.25) {
+          const p = t / 0.25;
+          tgtHeadScreech = true;
+          tgtWingPose = 'up'; tgtSweepL = -0.35 * p; tgtSweepR = 0.35 * p;
+          tgtEarL = -0.25 * p; tgtEarR = 0.25 * p;
+          tgtY = -p * 4.5; tgtLift = lerp(11.2, 14.5, p);
+          glowBoost = 1.0 + p * 0.9;
+          if (Math.random() < 0.65) {
+            const a = Math.random() * TAU;
+            spawnParticle(Math.cos(a) * 10, 6 + Math.sin(a) * 6, rig.lift + 13,
+              -Math.cos(a) * 26, -Math.sin(a) * 16, 0, 0.22, 1.7, fx.sonicMid, true, 0);
+          }
+        } else if (t < 1.30) {
+          const p = (t - 0.25) / 1.05;
+          tgtHeadScreech = p < 0.72;
+          tgtWingPose = p < 0.65 ? 'up' : pickWingPose(hoverFlap, false);
+          tgtSweepL = p < 0.65 ? -0.38 : hoverFlap * 0.16;
+          tgtSweepR = p < 0.65 ?  0.38 : -hoverFlap * 0.16;
+          tgtY = -4.5 + Math.sin(p * Math.PI) * 5.5;
+          tgtLift = 14.5 - Math.sin(p * Math.PI) * 1.8;
+          glowBoost = 1.7;
+          const times = [0.26, 0.50, 0.74];
+          for (let k = 0; k < 3; k++) {
+            if (!st['w' + k] && t >= times[k]) {
+              st['w' + k] = true;
+              sonicWaves.push({ y: 8, z: rig.lift + 12.5, r0: 3.5 + k * 1.2, r1: 14 + k * 3.0, t: 0, dur: 0.62, hitDone: false });
+              groundRipples.push({ x: 0, y: 10, r0: 4, r1: 52, t: 0, dur: 0.55 });
+              shakeMag = Math.max(shakeMag, 2.8);
+            }
+          }
+        } else {
+          const p = (t - 1.30) / (act.dur - 1.30);
+          tgtY = 0; tgtLift = lerp(13.0, 11.2, smoothstep(0, 1, p));
+        }
+      } else if (act.id === 'diveSlash') {
+        if (t < 0.42) {
+          const p = t / 0.42;
+          const rapid = Math.sin(t * 28);
+          tgtWingPose = pickWingPose(rapid, false);
+          tgtLift = lerp(11.2, 36.0, smoothstep(0, 1, p));
+          tgtY = -p * 10.0; tgtYaw = 0; tgtHeadYaw = 0;
+        } else if (t < 0.90) {
+          const p = (t - 0.42) / 0.48;
+          tgtWingPose = 'glide'; tgtSweepL = -0.42; tgtSweepR = 0.42;
+          tgtClawFwd = 2.6; tgtHeadScreech = true;
+          tgtY = lerp(-10.0, DUMMY_POS.y + 12, smoothstep(0, 1, p));
+          tgtLift = lerp(36.0, 9.5, p * p);
+          tgtYaw = 0; tgtHeadYaw = 0; glowBoost = 1.6;
+          if (Math.random() < 0.9) {
+            spawnParticle((Math.random() - 0.5) * 14, rig.y - 6, rig.lift + 10,
+              (Math.random() - 0.5) * 8, -28, 6, 0.24, 1.9, fx.windCore, true, 0);
+          }
+          if (!st.slashed && p > 0.62) {
+            st.slashed = true; shakeMag = 6.2; hitDummy(1.5, 0.35);
+            slashMarks.push({ x: DUMMY_POS.x, y: DUMMY_POS.y - 5.5, z: 19.5, t: 0, dur: 0.68 });
+            groundRipples.push({ x: DUMMY_POS.x, y: DUMMY_POS.y, r0: 4, r1: 30, t: 0, dur: 0.45 });
+            for (let i = 0; i < 20; i++) {
+              const a = Math.random() * TAU, sp = 18 + Math.random() * 34;
+              spawnParticle(DUMMY_POS.x + (Math.random() - 0.5) * 8, DUMMY_POS.y - 4, 14 + Math.random() * 10,
+                Math.cos(a) * sp, Math.sin(a) * sp, 10 + Math.random() * 20,
+                0.42 + Math.random() * 0.28, 2.1, i % 3 === 0 ? fx.slashCore : (i % 3 === 1 ? fx.slashOuter : fx.sparkA), true, 44);
+            }
+          }
+        } else {
+          const p = (t - 0.90) / (act.dur - 0.90), u = smoothstep(0, 1, p);
+          const arcX = Math.sin(u * Math.PI) * 28.0, arcY = lerp(DUMMY_POS.y + 12, 0, u);
+          const prevX = Math.sin(Math.max(0, u - 0.02) * Math.PI) * 28.0, prevY = lerp(DUMMY_POS.y + 12, 0, Math.max(0, u - 0.02));
+          tgtX = arcX; tgtY = arcY;
+          tgtLift = lerp(9.5, 11.2, u) + Math.sin(u * Math.PI) * 14.0;
+          const heading = Math.atan2(-(arcX - prevX), arcY - prevY);
+          tgtYaw = p > 0.82 ? lerp(heading, 0, (p - 0.82) / 0.18) : heading;
+          tgtWingPose = pickWingPose(Math.sin(t * 20), false);
+        }
+      } else if (act.id === 'summonFlock') {
+        const rapid = Math.sin(t * 24);
+        tgtWingPose = pickWingPose(rapid, false);
+        tgtHeadScreech = t < 0.45;
+        tgtLift = 11.2 + (t < 0.55 ? Math.sin(t * 24) * 2.4 + 2.5 : Math.sin(t * 10) * 1.2);
+        glowBoost = t < 0.7 ? 1.65 : 1.1;
+        if (!st.spawned && t >= 0.24) {
+          st.spawned = true;
+          groundRipples.push({ x: 0, y: 0, r0: 6, r1: 38, t: 0, dur: 0.55 });
+          for (let k = 0; k < 5; k++) {
+            const baseAng = (k / 5) * TAU;
+            const escAng = -0.8 + k * 0.42 + (k & 1 ? 0.35 : -0.35);
+            miniBats.push({
+              k, t: 0, orbitDur: 0.42 + k * 0.14, swoopDur: 0.44, scatterDur: 0.52,
+              baseAng, escVx: Math.sin(escAng) * 58, escVy: Math.cos(escAng) * 44, escVz: 24 + (k % 3) * 8,
+              x: 0, y: 0, z: rig.lift + 10, ro: baseAng, hitDone: false
+            });
+          }
+        }
+      } else if (act.id === 'whirlwind') {
+        if (t < 0.22) {
+          tgtLift = lerp(11.2, 7.2, t / 0.22);
+          tgtWingPose = 'glide';
+        } else if (t < 1.68) {
+          const p = (t - 0.22) / 1.46, speed = Math.sin(p * Math.PI);
+          tgtWingPose = pickWingPose(Math.sin(t * 28), false);
+          tgtLift = 7.5 + speed * 7.5;
+          tgtYaw = p * TAU * 4.5;
+          glowBoost = 1.4; shakeMag = Math.max(shakeMag, 1.8 * speed);
+          st.ringCd = (st.ringCd || 0) - dt;
+          if (st.ringCd <= 0) {
+            st.ringCd = 0.12;
+            vortexRings.push({ z: 2, r0: 8 + Math.random() * 4, r1: 32 + Math.random() * 14, t: 0, dur: 0.62, rotOff: Math.random() * TAU });
+            groundRipples.push({ x: 0, y: 0, r0: 8, r1: 68, t: 0, dur: 0.65 });
+            hitDummy(0.55, 0.25);
+          }
+          for (let k = 0; k < 2; k++) {
+            const a = Math.random() * TAU, r = 10 + Math.random() * 18, tang = a + Math.PI * 0.42, sp = 34 + Math.random() * 34;
+            spawnParticle(Math.cos(a) * r, Math.sin(a) * r, 1.5 + Math.random() * 5,
+              Math.cos(tang) * sp, Math.sin(tang) * sp, 14 + Math.random() * 16,
+              0.55 + Math.random() * 0.3, k === 0 ? 2.2 : 1.7,
+              k === 0 ? fx.debris : (Math.random() < 0.5 ? fx.windCore : fx.leaf), k === 1, 24);
+          }
+        } else {
+          const u = smoothstep(0, 1, (t - 1.68) / (act.dur - 1.68));
+          tgtLift = lerp(7.5, 11.2, u); tgtYaw = lerp(Math.PI, 0, u);
+        }
+      }
+      if (act.t >= act.dur) { activeAction = null; syncUI(); }
+    }
+
+    const directMove = !!activeAction || baseMode === 'glide';
+    rig.x = directMove ? lerp(rig.x, tgtX, kFast) : lerp(rig.x, tgtX, kSlow);
+    rig.y = directMove ? lerp(rig.y, tgtY, kFast) : lerp(rig.y, tgtY, kSlow);
+    rig.lift = lerp(rig.lift, tgtLift, kFast);
+    if (activeAction && activeAction.id === 'whirlwind' && activeAction.t >= 0.22 && activeAction.t < 1.68) {
+      rig.yaw = tgtYaw;
+    } else {
+      const dYaw = (((tgtYaw - rig.yaw + Math.PI) % TAU) + TAU) % TAU - Math.PI;
+      rig.yaw += dYaw * kFast;
+    }
+    rig.headYaw = lerp(rig.headYaw, tgtHeadYaw, kFast);
+    rig.headScreech = tgtHeadScreech;
+    rig.earLYaw = lerp(rig.earLYaw, tgtEarL, kFast);
+    rig.earRYaw = lerp(rig.earRYaw, tgtEarR, kFast);
+    rig.wingPose = tgtWingPose;
+    rig.wingSweepL = lerp(rig.wingSweepL, tgtSweepL, kFast);
+    rig.wingSweepR = lerp(rig.wingSweepR, tgtSweepR, kFast);
+    rig.wingZOff = lerp(rig.wingZOff, tgtWingZ, kFast);
+    rig.clawFwd = lerp(rig.clawFwd, tgtClawFwd, kFast);
+    rig.glowBoost = glowBoost;
+  }
+
+  // 构建魔物蝙蝠骨骼部件列表（翼根枢轴严格锁死肩关节，0 脱节 0 挤捏缝！）
+  function buildBatPartList() {
+    const list = [];
+    const yw = rig.yaw;
+    const hYaw = yw + rig.headYaw;
+
+    // 1. 腹下双弯爪
+    const [clX, clY] = localToWorldXY(rig.x, rig.y, yw, 0, rig.clawFwd);
+    list.push({ id: 'claws', m: parts.claws, x: clX, y: clY, lift: 0, ro: yw, bias: -0.4 });
+
+    // 2. 毛绒圆躯
+    list.push({ id: 'torso', m: parts.torso, x: rig.x, y: rig.y, lift: 3.6, ro: yw, bias: 0.0 });
+
+    // 3. 独立蝙蝠头（常规/尖啸双态）
+    const [hdX, hdY] = localToWorldXY(rig.x, rig.y, yw, 0, 1.4);
+    const hId = rig.headScreech ? 'headScreech' : 'head';
+    list.push({ id: hId, m: parts[hId], x: hdX, y: hdY, lift: 10.6, ro: hYaw, bias: 0.35 });
+
+    // 4. 左右独立雷达大尖耳（耳根锁在头顶两侧 ±2.9, -0.5）
+    const [elX, elY] = localToWorldXY(hdX, hdY, hYaw, -2.9, -0.5);
+    const [erX, erY] = localToWorldXY(hdX, hdY, hYaw,  2.9, -0.5);
+    list.push({ id: 'earL', m: parts.earL, x: elX, y: elY, lift: 17.6, ro: hYaw + rig.earLYaw, bias: 0.25 });
+    list.push({ id: 'earR', m: parts.earR, x: erX, y: erY, lift: 17.6, ro: hYaw + rig.earRYaw, bias: 0.25 });
+
+    // 5. 左右宽锯齿膜翼（翼根局部坐标 (-s*WING_PIVOT_X, WING_PIVOT_Y) 严格锁死在肩关节 (±3.8, 0.2)！）
+    const wp = rig.wingPose;
+    for (const s of [-1, 1]) {
+      const [shX, shY] = localToWorldXY(rig.x, rig.y, yw, s * 3.8, 0.2);
+      const wYaw = yw + (s < 0 ? rig.wingSweepL : rig.wingSweepR);
+      // 反向抵消局部枢轴，保证任意挥拍角翼根都牢牢咬合躯干！
+      const [wx, wy] = localToWorldXY(shX, shY, wYaw, s * WING_PIVOT_X, -WING_PIVOT_Y);
+      const wid = (s < 0 ? 'wingL_' : 'wingR_') + wp;
+      list.push({ id: wid, m: parts[wid], x: wx, y: wy, lift: 4.8 + rig.wingZOff, ro: wYaw, bias: -0.1 });
+    }
+    return list;
+  }
+
+  // 局部 actorBuf(260×240) 深度拼合 + 1 次整体 1px 外轮廓
+  function composeBatActor(partList, c, s, outlineHex) {
+    arCtx.setTransform(1, 0, 0, 1, 0, 0);
+    arCtx.globalCompositeOperation = 'source-over';
+    arCtx.globalAlpha = 1; arCtx.imageSmoothingEnabled = false;
+    arCtx.clearRect(0, 0, ACTOR_W, ACTOR_H);
+
+    agCtx.setTransform(1, 0, 0, 1, 0, 0);
+    agCtx.globalCompositeOperation = 'source-over';
+    agCtx.globalAlpha = 1; agCtx.imageSmoothingEnabled = false;
+    agCtx.clearRect(0, 0, ACTOR_W, ACTOR_H);
+
+    let calls = 0, hasAnyGlow = false;
+    for (let i = 0; i < partList.length; i++) {
+      const p = partList[i];
+      const dxW = p.x - rig.x, dyW = p.y - rig.y;
+      const rx = c * dxW - s * dyW, ry = s * dxW + c * dyW;
+      p._lx = ACTOR_AX + rx * BAKE_SCALE;
+      p._ly = ACTOR_AY + ry * TILT * BAKE_SCALE - p.lift * BAKE_STEP;
+      p._depth = ry + p.lift * 0.08 + p.bias;
+    }
+    partList.sort((a, b) => a._depth - b._depth);
+
+    for (let i = 0; i < partList.length; i++) {
+      const p = partList[i];
+      const sp = getBakedSprite(p.m, p.id, p.ro + th, outlineHex, false, 360);
+      const dx = Math.round(p._lx - sp.anchorX);
+      const dy = Math.round(p._ly - sp.anchorY);
+      arCtx.drawImage(sp.main, dx, dy);
+      calls++;
+
+      if (hasAnyGlow) {
+        agCtx.globalCompositeOperation = 'destination-out';
+        agCtx.drawImage(sp.main, dx, dy);
+      }
+      if (sp.glow) {
+        hasAnyGlow = true;
+        agCtx.globalCompositeOperation = 'source-over';
+        agCtx.drawImage(sp.glow, dx, dy);
+        calls++;
+      }
+    }
+    agCtx.globalCompositeOperation = 'source-over';
+    if (!useOutline) return { main: actorRaw, glow: hasAnyGlow ? actorGlow : null, calls };
+
+    asCtx.setTransform(1, 0, 0, 1, 0, 0);
+    asCtx.globalCompositeOperation = 'source-over';
+    asCtx.clearRect(0, 0, ACTOR_W, ACTOR_H);
+    asCtx.drawImage(actorRaw, 0, 0);
+    asCtx.globalCompositeOperation = 'source-in';
+    asCtx.fillStyle = outlineHex;
+    asCtx.fillRect(0, 0, ACTOR_W, ACTOR_H);
+
+    aoCtx.setTransform(1, 0, 0, 1, 0, 0);
+    aoCtx.globalCompositeOperation = 'source-over';
+    aoCtx.imageSmoothingEnabled = false;
+    aoCtx.clearRect(0, 0, ACTOR_W, ACTOR_H);
+    aoCtx.drawImage(actorSil, -1, 0);
+    aoCtx.drawImage(actorSil,  1, 0);
+    aoCtx.drawImage(actorSil, 0, -1);
+    aoCtx.drawImage(actorSil, 0,  1);
+    aoCtx.drawImage(actorRaw, 0, 0);
+    return { main: actorOut, glow: hasAnyGlow ? actorGlow : null, calls: calls + 5 };
+  }
+
+  function updateVFX(dt) {
+    if (bannerTimer > 0) {
+      bannerTimer -= dt;
+      if (bannerTimer <= 0) document.getElementById('banner').classList.remove('show');
+    }
+    shakeMag = Math.max(0, shakeMag - dt * 15);
+    shakeX = shakeMag ? (Math.random() - 0.5) * shakeMag * SCALE * 0.6 : 0;
+    shakeY = shakeMag ? (Math.random() - 0.5) * shakeMag * SCALE * 0.6 : 0;
+    dummyHit = Math.max(0, dummyHit - dt * 2.6);
+    dummyVibr = Math.max(0, dummyVibr - dt * 1.4);
+    const fx = curSkin.fx;
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.t += dt;
+      if (p.t >= p.life) { particles.splice(i, 1); continue; }
+      p.vz -= p.gravity * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      if (p.z < 0.5) { p.z = 0.5; p.vz = Math.abs(p.vz) * 0.38; p.vx *= 0.72; p.vy *= 0.72; }
+    }
+    for (let i = sonicWaves.length - 1; i >= 0; i--) {
+      const w = sonicWaves[i];
+      w.t += dt;
+      w.y = lerp(9, DUMMY_POS.y + 10, clamp(w.t / w.dur, 0, 1));
+      if (!w.hitDone && w.y >= DUMMY_POS.y - 3) { w.hitDone = true; hitDummy(0.85, 0.85); }
+      if (w.t >= w.dur) sonicWaves.splice(i, 1);
+    }
+    for (let i = slashMarks.length - 1; i >= 0; i--) {
+      slashMarks[i].t += dt;
+      if (slashMarks[i].t >= slashMarks[i].dur) slashMarks.splice(i, 1);
+    }
+    for (let i = groundRipples.length - 1; i >= 0; i--) {
+      groundRipples[i].t += dt;
+      if (groundRipples[i].t >= groundRipples[i].dur) groundRipples.splice(i, 1);
+    }
+    for (let i = vortexRings.length - 1; i >= 0; i--) {
+      vortexRings[i].t += dt;
+      if (vortexRings[i].t >= vortexRings[i].dur) vortexRings.splice(i, 1);
+    }
+    for (let i = miniBats.length - 1; i >= 0; i--) {
+      const mb = miniBats[i];
+      mb.t += dt;
+      const t1 = mb.orbitDur, t2 = t1 + mb.swoopDur, t3 = t2 + mb.scatterDur;
+      if (mb.t >= t3) { miniBats.splice(i, 1); continue; }
+      const px = mb.x, py = mb.y;
+      if (mb.t < t1) {
+        const u = mb.t / t1, ang = mb.baseAng + u * 3.8, rad = lerp(6, 18, smoothstep(0, 1, u));
+        mb.x = Math.cos(ang) * rad; mb.y = Math.sin(ang) * rad; mb.z = 14 + Math.sin(u * Math.PI * 2 + mb.k) * 4 + u * 4;
+      } else if (mb.t < t2) {
+        const u = (mb.t - t1) / mb.swoopDur;
+        if (!mb.sx) { mb.sx = mb.x; mb.sy = mb.y; mb.sz = mb.z; }
+        const spiral = Math.sin(u * Math.PI) * (mb.k % 2 === 0 ? 11 : -11);
+        mb.x = lerp(mb.sx, DUMMY_POS.x + (mb.k - 2) * 2.2, u) + spiral;
+        mb.y = lerp(mb.sy, DUMMY_POS.y - 2, u * u);
+        mb.z = lerp(mb.sz, 16 + (mb.k - 2) * 2.0, u);
+        if (Math.random() < 0.55) spawnParticle(mb.x, mb.y, mb.z, 0, -6, 2, 0.22, 1.5, fx.sonicMid, true, 0);
+      } else {
+        if (!mb.hitDone) { mb.hitDone = true; hitDummy(0.75, 0.25); shakeMag = Math.max(shakeMag, 2.2); }
+        mb.x += mb.escVx * dt; mb.y += mb.escVy * dt; mb.z += mb.escVz * dt;
+      }
+      const dx = mb.x - px, dy = mb.y - py;
+      if (dx * dx + dy * dy > 0.001) mb.ro = Math.atan2(-dx, dy);
+    }
+  }
+
+  function drawStackRealtime(asset, x, y, zLift, ro, sc) {
+    const [X, Y] = proj(x, y, zLift, sc);
+    const a = ro + th, c = Math.cos(a), s = Math.sin(a);
+    const X0 = Math.round(X), Y0 = Math.round(Y);
+    const isRetro = MODES[modeIdx] === 'retro';
+    const step = isRetro ? HS : Math.max(1, Math.round(HS * sc));
+    const halfStep = (!isRetro && step > Math.floor(TILT * sc)) ? Math.max(1, Math.round(step * 0.5)) : 0;
+    const { w, d, activeLayers, glowLayers, glowSlot, glowStrip, strip } = asset;
+    const hasGlow = !!glowStrip && glowLayers.length > 0;
+    const minGlowZ = hasGlow ? glowLayers[0] : 9999;
+    const eScaleX = EW / CW, eScaleY = EH / CH;
+    let calls = 0;
+
+    for (let li = 0; li < activeLayers.length; li++) {
+      const z = activeLayers[li];
+      const yy = isRetro ? (Y0 - z * HS) : (Y0 - z * step);
+      const sx = z * w;
+      if (halfStep) {
+        mctx.setTransform(c * sc, TILT * s * sc, -s * sc, TILT * c * sc, X0, yy + halfStep);
+        mctx.drawImage(strip, sx, 0, w, d, -w / 2, -d / 2, w, d);
+        calls++;
+      }
+      mctx.setTransform(c * sc, TILT * s * sc, -s * sc, TILT * c * sc, X0, yy);
+      mctx.drawImage(strip, sx, 0, w, d, -w / 2, -d / 2, w, d);
+      calls++;
+      if (!hasGlow || z >= minGlowZ) {
+        ectx.globalCompositeOperation = 'destination-out';
+        ectx.setTransform(c * sc * eScaleX, TILT * s * sc * eScaleY, -s * sc * eScaleX, TILT * c * sc * eScaleY, X0 * eScaleX, yy * eScaleY);
+        ectx.drawImage(strip, sx, 0, w, d, -w / 2, -d / 2, w, d);
+      }
+      if (hasGlow && glowSlot[z] >= 0) {
+        ectx.globalCompositeOperation = 'source-over';
+        ectx.drawImage(glowStrip, glowSlot[z] * w, 0, w, d, -w / 2, -d / 2, w, d);
+        calls++;
+      }
+    }
+    ectx.globalCompositeOperation = 'source-over';
+    return calls;
+  }
+
+  // 6. 主循环
+  let last = 0, fpsAcc = 0, fpsFrames = 0, fpsVal = 60, statTimer = 0, cpuMsSmooth = 1.0;
+
+  function tick(ms) {
+    const tCpu0 = performance.now();
+    const t = ms / 1000, dt = Math.min(0.05, t - (last || t)); last = t;
+    animTime += dt;
+    fpsAcc += dt; fpsFrames++;
+    if (fpsAcc >= 0.4) { fpsVal = Math.round(fpsFrames / fpsAcc); fpsAcc = 0; fpsFrames = 0; }
+
+    if (autoSpin && !drag) thTarget += dt * 0.55;
+    if (!drag) th += (thTarget - th) * Math.min(1, dt * 8);
+
+    updateBatRig(dt);
+    updateVFX(dt);
+
+    const mode = MODES[modeIdx];
+    const sc = mode === 'retro' ? 1 : SCALE;
+    const c = Math.cos(th), s = Math.sin(th);
+    const eScale = EW / cv.width;
+    const fx = curSkin.fx;
+    let drawCalls = 0;
+
+    const batParts = buildBatPartList();
+    const dummyShakeX = (dummyHit > 0 ? Math.sin(animTime * 52) * dummyHit * 2.0 : 0) +
+                        (dummyVibr > 0 ? Math.sin(animTime * 95) * dummyVibr * 1.6 : 0);
+    const dummyShakeY = (dummyHit > 0 ? Math.cos(animTime * 46) * dummyHit * 1.3 : 0) +
+                        (dummyVibr > 0 ? Math.cos(animTime * 88) * dummyVibr * 1.1 : 0);
+    const dummyObj = { id: 'dummy', m: dummyAsset, x: DUMMY_POS.x + dummyShakeX, y: DUMMY_POS.y + dummyShakeY, lift: 0, ro: 0 };
+
+    // 1. 2× 洞窟青石板圆台缓冲 gbuf（高空高度感由显著缩放淡化的双层暗斑精确表达！）
+    const bSize = platform.size, halfB = bSize * 0.5;
+    gbctx.setTransform(GROUND_SUPERSAMPLE, 0, 0, GROUND_SUPERSAMPLE, 0, 0);
+    gbctx.globalCompositeOperation = 'source-over';
+    gbctx.imageSmoothingEnabled = false;
+    gbctx.clearRect(0, 0, bSize, bSize);
+    gbctx.drawImage(platform.base, 0, 0);
+
+    gbctx.save();
+    gbctx.translate(halfB, halfB);
+    gbctx.beginPath();
+    gbctx.arc(0, 0, platform.rInner, 0, TAU);
+    gbctx.clip();
+
+    for (const rp of groundRipples) {
+      const u = clamp(rp.t / rp.dur, 0, 1);
+      const rad = lerp(rp.r0, rp.r1, smoothstep(0, 1, u));
+      gbctx.strokeStyle = `rgba(${fx.groundRippleRGB}, ${(1 - u) * 0.72})`;
+      gbctx.lineWidth = Math.max(1.2, (1 - u) * 3.0);
+      gbctx.beginPath(); gbctx.arc(rp.x, rp.y, rad, 0, TAU); gbctx.stroke();
+    }
+
+    // 主蝙蝠高度联动双层地面投影（飞高时显著缩小偏淡，滑翔高度一眼可读！）
+    const batLf = clamp(1 - rig.lift / 42, 0.16, 1.0);
+    gbctx.save();
+    gbctx.translate(rig.x + 2.0 + rig.lift * 0.18, rig.y - 2.0 - rig.lift * 0.18);
+    gbctx.rotate(rig.yaw);
+    gbctx.fillStyle = `rgba(6, 7, 14, ${0.38 * batLf})`;
+    gbctx.beginPath();
+    gbctx.ellipse(0, 0, 14.5 * (0.48 + 0.52 * batLf), 7.2 * (0.48 + 0.52 * batLf), 0, 0, TAU);
+    gbctx.fill();
+    gbctx.fillStyle = `rgba(6, 7, 14, ${0.45 * batLf})`;
+    gbctx.beginPath(); gbctx.arc(0, 0, 6.2 * (0.48 + 0.52 * batLf), 0, TAU); gbctx.fill();
+    gbctx.restore();
+
+    for (const mb of miniBats) {
+      const mlf = clamp(1 - mb.z / 44, 0.15, 0.8);
+      gbctx.fillStyle = `rgba(6, 7, 14, ${0.34 * mlf})`;
+      gbctx.beginPath(); gbctx.arc(mb.x + mb.z * 0.14, mb.y - mb.z * 0.14, 4.2 * mlf, 0, TAU); gbctx.fill();
+    }
+
+    gbctx.save();
+    gbctx.translate(dummyObj.x, dummyObj.y);
+    gbctx.save(); gbctx.globalAlpha = 0.36; gbctx.translate(2.0, -2.0);
+    gbctx.drawImage(dummyAsset.footShadow, -dummyAsset.w / 2, -dummyAsset.d / 2);
+    gbctx.restore();
+    gbctx.fillStyle = 'rgba(6, 7, 14, 0.52)';
+    gbctx.beginPath(); gbctx.arc(0, 0, dummyAsset.meta.footRadius, 0, TAU); gbctx.fill();
+    gbctx.restore();
+    gbctx.restore();
+
+    // 2. 清理 1/4 亮核缓冲，贴天空 + 洞窟青石板
+    ectx.setTransform(1, 0, 0, 1, 0, 0);
+    ectx.globalCompositeOperation = 'source-over';
+    ectx.imageSmoothingEnabled = false;
+    ectx.clearRect(0, 0, EW, EH);
+
+    dctx.setTransform(1, 0, 0, 1, 0, 0);
+    dctx.globalCompositeOperation = 'source-over';
+    dctx.imageSmoothingEnabled = false;
+    dctx.drawImage(bgc, 0, 0);
+    drawCalls++;
+
+    dctx.setTransform(c * SCALE, TILT * s * SCALE, -s * SCALE, TILT * c * SCALE,
+      cv.width / 2 + shakeX, cv.height / 2 + 20 * SCALE + shakeY);
+    dctx.drawImage(gbuf, -halfB, -halfB, bSize, bSize);
+    dctx.setTransform(1, 0, 0, 1, 0, 0);
+    drawCalls++;
+
+    // 3. 绘制整体骨骼蝙蝠 + 小蝠群 + 训练靶桩
+    if (mode === 'cached') {
+      const dispRatio = SCALE / BAKE_SCALE;
+      const composed = composeBatActor(batParts, c, s, curSkin.outline);
+      drawCalls += composed.calls;
+
+      const drawList = [
+        { kind: 'bat', ry: proj(rig.x, rig.y, 0, SCALE)[2] },
+        { kind: 'dummy', ry: proj(dummyObj.x, dummyObj.y, 0, SCALE)[2] }
+      ];
+      for (let i = 0; i < miniBats.length; i++) {
+        const mb = miniBats[i];
+        drawList.push({ kind: 'mini', mb, mf: Math.floor(animTime * 16 + mb.k) & 1, ry: proj(mb.x, mb.y, 0, SCALE)[2] });
+      }
+      drawList.sort((a, b) => a.ry - b.ry);
+
+      ectx.setTransform(1, 0, 0, 1, 0, 0);
+      for (const it of drawList) {
+        if (it.kind === 'bat') {
+          const [sx, sy] = proj(rig.x, rig.y, rig.lift, SCALE);
+          const dw = Math.round(ACTOR_W * dispRatio), dh = Math.round(ACTOR_H * dispRatio);
+          const dx = Math.round(sx - ACTOR_AX * dispRatio), dy = Math.round(sy - ACTOR_AY * dispRatio);
+          dctx.drawImage(composed.main, dx, dy, dw, dh);
+          drawCalls++;
+          ectx.globalCompositeOperation = 'destination-out';
+          ectx.drawImage(composed.main, dx * eScale, dy * eScale, dw * eScale, dh * eScale);
+          if (composed.glow) {
+            ectx.globalCompositeOperation = 'source-over';
+            ectx.drawImage(composed.glow, dx * eScale, dy * eScale, dw * eScale, dh * eScale);
+            drawCalls++;
+          }
+        } else if (it.kind === 'dummy') {
+          const [dxP, dyP] = proj(dummyObj.x, dummyObj.y, 0, SCALE);
+          const sp = getBakedSprite(dummyAsset, 'dummy', th, curSkin.outline, useOutline, 360);
+          const dw = Math.round(sp.bw * dispRatio), dh = Math.round(sp.bh * dispRatio);
+          const dx = Math.round(dxP - sp.anchorX * dispRatio), dy = Math.round(dyP - sp.anchorY * dispRatio);
+          dctx.drawImage(sp.main, dx, dy, dw, dh);
+          drawCalls++;
+          ectx.globalCompositeOperation = 'destination-out';
+          ectx.drawImage(sp.main, dx * eScale, dy * eScale, dw * eScale, dh * eScale);
+        } else {
+          const mb = it.mb;
+          const [mx, my] = proj(mb.x, mb.y, mb.z, SCALE);
+          const sp = getBakedSprite(miniBatFrames[it.mf], 'mini_' + it.mf, mb.ro + th, curSkin.outline, useOutline, 360);
+          const dw = Math.round(sp.bw * dispRatio), dh = Math.round(sp.bh * dispRatio);
+          const dx = Math.round(mx - sp.anchorX * dispRatio), dy = Math.round(my - sp.anchorY * dispRatio);
+          dctx.drawImage(sp.main, dx, dy, dw, dh);
+          drawCalls++;
+          if (sp.glow) {
+            ectx.globalCompositeOperation = 'source-over';
+            ectx.drawImage(sp.glow, dx * eScale, dy * eScale, dw * eScale, dh * eScale);
+            drawCalls++;
+          }
+        }
+      }
+      ectx.globalCompositeOperation = 'source-over';
+    } else {
+      mctx.setTransform(1, 0, 0, 1, 0, 0);
+      mctx.globalCompositeOperation = 'source-over';
+      mctx.imageSmoothingEnabled = false;
+      mctx.clearRect(0, 0, CW, CH);
+
+      const allObjs = [
+        ...batParts.map(p => ({ ...p, lift: rig.lift + p.lift })),
+        dummyObj,
+        ...miniBats.map(mb => ({ m: miniBatFrames[Math.floor(animTime * 16 + mb.k) & 1], x: mb.x, y: mb.y, lift: mb.z, ro: mb.ro, bias: 0 }))
+      ];
+      for (const o of allObjs) o._depth = proj(o.x, o.y, o.lift, sc)[2] + o.lift * 0.08 + (o.bias || 0);
+      allObjs.sort((a, b) => a._depth - b._depth);
+      for (const o of allObjs) drawCalls += drawStackRealtime(o.m, o.x, o.y, o.lift, o.ro, sc);
+
+      const drawW = mode === 'retro' ? CW * SCALE : CW;
+      const drawH = mode === 'retro' ? CH * SCALE : CH;
+      if (useOutline) {
+        octx.setTransform(1, 0, 0, 1, 0, 0);
+        octx.globalCompositeOperation = 'source-over';
+        octx.clearRect(0, 0, CW, CH);
+        octx.drawImage(mc, 0, 0);
+        octx.globalCompositeOperation = 'source-in';
+        octx.fillStyle = curSkin.outline;
+        octx.fillRect(0, 0, CW, CH);
+        octx.globalCompositeOperation = 'source-over';
+        const op = mode === 'retro' ? SCALE : Math.max(1, Math.round(SCALE * 0.30));
+        for (const [ox, oy] of [[-op, 0], [op, 0], [0, -op], [0, op]]) dctx.drawImage(oc, ox, oy, drawW, drawH);
+      }
+      dctx.drawImage(mc, 0, 0, drawW, drawH);
+    }
+
+    // 4. 3D 像素技能特效
+    const pSc = mode === 'retro' ? 1 : SCALE;
+    const toMain = mode === 'retro' ? SCALE : 1;
+    const toE = toMain * eScale;
+
+    function drawVoxelBlock(wx, wy, wz, szVox, color, isGlow) {
+      const [px, py] = proj(wx, wy, wz, pSc);
+      const sx = Math.round(px * toMain), sy = Math.round(py * toMain);
+      const sPx = Math.max(2, Math.round(szVox * SCALE));
+      dctx.fillStyle = color;
+      dctx.fillRect(sx - (sPx >> 1), sy - (sPx >> 1), sPx, sPx);
+      if (isGlow) {
+        const es = Math.max(1, Math.round(sPx * eScale));
+        ectx.fillStyle = color;
+        ectx.fillRect(Math.round(px * toE) - (es >> 1), Math.round(py * toE) - (es >> 1), es, es);
+      }
+    }
+
+    for (const w of sonicWaves) {
+      const u = clamp(w.t / w.dur, 0, 1);
+      const baseR = lerp(w.r0, w.r1, smoothstep(0, 1, u));
+      const bSz = Math.max(1.2, (1 - u * 0.45) * 2.1);
+      for (let i = 0; i < 28; i++) {
+        const a = (i / 28) * TAU, rad = baseR * ((i & 1) ? 1.18 : 0.84);
+        const wx = Math.cos(a) * rad, wz = w.z + Math.sin(a) * rad * 0.85;
+        drawVoxelBlock(wx, w.y, wz, bSz, (i & 1) ? fx.sonicCore : fx.sonicMid, true);
+        if (i % 2 === 0) drawVoxelBlock(wx * 1.12, w.y - 1.5, wz, bSz * 0.85, fx.sonicOuter, true);
+      }
+    }
+    for (const sl of slashMarks) {
+      const u = clamp(sl.t / sl.dur, 0, 1), reveal = clamp(u * 4.5, 0, 1), fade = clamp((1 - u) * 1.8, 0, 1);
+      for (let line = -1; line <= 1; line++) {
+        const steps = Math.floor(14 * reveal);
+        for (let k = 0; k <= steps; k++) {
+          const v = k / 14, taper = Math.sin(v * Math.PI);
+          const wx = sl.x + lerp(-7.5, 7.5, v) + line * 2.6, wz = sl.z + lerp(6.5, -6.5, v) + line * 1.8;
+          const sz = Math.max(1.1, (1.4 + taper * 1.4) * fade);
+          drawVoxelBlock(wx, sl.y, wz, sz * 1.25, fx.slashOuter, true);
+          drawVoxelBlock(wx, sl.y - 0.5, wz + 0.3, sz * 0.72, fx.slashCore, true);
+        }
+      }
+    }
+    for (const vr of vortexRings) {
+      const u = clamp(vr.t / vr.dur, 0, 1), rad = lerp(vr.r0, vr.r1, smoothstep(0, 1, u)), vz = lerp(2.5, 30.0, u);
+      const bSz = Math.max(1.2, (1 - u * 0.5) * 2.1);
+      for (let i = 0; i < 18; i++) {
+        if ((i % 6) === 5) continue;
+        const a = (i / 18) * TAU + vr.rotOff + u * 5.2;
+        drawVoxelBlock(Math.cos(a) * rad, Math.sin(a) * rad, vz + Math.sin(a * 2) * 1.2, bSz, (i % 3 === 0) ? fx.windCore : fx.windOuter, true);
+      }
+    }
+    for (const p of particles) {
+      const u = p.t / p.life;
+      drawVoxelBlock(p.x, p.y, p.z, p.sz * (1 - u * 0.62), p.color, p.glow);
+    }
+    for (const mt of ambientMotes) {
+      const mz = ((mt.z + animTime * mt.sp) % 42) + 2;
+      const mx = mt.x + Math.sin(animTime * 1.4 + mt.ph) * 4.5;
+      const my = mt.y + Math.cos(animTime * 1.2 + mt.ph) * 4.5;
+      drawVoxelBlock(mx, my, mz, 1.0, fx.windCore, true);
+    }
+
+    // 5. 真 1/4 降采样离屏模糊
+    ebctx.setTransform(1, 0, 0, 1, 0, 0);
+    ebctx.clearRect(0, 0, EW, EH);
+    ebctx.filter = `blur(${Math.max(1, Math.round(SCALE * 0.15))}px)`;
+    ebctx.drawImage(ec, 0, 0);
+    ebctx.filter = 'none';
+
+    dctx.globalCompositeOperation = 'screen';
+    dctx.imageSmoothingEnabled = true;
+    dctx.globalAlpha = clamp(0.72 * rig.glowBoost, 0, 1);
+    dctx.drawImage(eb, 0, 0, cv.width, cv.height);
+    dctx.globalAlpha = clamp(0.55 * rig.glowBoost, 0, 1);
+    dctx.imageSmoothingEnabled = false;
+    dctx.drawImage(ec, 0, 0, cv.width, cv.height);
+    dctx.globalAlpha = 1;
+    dctx.globalCompositeOperation = 'source-over';
+    drawCalls += 2;
+
+    const cpuMs = performance.now() - tCpu0;
+    cpuMsSmooth = cpuMsSmooth * 0.88 + cpuMs * 0.12;
+
+    statTimer += dt;
+    if (statTimer >= 0.25) {
+      statTimer = 0;
+      const hitRate = (cacheHits + cacheMisses) ? Math.round(cacheHits * 100 / (cacheHits + cacheMisses)) : 100;
+      $('stats').innerHTML =
+        `<span>建模 <b>${buildMs}ms</b></span>` +
+        (skinMs > 0 ? `<span>换色 <b>${skinMs}ms</b></span>` : '') +
+        `<span>帧率 <b>${fpsVal}fps</b></span>` +
+        `<span>单帧 <b>${cpuMsSmooth.toFixed(1)}ms</b></span>` +
+        `<span>绘制 <b>${drawCalls}次</b></span>` +
+        `<span>色表 <b>${PAL_KEYS.length}色</b></span>` +
+        (mode === 'cached' ? `<span>缓存 <b>${spriteCache.size}</b> (${hitRate}%)</span>` : '');
+    }
+
+    requestAnimationFrame(tick);
+  }
+
+  // 7. HUD 绑定与交互
+  const $ = id => document.getElementById(id);
+
+  function buildBars() {
+    const sb = $('skinBar');
+    sb.innerHTML = '';
+    SKINS.forEach((sk, idx) => {
+      const btn = document.createElement('button');
+      btn.innerHTML = `<span class="swatch" style="background:${sk.dot}"></span>${sk.name}`;
+      btn.onclick = () => applySkin(idx, true);
+      sb.appendChild(btn);
+    });
+    const kb = $('skillBar');
+    kb.innerHTML = '';
+    SKILLS.forEach((sk, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'skill-btn';
+      btn.textContent = `${idx + 1}. ${sk.name}`;
+      btn.onclick = () => startSkill(idx);
+      kb.appendChild(btn);
+    });
+  }
+
+  function syncUI() {
+    $('skinBadge').textContent = curSkin.tag;
+    $('skinBar').querySelectorAll('button').forEach((b, i) => b.classList.toggle('on', i === skinIdx));
+    $('skillBar').querySelectorAll('button').forEach((b, i) => {
+      b.classList.toggle('active', !!(activeAction && activeAction.id === SKILLS[i].id));
+    });
+    $('btnHover').classList.toggle('on', !activeAction && baseMode === 'hover');
+    $('btnGlide').classList.toggle('on', !activeAction && baseMode === 'glide');
+    $('btnSpin').classList.toggle('on', autoSpin);
+    $('btnOutline').classList.toggle('on', useOutline);
+    $('btnMode').textContent = '模式：' + MODE_LABEL[MODES[modeIdx]];
+    $('btnMode').classList.toggle('on', MODES[modeIdx] === 'cached');
+  }
+
+  $('btnHover').onclick = () => { activeAction = null; baseMode = 'hover'; syncUI(); showBanner('洞窟生态 · 低空扑翼悬停', 1.1); };
+  $('btnGlide').onclick = () => { activeAction = null; baseMode = 'glide'; syncUI(); showBanner('洞窟生态 · 拍翼滑翔巡航', 1.2); };
+  $('btnSpin').onclick = () => { autoSpin = !autoSpin; syncUI(); };
+  $('btnOutline').onclick = () => { useOutline = !useOutline; syncUI(); };
+  $('btnMode').onclick = () => { modeIdx = (modeIdx + 1) % MODES.length; fit(); syncUI(); };
+  $('btnReset').onclick = () => {
+    thTarget = 0.56;
+    th = thTarget + (((th - thTarget + Math.PI) % TAU + TAU) % TAU - Math.PI);
+    zoom = 0; autoSpin = false; baseMode = 'hover'; activeAction = null; fit(); syncUI();
+  };
+  $('btnExport').onclick = () => {
+    const asset = parts.head;
+    const a = document.createElement('a');
+    a.download = `bat_${curSkin.id}_head_${asset.w}x${asset.d}x${asset.h}.png`;
+    a.href = asset.strip.toDataURL('image/png');
+    a.click();
+  };
+
+  cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, th }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', e => { if (drag) { th = thTarget = drag.th + (e.clientX - drag.x) * 0.01; } });
+  cv.addEventListener('pointerup', () => { drag = null; });
+  cv.addEventListener('wheel', e => {
+    zoom = clamp(zoom + (e.deltaY > 0 ? -1 : 1), -2, 5);
+    fit(); e.preventDefault();
+  }, { passive: false });
+  window.addEventListener('keydown', e => {
+    if (e.key === 'q' || e.key === 'Q') thTarget -= Math.PI / 4;
+    if (e.key === 'e' || e.key === 'E') thTarget += Math.PI / 4;
+    if (e.key === 'c' || e.key === 'C') applySkin(skinIdx + 1, true);
+    if (e.key === 's' || e.key === 'S') {
+      activeAction = null;
+      baseMode = baseMode === 'glide' ? 'hover' : 'glide';
+      syncUI();
+      showBanner(baseMode === 'glide' ? '洞窟生态 · 拍翼滑翔巡航' : '洞窟生态 · 低空扑翼悬停', 1.2);
+    }
+    if (e.key >= '1' && e.key <= '4') startSkill(Number(e.key) - 1);
+  });
+  window.addEventListener('resize', fit);
+
+  window.__BAT_DEBUG__ = {
+    getStats: () => ({
+      buildMs: Number(buildMs),
+      skinMs, skin: curSkin.id, baseMode,
+      fps: fpsVal, cpuMs: Number(cpuMsSmooth.toFixed(2)),
+      cacheSize: spriteCache.size, cacheHits, cacheMisses,
+      th, zoom, mode: MODES[modeIdx], paletteCount: PAL_KEYS.length,
+      activeAction: activeAction ? activeAction.id : null
+    }),
+    setAngle: a => { th = thTarget = a; },
+    setSkin: idOrIdx => {
+      const idx = typeof idOrIdx === 'number' ? idOrIdx : SKINS.findIndex(s => s.id === idOrIdx);
+      if (idx >= 0) applySkin(idx, false);
+    },
+    setBaseMode: m => { activeAction = null; baseMode = m; syncUI(); },
+    cycleSkin: () => applySkin(skinIdx + 1, true),
+    getSkin: () => curSkin.id,
+    triggerSkill: i => startSkill(i),
+    setAutoSpin: v => { autoSpin = v; syncUI(); },
+    setZoom: z => { zoom = clamp(z, -2, 5); fit(); }
+  };
+
+  buildBars(); fit(); syncUI(); requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
