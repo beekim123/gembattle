@@ -119,6 +119,7 @@ export const ACTIONS = Object.freeze({
   CHANGE_SHIELD_COLOR: 'change_shield_color',
   HEAL_MONSTER: 'heal_monster',
   ADD_GEM_EXP: 'add_gem_exp',
+  WHITE_ROUND: 'white_round',
 });
 
 export const ACTION_LIST = Object.freeze(Object.values(ACTIONS));
@@ -320,6 +321,20 @@ export const DEFAULT_ACTION_TABLE = Object.freeze({
     allowedSources: ALL_PLAYER_SOURCES,
     defaultDuration: ACTION_DURATIONS.INSTANT,
     allowedDurations: Object.freeze([ACTION_DURATIONS.INSTANT]),
+    retrigger: makeRetrigger(RETRIGGER_POLICIES.NO_RETRIGGER),
+  }),
+
+  [ACTIONS.WHITE_ROUND]: Object.freeze({
+    id: ACTIONS.WHITE_ROUND,
+    label: '打一轮白',
+    description: '对目标打一轮白色伤害：红、绿、蓝各打「当时的倍率」那么多发，不削盾（阶段 1 加成「破盾时全体吃一轮白」用）',
+    params: Object.freeze({
+      target: Object.freeze({ type: 'string', required: false, description: 'all（默认）或 selected' }),
+    }),
+    allowedSources: ALL_PLAYER_SOURCES,
+    defaultDuration: ACTION_DURATIONS.INSTANT,
+    allowedDurations: Object.freeze([ACTION_DURATIONS.INSTANT]),
+    // 5.9：加成多打的发不再触发「打中一发时」「破盾时」，也不削盾
     retrigger: makeRetrigger(RETRIGGER_POLICIES.NO_RETRIGGER),
   }),
 

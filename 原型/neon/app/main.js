@@ -7,6 +7,7 @@ import { createGameLoop } from './loop.js';
 import { createSceneManager } from './scene-manager.js';
 import { createTrySetupScene } from './scenes/try-setup.js';
 import { createBattleScene } from './scenes/battle-scene.js';
+import { DEFAULT_ALLY_IDS, DEFAULT_BUFF_IDS } from '../modules/content/index.js';
 
 const LOGICAL_WIDTH = 960;
 const LOGICAL_HEIGHT = 540;
@@ -38,6 +39,9 @@ if (directEncounter) {
       ? []
       : ['fn_draw_2', 'fn_hit_percent_50', 'fn_shred_shield_2', 'fn_block_next'],
     stressMode: params.get('stress') === '1',
+    // 默认带上 4 个加成、2 个队友（跟试打台一样）；?bare=1 什么都不带
+    buffs: params.get('bare') === '1' ? [] : [...DEFAULT_BUFF_IDS],
+    allies: params.get('bare') === '1' ? [] : [...DEFAULT_ALLY_IDS],
   });
 } else {
   sceneManager.switchTo('home');

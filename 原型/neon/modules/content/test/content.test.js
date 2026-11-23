@@ -6,8 +6,10 @@ import {
   validateBattleStartPacket,
 } from '../../shared/index.js';
 import {
+  ALLY_LIST,
   ALL_CARD_DEFS,
   ALL_ENCOUNTERS,
+  BUFF_LIST,
   DECK_LOADOUTS,
   FUNCTION_CARD_LIST,
   STAGE1_CORE_ENCOUNTERS,
@@ -48,4 +50,25 @@ test('牌的名字里不写换行符：排版交给画面按宽度换行', () =>
   for (const def of Object.values(ALL_CARD_DEFS)) {
     assert.doesNotMatch(def.label, /\n/, `${def.defId} 的名字里有换行符`);
   }
+});
+
+test('4 个加成、2 个队友带进开战包：契约校验通过，辅助塞的 3 张牌进了牌组', () => {
+  assert.equal(BUFF_LIST.length, 4);
+  assert.equal(ALLY_LIST.length, 2);
+  const plain = createBattlePacket({ encounterId: 'dual_shield', seed: 't' });
+  const packet = createBattlePacket({
+    encounterId: 'dual_shield',
+    seed: 't',
+    buffs: BUFF_LIST.map((b) => b.id),
+    allies: ALLY_LIST.map((a) => a.id),
+  });
+  const res = validateBattleStartPacket(packet);
+  assert.equal(res.ok, true, res.errors.join('\n'));
+  assert.equal(packet.player.buffs.length, 4);
+  assert.equal(packet.player.allies.length, 2);
+  assert.equal(packet.player.deck.length, plain.player.deck.length + 3);
+  // 改开战包里的不会改到原始数据
+  packet.player.buffs[0].effects[0].params.target = 'x';
+  assert.notEqual(BUFF_LIST[0].effects[0].params.target, 'x');
+  assert.throws(() => createBattlePacket({ encounterId: 'dual_shield', buffs: ['nope'] }), /未知的加成/);
 });

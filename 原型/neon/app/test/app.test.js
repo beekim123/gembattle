@@ -12,6 +12,12 @@ function makeFakeRenderer() {
   const ctx = {
     globalAlpha: 1,
     setTransform() {},
+    translate() {},
+    rotate() {},
+    scale() {},
+    clip() {},
+    setLineDash() {},
+    clearRect() {},
     save() {},
     restore() {},
     fillRect() {},
@@ -103,14 +109,28 @@ test('试打大厅点「开始试打」能切进实战场景并打出一回合',
   const battle = battleScene.getBattle();
   assert.ok(battle);
 
-  // 点击「自动帮排」（x: 682..856, y: 290..324）再点「打出」（x: 682..938, y: 238..282）
-  sm.dispatchPointer({ type: 'down', x: 750, y: 306 });
-  sm.dispatchPointer({ type: 'up', x: 750, y: 306 });
-  assert.ok(battle.getSnapshot().chain.length > 0);
+  // 带上了默认的 4 个加成、2 个队友
+  assert.equal(battle.getSnapshot().player.buffs.length, 4);
+  assert.equal(battle.getSnapshot().player.allies.length, 2);
 
-  sm.dispatchPointer({ type: 'down', x: 780, y: 260 });
-  sm.dispatchPointer({ type: 'up', x: 780, y: 260 });
-  sm.update(0.05);
+  // 把第一张排链牌拖进链（出牌只认拖拽）
+  sm.render(renderer);
+  const view = battleScene.getView();
+  const snap0 = battle.getSnapshot();
+  const card = snap0.hand.find((c) => c.usage === 'chain' && !c.hidden);
+  const box = view.getLayoutBoxes().hand.find((h) => h.uid === card.uid);
+  sm.dispatchPointer({ type: 'down', x: box.cx, y: box.cy });
+  sm.dispatchPointer({ type: 'move', x: box.cx, y: box.cy - 80 });
+  sm.dispatchPointer({ type: 'move', x: 480, y: 280 });
+  sm.dispatchPointer({ type: 'up', x: 480, y: 280 });
+  assert.equal(battle.getSnapshot().chain.length, 1);
+
+  // 点圆按钮打出，播完进第 2 回合
+  const cast = view.getLayoutBoxes().buttons.find((b) => b.id === 'cast');
+  sm.dispatchPointer({ type: 'down', x: cast.x + cast.w / 2, y: cast.y + cast.h / 2 });
+  sm.dispatchPointer({ type: 'up', x: cast.x + cast.w / 2, y: cast.y + cast.h / 2 });
+  for (let i = 0; i < 400 && view.isBusy(); i++) sm.update(0.05);
+  assert.equal(view.isBusy(), false);
 
   texts.length = 0;
   sm.render(renderer);

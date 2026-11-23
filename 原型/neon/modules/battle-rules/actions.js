@@ -12,6 +12,7 @@ import { pickColorsToRecord } from './chain-math.js';
 
 function resolveTargets(ctx, targetMode, selfMonster) {
   if (targetMode === 'self' && selfMonster) return [selfMonster];
+  if (targetMode === 'event_monster') return selfMonster && selfMonster.alive ? [selfMonster] : []; // 触发这件事的那只（比如被破盾的）
   if (targetMode === 'all') return ctx.getAliveMonsters();
   const selected = ctx.getSelectedMonster();
   return selected ? [selected] : [];
@@ -98,12 +99,13 @@ export const ACTION_HANDLERS = Object.freeze({
   },
 
   [ACTIONS.DEAL_BONUS_DAMAGE](ctx, params, meta) {
-    const targets = resolveTargets(ctx, params.target || 'selected', null);
+    const targets = resolveTargets(ctx, params.target || 'selected', meta.monster || null);
     for (const mon of targets) {
       ctx.dealBonusDamage(mon, {
         amount: Number(params.amount) || 0,
         scale: params.scale || 'fixed',
         ignoreTraits: Boolean(params.ignoreTraits),
+        canCrit: Boolean(params.canCrit),
         sourceLabel: meta.sourceLabel || '补刀',
       });
     }
@@ -174,6 +176,10 @@ export const ACTION_HANDLERS = Object.freeze({
   [ACTIONS.ADD_GEM_EXP](ctx, params) {
     const amount = Math.max(0, Math.floor(params.amount || 0));
     if (amount > 0) ctx.addGemExp(params.color, amount);
+  },
+
+  [ACTIONS.WHITE_ROUND](ctx, params, meta) {
+    ctx.dealWhiteRound(params.target || 'all', meta.sourceLabel || '白');
   },
 
   [ACTIONS.ADD_HITS](ctx, params) {

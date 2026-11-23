@@ -17,6 +17,8 @@ import {
   PLAYER_PRESETS,
   STAGE1_CORE_ENCOUNTERS,
 } from './monsters/encounters.js';
+import { BUFF_DEFS, BUFF_LIST } from './buffs/buffs.js';
+import { ALLY_DEFS, ALLY_LIST } from './allies/allies.js';
 
 export {
   GEM_CARD_DEFS,
@@ -30,7 +32,44 @@ export {
   STAGE1_CORE_ENCOUNTERS,
   ALL_ENCOUNTERS,
   PLAYER_PRESETS,
+  BUFF_DEFS,
+  BUFF_LIST,
+  ALLY_DEFS,
+  ALLY_LIST,
 };
+
+/** 加成、队友试打默认带哪些（claude 的倾向，用户还没拍板，试打台上能换） */
+export const DEFAULT_BUFF_IDS = Object.freeze(BUFF_LIST.map((b) => b.id));
+export const DEFAULT_ALLY_IDS = Object.freeze(ALLY_LIST.map((a) => a.id));
+
+function cloneEffects(effects) {
+  return (effects || []).map((ef) => ({
+    timing: ef.timing,
+    action: ef.action,
+    ...(ef.duration ? { duration: ef.duration } : {}),
+    ...(ef.condition ? { condition: { ...ef.condition } } : {}),
+    params: { ...(ef.params || {}) },
+  }));
+}
+
+function buildBuffs(ids) {
+  return ids.map((id) => {
+    const def = BUFF_DEFS[id];
+    if (!def) throw new Error(`未知的加成：${id}`);
+    return { id: def.id, slot: def.slot, lane: def.lane, label: def.label, description: def.description, effects: cloneEffects(def.effects) };
+  });
+}
+
+function buildAllies(ids) {
+  return ids.map((id) => {
+    const def = ALLY_DEFS[id];
+    if (!def) throw new Error(`未知的队友：${id}`);
+    return {
+      id: def.id, role: def.role, roleTag: def.roleTag, mode: def.mode, label: def.label, description: def.description,
+      usesPerBattle: def.remainingUses ?? null, effects: cloneEffects(def.effects),
+    };
+  });
+}
 
 /** 默认试打附带的功能牌套装选项 */
 export const DECK_LOADOUTS = Object.freeze({
@@ -103,12 +142,16 @@ export function createBattlePacket({
   seed = 'code00-battle-1',
   rulesConfig = {},
   drawTarget = null,
+  buffs = [],
+  allies = [],
 } = {}) {
   const encounter = ENCOUNTERS[encounterId];
   if (!encounter) throw new Error(`未知的战斗遭遇：${encounterId}`);
 
   const preset = PLAYER_PRESETS[presetId || encounter.recommendedPreset] || PLAYER_PRESETS.tier_c;
   const mergedConfig = { ...DEFAULT_RULES_CONFIG, ...rulesConfig };
+  // 辅助队友塞进牌组的牌，跟着额外牌一起进
+  const allyCards = allies.flatMap((id) => ALLY_DEFS[id]?.deckCards || []);
 
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -123,13 +166,13 @@ export function createBattlePacket({
       maxHandSize: mergedConfig.maxHandSize,
     },
     player: {
-      deck: buildDeck(extraCards),
+      deck: buildDeck([...extraCards, ...allyCards]),
       stats: { ...preset.stats },
       drawTarget: drawTarget ?? preset.drawTarget,
       hearts: preset.hearts,
       maxHearts: preset.maxHearts,
-      buffs: [],
-      allies: [],
+      buffs: buildBuffs(buffs),
+      allies: buildAllies(allies),
       gearTraits: [],
       gemLevels: {
         red: { level: 1, exp: 0 },

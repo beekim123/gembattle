@@ -44,7 +44,7 @@ const DEFAULT_JOBS = [
     width: 1040,
     height: 600,
     full: false,
-    clicks: [{ x: 750, y: 306 }], // 点「自动帮排」看排链和两行算式预览
+    clicks: [{ x: 742, y: 447 }], // 点「自动排」看排好的链和预览
   },
   {
     name: '实战·一群怪（打出飘纯数字）',
@@ -54,8 +54,8 @@ const DEFAULT_JOBS = [
     height: 600,
     full: false,
     clicks: [
-      { x: 750, y: 306 }, // 点「自动帮排」
-      { x: 780, y: 260, frames: 1, waitMs: 650 }, // 点「打出」看飘字与总伤面板
+      { x: 742, y: 447 }, // 点「自动帮排」
+      { x: 884, y: 478, frames: 1, waitMs: 900 }, // 点圆按钮「打出」看飘字和总数
     ],
     freeze: true,
   },
@@ -75,8 +75,8 @@ const DEFAULT_JOBS = [
     height: 600,
     full: false,
     clicks: [
-      { x: 750, y: 306 }, // 自动帮排 12 张
-      { x: 780, y: 260, frames: 1, waitMs: 650 }, // 打出上万发
+      { x: 742, y: 447 }, // 自动帮排 12 张
+      { x: 884, y: 478, frames: 1, waitMs: 900 }, // 打出上万发
     ],
     freeze: true,
   },

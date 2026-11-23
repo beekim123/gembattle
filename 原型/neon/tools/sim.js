@@ -4,6 +4,8 @@
 
 import { createBattle } from '../modules/battle-rules/index.js';
 import {
+  ALLY_LIST,
+  BUFF_LIST,
   DECK_LOADOUTS,
   FUNCTION_CARD_LIST,
   STAGE1_CORE_ENCOUNTERS,
@@ -69,7 +71,7 @@ function playUsefulInstants(battle) {
   }
 }
 
-function runBatch({ encounterId, bot, extraCards = [], runs = RUNS, rulesConfig = {}, presetId = null }) {
+function runBatch({ encounterId, bot, extraCards = [], runs = RUNS, rulesConfig = {}, presetId = null, buffs = [], allies = [] }) {
   let wins = 0;
   let totalTurns = 0;
   let totalHeartsLost = 0;
@@ -84,6 +86,8 @@ function runBatch({ encounterId, bot, extraCards = [], runs = RUNS, rulesConfig 
       extraCards,
       seed: `sim-${encounterId}-${bot.id}-${i}`,
       rulesConfig,
+      buffs,
+      allies,
     });
     const battle = createBattle(packet);
     let safety = 0;
@@ -186,4 +190,20 @@ for (const chainLen of [3, 6, 9, 12]) {
   console.log(
     `  排链 ${String(chainLen).padStart(2)} 张 | 总发数 ${String(sum.payload.totalHits).padStart(6)} 发 | 总伤害 ${String(sum.payload.totalDamage).padStart(10)} | 打包事件 ${String(pktCount).padStart(3)} 包 | 耗时 ${ms}ms`,
   );
+}
+
+// 5. 加成、队友对照（阶段 1 后半段，claude 的倾向，用户没拍板）：每样单带一个，跟什么都不带比
+console.log('\n\n【五】加成、队友单带对照（29 宝石 + 4 张常用功能牌，全打·最长链）');
+const extras = [
+  { label: '什么都不带', buffs: [], allies: [] },
+  ...BUFF_LIST.map((b) => ({ label: `加成：${b.label}`, buffs: [b.id], allies: [] })),
+  ...ALLY_LIST.map((a) => ({ label: `队友：${a.label}`, buffs: [], allies: [a.id] })),
+  { label: '全带', buffs: BUFF_LIST.map((b) => b.id), allies: ALLY_LIST.map((a) => a.id) },
+];
+for (const enc of STAGE1_CORE_ENCOUNTERS) {
+  console.log(`\n▶ ${enc.label}（${enc.id}）`);
+  for (const ex of extras) {
+    const r = runBatch({ encounterId: enc.id, bot: BOTS[0], extraCards: DECK_LOADOUTS.starter_4_functions.extraCards, buffs: ex.buffs, allies: ex.allies });
+    console.log(`  ${ex.label.padEnd(14, '　')} | 胜率 ${r.winRate.padStart(6)} | 均回合 ${r.avgTurns.padStart(5)} | 均掉心 ${r.avgHeartsLost.padStart(4)} | 均回伤 ${r.avgTurnDmg}`);
+  }
 }

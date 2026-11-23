@@ -15,6 +15,12 @@ function makeRecordingRenderer() {
   const ctx = {
     globalAlpha: 1,
     setTransform() {},
+    translate() {},
+    rotate() {},
+    scale() {},
+    clip() {},
+    setLineDash() {},
+    clearRect() {},
     save() {},
     restore() {},
     fillRect() {},
@@ -136,66 +142,139 @@ function makeFakeSnapshot() {
   };
 }
 
-test('battle-view 只凭假快照渲染完整画面，并将点击正确转成 callbacks 而不算规则', () => {
-  const actions = [];
-  const view = createBattleView({
+function makePreview() {
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    chainLength: 1,
+    steps: [{ cardUid: 'c-yellow', resolvedColor: 'yellow', relation: CHAIN_RELATIONS.CONNECT, multiplierAfter: 2, hits: 4, triggersComplementWhite: false, triggersRainbow: false }],
+    finalMultiplier: 2,
+    hasComplementWhite: false,
+    willTriggerRainbow: false,
+    colorsNeededForRainbow: 3,
+    shieldShred: { red: 1, green: 1, blue: 0 },
+    expectedBreakUids: [],
+    estimatedHits: 4,
+    estimatedDamage: 240,
+    formulaLines: ['发数：1 张排链 = 预计 4 发', '每发：约 60'],
+  };
+}
+
+function makeView(actions) {
+  return createBattleView({
     allowAutoArrange: true,
     callbacks: {
-      onQueueCard: (uid) => actions.push(['queue', uid]),
+      onQueueCard: (uid, index) => actions.push(['queue', uid, index]),
+      onMoveChainCard: (uid, index) => actions.push(['move', uid, index]),
       onPlayInstant: (uid) => actions.push(['instant', uid]),
       onUnqueueCard: (uid) => actions.push(['unqueue', uid]),
+      onSelectTarget: (uid) => actions.push(['target', uid]),
       onCommitChain: () => actions.push(['commit']),
     },
   });
+}
 
-  const snap = makeFakeSnapshot();
-  view.setState({
-    snapshot: snap,
-    preview: {
-      schemaVersion: SCHEMA_VERSION,
-      chainLength: 1,
-      steps: [{ cardUid: 'c-yellow', resolvedColor: 'yellow', relation: CHAIN_RELATIONS.CONNECT, multiplierAfter: 2, hits: 4, triggersComplementWhite: false, triggersRainbow: false }],
-      finalMultiplier: 2,
-      hasComplementWhite: false,
-      willTriggerRainbow: false,
-      colorsNeededForRainbow: 3,
-      shieldShred: { red: 1, green: 1, blue: 0 },
-      expectedBreakUids: [],
-      estimatedHits: 4,
-      estimatedDamage: 240,
-      formulaLines: ['发数：1 张排链 = 预计 4 发', '每发：约 60'],
-    },
-    events: [
-      { seq: 1, type: BATTLE_EVENT_TYPES.DAMAGE_PACKET, payload: { targetUid: 'm1', damage: 52381, perHitDamage: 52381, hitsInPacket: 1, isCrit: true } },
-    ],
-  });
+/** 按下 → 拖几步 → 松手 */
+function dragTo(view, from, to) {
+  view.onPointer({ type: 'down', x: from.x, y: from.y });
+  for (let k = 1; k <= 4; k++) {
+    view.onPointer({ type: 'move', x: from.x + ((to.x - from.x) * k) / 4, y: from.y + ((to.y - from.y) * k) / 4 });
+  }
+  view.onPointer({ type: 'up', x: to.x, y: to.y });
+}
 
+test('battle-view 只凭假快照画出整个画面，鼠标放怪身上才显示细节', () => {
+  const view = makeView([]);
+  view.setState({ snapshot: makeFakeSnapshot(), preview: makePreview(), events: [] });
   const { renderer, texts } = makeRecordingRenderer();
   view.update(0.05);
   view.render(renderer);
-
-  assert.ok(texts.some((t) => t.includes('8420 / 10000')));
-  assert.ok(texts.some((t) => t.includes('52381')));
   assert.ok(texts.includes('打出'));
+  assert.ok(texts.some((t) => t.includes('第 2 回合')));
+  // 头顶不写血量数字
+  assert.ok(!texts.some((t) => t.includes('8420 / 10000')));
 
-  // 点击手牌排链牌与马上用功能牌
-  const boxes = view.getLayoutBoxes();
-  const cyanBox = boxes.hand.find((h) => h.uid === 'h-cyan');
-  const blockBox = boxes.hand.find((h) => h.uid === 'h-block');
-  const chainBox = boxes.chain[0];
+  const m = view.getLayoutBoxes().monsters[0];
+  view.onPointer({ type: 'move', x: m.x + m.w / 2, y: m.y + m.h / 2 });
+  texts.length = 0;
+  view.render(renderer);
+  assert.ok(texts.some((t) => t.includes('8420 / 10000')));
+});
 
-  view.onPointer({ type: 'down', x: cyanBox.x + 10, y: cyanBox.y + 10 });
-  view.onPointer({ type: 'up', x: cyanBox.x + 10, y: cyanBox.y + 10 });
+test('出牌只认拖拽：点一下手牌什么都不做', () => {
+  const actions = [];
+  const view = makeView(actions);
+  view.setState({ snapshot: makeFakeSnapshot(), preview: makePreview(), events: [] });
+  const cyan = view.getLayoutBoxes().hand.find((h) => h.uid === 'h-cyan');
+  view.onPointer({ type: 'down', x: cyan.cx, y: cyan.cy });
+  view.onPointer({ type: 'up', x: cyan.cx, y: cyan.cy });
+  assert.deepEqual(actions, []);
+});
 
-  view.onPointer({ type: 'down', x: blockBox.x + 10, y: blockBox.y + 10 });
-  view.onPointer({ type: 'up', x: blockBox.x + 10, y: blockBox.y + 10 });
+test('拖进链、拖到马上用、拖回手里、链里换位子，都转成 callbacks', () => {
+  const actions = [];
+  const view = makeView(actions);
+  view.setState({ snapshot: makeFakeSnapshot(), preview: makePreview(), events: [] });
+  const b = view.getLayoutBoxes();
+  const cyan = b.hand.find((h) => h.uid === 'h-cyan');
+  const block = b.hand.find((h) => h.uid === 'h-block');
+  const chain0 = b.chain[0];
 
-  view.onPointer({ type: 'down', x: chainBox.x + 10, y: chainBox.y + 10 });
-  view.onPointer({ type: 'up', x: chainBox.x + 10, y: chainBox.y + 10 });
+  // 拖到链的右边 → 插在最后
+  dragTo(view, { x: cyan.cx, y: cyan.cy }, { x: chain0.cx + 80, y: chain0.cy });
+  // 拖到链的左边 → 插在最前
+  dragTo(view, { x: cyan.cx, y: cyan.cy }, { x: chain0.cx - 80, y: chain0.cy });
+  // 马上用的牌拖上去 → 直接用
+  dragTo(view, { x: block.cx, y: block.cy }, { x: 480, y: 300 });
+  // 链里的牌拖回手里 → 撤回
+  dragTo(view, { x: chain0.cx, y: chain0.cy }, { x: 480, y: 500 });
+  // 拖了又放回手里 → 什么都不做
+  dragTo(view, { x: cyan.cx, y: cyan.cy }, { x: cyan.cx + 20, y: cyan.cy - 10 });
 
   assert.deepEqual(actions, [
-    ['queue', 'h-cyan'],
+    ['queue', 'h-cyan', 1],
+    ['queue', 'h-cyan', 0],
     ['instant', 'h-block'],
     ['unqueue', 'c-yellow'],
   ]);
+});
+
+test('打出去以后按事件播一段，播完才能再动', () => {
+  const actions = [];
+  const view = makeView(actions);
+  const before = makeFakeSnapshot();
+  view.setState({ snapshot: before, preview: makePreview(), events: [] });
+
+  const after = makeFakeSnapshot();
+  after.turn = 3;
+  after.chain = [];
+  after.monsters[0].hp = 8180;
+  view.setState({
+    snapshot: after,
+    preview: { ...makePreview(), chainLength: 0, steps: [] },
+    events: [
+      { seq: 1, type: BATTLE_EVENT_TYPES.CHAIN_STEP, payload: { cardUid: 'c-yellow', color: 'yellow', relation: CHAIN_RELATIONS.CONNECT, multiplier: 2 } },
+      { seq: 2, type: BATTLE_EVENT_TYPES.DAMAGE_PACKET, payload: { targetUid: 'm1', damage: 52381, perHitDamage: 52381, hitsInPacket: 1, isCrit: true, color: 'red' } },
+      { seq: 3, type: BATTLE_EVENT_TYPES.CHAIN_SUMMARY, payload: { playedCount: 1, finalMultiplier: 2, totalHits: 1, totalDamage: 52381, rainbowTriggered: false, formulaLines: [] } },
+    ],
+  });
+  assert.equal(view.isBusy(), true);
+
+  // 播的时候拖牌没用
+  const cyan = view.getLayoutBoxes().hand.find((h) => h.uid === 'h-cyan');
+  dragTo(view, { x: cyan.cx, y: cyan.cy }, { x: 480, y: 280 });
+  assert.deepEqual(actions, []);
+
+  const { renderer, texts } = makeRecordingRenderer();
+  let sawNumber = false;
+  for (let i = 0; i < 200 && view.isBusy(); i++) {
+    view.update(0.05);
+    texts.length = 0;
+    view.render(renderer);
+    if (texts.some((t) => t.includes('52381'))) sawNumber = true;
+  }
+  assert.equal(view.isBusy(), false);
+  assert.ok(sawNumber, '飘字里要有这一发的数');
+  texts.length = 0;
+  view.render(renderer);
+  assert.ok(texts.some((t) => t.includes('第 3 回合')));
 });

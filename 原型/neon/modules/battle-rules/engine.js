@@ -184,6 +184,13 @@ export function createBattle(startPacket, options = {}) {
   let battleRuleOverrides = {};
   let turnRuleOverrides = {};
   let chainRuleOverrides = {};
+  /** 加成改的规则开没开（这条链 / 这回合 / 这一仗，哪层开了都算） */
+  const ruleOn = (key) => Boolean(chainRuleOverrides[key] || turnRuleOverrides[key] || battleRuleOverrides[key]);
+  const colorAdvanceOpts = () => ({
+    keepAll: ruleOn('keepRecordedColors'),
+    keepOnComplement: ruleOn('complementKeepsRecorded'),
+    rainbowKeepNeighbors: ruleOn('rainbowKeepsNeighbors'),
+  });
 
   // 战绩与试玩统计（10.3 + 10.4）
   const defeatedMonsters = [];
@@ -379,7 +386,7 @@ export function createBattle(startPacket, options = {}) {
         countdown: mon.countdown,
       });
     },
-    dealBonusDamage(mon, { amount, scale, ignoreTraits, sourceLabel }) {
+    dealBonusDamage(mon, { amount, scale, ignoreTraits, canCrit = false, sourceLabel }) {
       if (!mon || !mon.alive) return;
       const eff = getEffectiveStats();
       const base = scale === 'attackRatio' ? Math.round(eff.attack * amount) : Math.round(amount);
@@ -387,13 +394,38 @@ export function createBattle(startPacket, options = {}) {
       applyRawHitsToMonster(mon, {
         hits: 1,
         perHitBase: base,
-        canCrit: false,
+        canCrit: Boolean(canCrit),
         ignoreTraits,
         cardColor: 'white',
         isWhite: false,
         isRainbow: false,
         sourceLabel,
       });
+    },
+    /** 加成「破盾时全体吃一轮白」：红绿蓝各打「当时的倍率」发，白色伤害，不削盾 */
+    dealWhiteRound(targetMode, sourceLabel) {
+      const mult = activeChainMultRef ? activeChainMultRef.value : 1;
+      const eff = getEffectiveStats();
+      const baseDmgMod = 1 + eff.damageBonus + eff.hitPercent;
+      const targets = targetMode === 'selected' ? [ensureValidTarget()].filter(Boolean) : getAliveMonsters();
+      emit(BATTLE_EVENT_TYPES.EFFECT_TRIGGERED, { source: sourceLabel, label: `全体吃一轮白 ×${mult}` });
+      for (const gem of PRIMARY_GEMS) {
+        const perHitBase = eff.attack * gemLevelMultiplier(player.gemLevels[gem].level) * baseDmgMod;
+        for (const mon of targets) {
+          if (!mon.alive) continue;
+          applyRawHitsToMonster(mon, {
+            hits: mult,
+            perHitBase,
+            canCrit: true,
+            ignoreTraits: false,
+            cardColor: 'white',
+            isWhite: true,
+            isRainbow: false,
+            allowRetargetOnKill: false,
+            sourceLabel,
+          });
+        }
+      }
     },
     setRuleOverride(ruleKey, value, duration) {
       if (duration === ACTION_DURATIONS.THIS_CHAIN) chainRuleOverrides[ruleKey] = value;
@@ -461,9 +493,10 @@ export function createBattle(startPacket, options = {}) {
       for (const ef of ally.effects || []) {
         if (ef.timing === timing) {
           if (ally.remainingUses !== null && ally.remainingUses <= 0) continue;
+          // 先报「队友出手」，再出伤害，画面上先看到他动再看到数
+          emit(BATTLE_EVENT_TYPES.ALLY_ACTION, { allyId: ally.id, label: ally.label, timing });
           executeAction(actionCtx, ef, { sourceLabel: ally.label, ...extraMeta });
           if (ally.remainingUses !== null) ally.remainingUses--;
-          emit(BATTLE_EVENT_TYPES.ALLY_ACTION, { allyId: ally.id, label: ally.label, timing });
         }
       }
     }
@@ -827,12 +860,14 @@ export function createBattle(startPacket, options = {}) {
           green: { ...player.gemLevels.green, nextExp: gemLevelThreshold(player.gemLevels.green.level) },
           blue: { ...player.gemLevels.blue, nextExp: gemLevelThreshold(player.gemLevels.blue.level) },
         },
-        buffs: player.buffs.map((b) => ({ id: b.id, label: b.label })),
+        buffs: player.buffs.map((b) => ({ id: b.id, label: b.label, lane: b.lane ?? null, description: b.description ?? '' })),
         allies: player.allies.map((a) => ({
           id: a.id,
           role: a.role,
+          roleTag: a.roleTag ?? null,
           mode: a.mode,
           label: a.label,
+          description: a.description ?? '',
           remainingUses: a.remainingUses,
         })),
         gearTraits: player.gearTraits.map((g) => ({ gearId: g.gearId, slot: g.slot, label: g.label })),
@@ -942,6 +977,7 @@ export function createBattle(startPacket, options = {}) {
     const steps = [];
     const gemBatchesForRainbow = [];
     let hasHiddenInChain = false;
+    let previewBreakUsed = false;
 
     const baseHitMultiplier = (1 + eff.damageBonus + eff.hitPercent) * (1 + eff.critRate * (eff.critDamage - 1));
 
@@ -965,6 +1001,9 @@ export function createBattle(startPacket, options = {}) {
 
       if (rel === CHAIN_RELATIONS.CONNECT || rel === CHAIN_RELATIONS.COMPLEMENT) {
         mult *= 2;
+      } else if (rel === CHAIN_RELATIONS.BREAK && ruleOn('firstBreakStillDoubles') && !previewBreakUsed) {
+        mult *= 2; // 加成「第一次断色照样 ×2」
+        previewBreakUsed = true;
       }
 
       const isComplement = rel === CHAIN_RELATIONS.COMPLEMENT;
@@ -1020,7 +1059,7 @@ export function createBattle(startPacket, options = {}) {
       const hasMultX2 = card.effects?.some((ef) => ef.action === ACTIONS.MODIFY_MULTIPLIER);
       if (hasMultX2) mult *= 2;
 
-      const adv = advanceRecordedColors(rec, resolved.color, rel, rainbow);
+      const adv = advanceRecordedColors(rec, resolved.color, rel, rainbow, colorAdvanceOpts());
       rec = adv.nextRecorded;
       if (adv.triggeredRainbow) rainbow = true;
       cursor = resolved.color;
@@ -1088,15 +1127,28 @@ export function createBattle(startPacket, options = {}) {
     return true;
   }
 
-  function queueCard(cardUid) {
+  /** 把手里一张排进链；index 是插到链的第几个位子（拖拽放在中间），不给就接在链尾 */
+  function queueCard(cardUid, index = null) {
     assertPlayerInput();
     const idx = hand.findIndex((c) => c.uid === cardUid);
     if (idx < 0) return false;
     const card = hand[idx];
     if (card.usage !== 'chain') return false;
     hand.splice(idx, 1);
-    chain.push(card);
+    if (Number.isInteger(index) && index >= 0 && index < chain.length) chain.splice(index, 0, card);
+    else chain.push(card);
     return true;
+  }
+
+  /** 链里一张挪到另一个位子（拖拽换顺序，不算撤回） */
+  function moveChainCard(cardUid, index) {
+    assertPlayerInput();
+    const from = chain.findIndex((c) => c.uid === cardUid);
+    if (from < 0) return false;
+    const [card] = chain.splice(from, 1);
+    const to = Math.max(0, Math.min(chain.length, Number.isInteger(index) ? index : chain.length));
+    chain.splice(to, 0, card);
+    return from !== to;
   }
 
   function unqueueCard(cardUid) {
@@ -1245,6 +1297,7 @@ export function createBattle(startPacket, options = {}) {
     const rainbowBatches = [];
 
     const cardsToResolve = chain.splice(0);
+    let chainBreakUsed = false;
     for (const card of cardsToResolve) {
       card.hidden = false;
       const resolved = resolveCardForChain(card, currentColor);
@@ -1252,6 +1305,10 @@ export function createBattle(startPacket, options = {}) {
 
       if (rel === CHAIN_RELATIONS.CONNECT || rel === CHAIN_RELATIONS.COMPLEMENT) {
         multRef.value *= 2;
+      } else if (rel === CHAIN_RELATIONS.BREAK && ruleOn('firstBreakStillDoubles') && !chainBreakUsed) {
+        multRef.value *= 2; // 加成「第一次断色照样 ×2」
+        chainBreakUsed = true;
+        emit(BATTLE_EVENT_TYPES.EFFECT_TRIGGERED, { source: '第一次断色照样 ×2', label: '断色照样 ×2' });
       }
 
       emit(BATTLE_EVENT_TYPES.CHAIN_STEP, {
@@ -1414,8 +1471,7 @@ export function createBattle(startPacket, options = {}) {
       activeExtraHitsQueue = null;
 
       // 5. 推进集色与彩虹判定
-      const keepReset = Boolean(turnRuleOverrides.keepRecordedColors || battleRuleOverrides.keepRecordedColors);
-      const adv = advanceRecordedColors(recordedColors, resolved.color, rel, rainbowTriggered, keepReset);
+      const adv = advanceRecordedColors(recordedColors, resolved.color, rel, rainbowTriggered, colorAdvanceOpts());
       recordedColors = adv.nextRecorded;
       if (adv.triggeredRainbow) {
         rainbowTriggered = true;
@@ -1586,6 +1642,7 @@ export function createBattle(startPacket, options = {}) {
     selectTarget,
     queueCard,
     unqueueCard,
+    moveChainCard,
     undoLast,
     clearChain,
     playInstantCard,

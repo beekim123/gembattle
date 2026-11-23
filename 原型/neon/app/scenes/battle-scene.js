@@ -30,6 +30,8 @@ export function createBattleScene(context) {
       drawTarget: config.drawTarget ?? 4,
       seed: config.seed || `battle-${Date.now()}`,
       rulesConfig: config.rulesConfig || {},
+      buffs: config.buffs || [],
+      allies: config.allies || [],
     });
 
     // 万发压测模式：给 12 张高连携黄/白宝石 + 高血量木桩，方便直接验证万发打包飘字
@@ -56,8 +58,11 @@ export function createBattleScene(context) {
         onSelectTarget(uid) {
           if (battle.selectTarget(uid)) syncView();
         },
-        onQueueCard(uid) {
-          if (battle.queueCard(uid)) syncView();
+        onQueueCard(uid, index) {
+          if (battle.queueCard(uid, index)) syncView();
+        },
+        onMoveChainCard(uid, index) {
+          if (battle.moveChainCard(uid, index)) syncView();
         },
         onUnqueueCard(uid) {
           if (battle.unqueueCard(uid)) syncView();
@@ -91,6 +96,8 @@ export function createBattleScene(context) {
           context.switchTo('home', {
             encounterId: lastConfig.encounterId,
             rulesConfig: lastConfig.rulesConfig,
+            buffs: lastConfig.buffs,
+            allies: lastConfig.allies,
           });
         },
       },
@@ -117,6 +124,7 @@ export function createBattleScene(context) {
 
     onKeyDown(key) {
       if (!battle || battle.getResult()) return;
+      if (view?.isBusy?.()) return; // 正在播打出去的那一下
       if (key === ' ') {
         const out = battle.commitChain();
         syncView(out.events, out.result);
@@ -126,6 +134,8 @@ export function createBattleScene(context) {
         context.switchTo('home', {
           encounterId: lastConfig.encounterId,
           rulesConfig: lastConfig.rulesConfig,
+          buffs: lastConfig.buffs,
+          allies: lastConfig.allies,
         });
       }
     },

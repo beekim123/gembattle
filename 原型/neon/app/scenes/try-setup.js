@@ -1,7 +1,15 @@
 // 阶段 1 试打大厅（选仗 + 牌组配置 + 全部手感开关 + 万发压测入口）。
 // 仅通过各模块 index.js 导入，不碰 DOM。
 
-import { ALL_ENCOUNTERS, DECK_LOADOUTS, DEFAULT_RULES_CONFIG } from '../../modules/content/index.js';
+import {
+  ALLY_LIST,
+  ALL_ENCOUNTERS,
+  BUFF_LIST,
+  DECK_LOADOUTS,
+  DEFAULT_ALLY_IDS,
+  DEFAULT_BUFF_IDS,
+  DEFAULT_RULES_CONFIG,
+} from '../../modules/content/index.js';
 import { COLOR_META, COLOR_RING } from '../../modules/shared/index.js';
 import {
   UI_THEME,
@@ -23,6 +31,9 @@ export function createTrySetupScene(context) {
   let drawTargetIdx = 0; // 默认 N = 4
   let rulesConfig = { ...DEFAULT_RULES_CONFIG };
   let battleCounter = 1;
+  // 4 个加成、2 个队友：默认全带（claude 的倾向，用户还没拍板），点一下带 / 不带
+  let buffIds = new Set(DEFAULT_BUFF_IDS);
+  let allyIds = new Set(DEFAULT_ALLY_IDS);
 
   function currentEncounter() {
     return ALL_ENCOUNTERS.find((e) => e.id === selectedEncounterId) || ALL_ENCOUNTERS[0];
@@ -43,6 +54,8 @@ export function createTrySetupScene(context) {
       rulesConfig: { ...rulesConfig, ...(override.rulesConfig || {}) },
       seed: override.seed || `try-${enc.id}-${battleCounter}`,
       stressMode: Boolean(override.stressMode),
+      buffs: override.buffs ?? BUFF_LIST.map((b) => b.id).filter((id) => buffIds.has(id)),
+      allies: override.allies ?? ALLY_LIST.map((a) => a.id).filter((id) => allyIds.has(id)),
     });
   }
 
@@ -192,13 +205,39 @@ export function createTrySetupScene(context) {
           id: sw.id,
           label: sw.label,
           x: 568,
-          y: 104 + idx * 46,
+          y: 92 + idx * 30,
           w: 356,
-          h: 38,
+          h: 26,
           variant: 'default',
           fontSize: 13,
           onClick: () => {
             sw.onClick();
+            rebuildButtons();
+          },
+        }),
+      );
+    });
+
+    // 右栏下半：加成和队友，点一下带 / 不带
+    const toggles = [
+      ...BUFF_LIST.map((b) => ({ kind: 'buff', def: b, on: buffIds.has(b.id), label: `加成：${b.label}` })),
+      ...ALLY_LIST.map((a) => ({ kind: 'ally', def: a, on: allyIds.has(a.id), label: `队友（${a.roleTag}）：${a.label}` })),
+    ];
+    toggles.forEach((tg, idx) => {
+      btns.push(
+        createButton({
+          id: `tg-${tg.def.id}`,
+          label: `${tg.on ? '[带]' : '[ - ]'} ${tg.label}`,
+          x: 568,
+          y: 348 + idx * 28,
+          w: 356,
+          h: 24,
+          variant: tg.on ? 'primary' : 'default',
+          fontSize: 12,
+          tooltip: { title: tg.label, lines: [tg.def.description], tag: '先照倾向做的，没拍板' },
+          onClick: () => {
+            const set = tg.kind === 'buff' ? buffIds : allyIds;
+            if (set.has(tg.def.id)) set.delete(tg.def.id); else set.add(tg.def.id);
             rebuildButtons();
           },
         }),
@@ -215,6 +254,8 @@ export function createTrySetupScene(context) {
     onEnter(payload) {
       if (payload?.encounterId) selectedEncounterId = payload.encounterId;
       if (payload?.rulesConfig) rulesConfig = { ...rulesConfig, ...payload.rulesConfig };
+      if (Array.isArray(payload?.buffs)) buffIds = new Set(payload.buffs);
+      if (Array.isArray(payload?.allies)) allyIds = new Set(payload.allies);
       rebuildButtons();
     },
 
@@ -259,16 +300,16 @@ export function createTrySetupScene(context) {
         y: 60,
         w: 386,
         h: 464,
-        title: '2. 手感与规则开关（点一下切换）',
-        subtitle: '设计稿 10.4',
+        title: '2. 开关 · 加成 · 队友（点一下切换）',
+        subtitle: '设计稿 10.4 / 6.1',
         radius: 10,
       });
 
       drawText(renderer, {
-        text: `当前选中：${currentEncounter().summary}`,
+        text: '加成、队友先照倾向做的，还没拍板；鼠标放上去看它干什么',
         x: 568,
-        y: 478,
-        size: 12,
+        y: 334,
+        size: 11,
         color: '#9db6df',
         maxWidth: 356,
       });

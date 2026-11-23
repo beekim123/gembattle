@@ -70,9 +70,13 @@ export function computeChainRelation(cardOrColor, currentColor) {
  * - 触发彩虹后，集色重置为当前这一色（白则清空）。
  */
 export function advanceRecordedColors(recordedSet, resolvedColor, relation, rainbowAlreadyTriggered, keepRecordedOnReset = false) {
+  // 第 5 个参数：老的写法是布尔（断色、补色都不清空）；加成用对象：
+  // { keepAll, keepOnComplement（合白不清空）, rainbowKeepNeighbors（彩虹以后留这一色和两边）}
+  const opt = typeof keepRecordedOnReset === 'object' && keepRecordedOnReset !== null ? keepRecordedOnReset : { keepAll: Boolean(keepRecordedOnReset) };
   const next = new Set(recordedSet);
 
-  if (!keepRecordedOnReset && (relation === CHAIN_RELATIONS.BREAK || relation === CHAIN_RELATIONS.COMPLEMENT)) {
+  const clears = relation === CHAIN_RELATIONS.BREAK || (relation === CHAIN_RELATIONS.COMPLEMENT && !opt.keepOnComplement);
+  if (!opt.keepAll && clears) {
     next.clear();
   }
   if (isRingColor(resolvedColor)) {
@@ -85,6 +89,11 @@ export function advanceRecordedColors(recordedSet, resolvedColor, relation, rain
     next.clear();
     if (isRingColor(resolvedColor)) {
       next.add(resolvedColor);
+      if (opt.rainbowKeepNeighbors) {
+        const i = COLOR_RING.indexOf(resolvedColor);
+        next.add(COLOR_RING[(i + 1) % COLOR_RING.length]);
+        next.add(COLOR_RING[(i + COLOR_RING.length - 1) % COLOR_RING.length]);
+      }
     }
   }
 
