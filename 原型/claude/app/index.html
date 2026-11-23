@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>code00 原型</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #1d1f24; color: #d8dbe2; font: 16px/1.6 system-ui, sans-serif; }
+  body { display: flex; align-items: center; justify-content: center; }
+  .box { text-align: center; }
+  .ok { color: #7fd18b; }
+</style>
+</head>
+<body>
+<div class="box">
+  <p>code00 原型：还没开工，这一页只用来确认启动脚本好使。</p>
+  <p id="check">正在检查模块能不能加载……</p>
+</div>
+<script type="module">
+  // 只是确认浏览器能从本地小服务加载 ES 模块。阶段 0 开工时会换成真正的入口。
+  import { ok } from './check.js';
+  const el = document.getElementById('check');
+  el.textContent = ok;
+  el.className = 'ok';
+</script>
+</body>
+</html>

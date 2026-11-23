@@ -1,0 +1,9 @@
+{
+  "name": "code00-prototype-claude",
+  "private": true,
+  "type": "module",
+  "description": "code00 原型（claude 做的那份）：浏览器里跑，不用 Electron，不装依赖",
+  "scripts": {
+    "start": "node tools/serve.js --open"
+  }
+}
