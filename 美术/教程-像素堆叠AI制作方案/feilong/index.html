@@ -1,0 +1,1958 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>赤翼飞龙 · 双形态翱翔骨骼像素堆叠 360° 演示</title>
+<style>
+  :root {
+    --bg: #120d11;
+    --panel: rgba(20, 15, 20, 0.86);
+    --border: rgba(235, 148, 92, 0.28);
+    --text: #f8efe6;
+    --muted: #bfa99a;
+    --accent: #f27c38;
+    --hot: #ffbe4f;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    user-select: none;
+  }
+  canvas#view {
+    display: block; width: 100vw; height: 100vh;
+    cursor: grab; image-rendering: pixelated;
+  }
+  canvas#view:active { cursor: grabbing; }
+  .hud {
+    position: fixed; left: 16px; top: 16px; z-index: 10;
+    display: flex; flex-direction: column; gap: 8px;
+    pointer-events: none;
+  }
+  .card {
+    pointer-events: auto;
+    background: var(--panel);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 9px 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    max-width: 420px;
+  }
+  .title {
+    font-size: 16px; font-weight: 700; letter-spacing: 0.3px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .badge {
+    font-size: 11px; font-weight: 700; color: #1f0d06;
+    background: linear-gradient(135deg, var(--hot), var(--accent));
+    border-radius: 99px; padding: 1px 8px;
+  }
+  .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .row-label {
+    font-size: 11px; color: var(--muted); margin-top: 7px; margin-bottom: 4px;
+    letter-spacing: 0.4px;
+  }
+  .controls { display: flex; flex-wrap: wrap; gap: 5px; }
+  button {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: var(--text); border-radius: 8px;
+    padding: 4px 9px; font: inherit; font-size: 12px;
+    cursor: pointer; transition: all 0.14s ease;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  button:hover { background: rgba(255, 255, 255, 0.14); }
+  button.on {
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
+    border-color: var(--accent);
+    color: #fff5ea;
+  }
+  button.transform-btn {
+    background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 42%, transparent), color-mix(in srgb, var(--hot) 30%, transparent));
+    border-color: var(--hot);
+    color: #fff8eb;
+    font-weight: 600;
+  }
+  button.skill-btn.active {
+    background: color-mix(in srgb, var(--hot) 36%, transparent);
+    border-color: var(--hot);
+    color: #fff8eb;
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  .swatch {
+    width: 8px; height: 8px; border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.38);
+    display: inline-block; flex-shrink: 0;
+  }
+  .stats {
+    margin-top: 8px; padding-top: 7px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--muted); font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    display: flex; flex-wrap: wrap; gap: 9px;
+  }
+  .stats b { color: #f6e3d2; font-weight: 600; }
+  .banner {
+    position: fixed; right: 18px; top: 18px; z-index: 10;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 8px 14px;
+    font-size: 13px; color: #ffe5c2; font-weight: 600;
+    opacity: 0; transform: translateY(-6px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    pointer-events: none;
+  }
+  .banner.show { opacity: 1; transform: translateY(0); }
+  .hint {
+    position: fixed; left: 16px; bottom: 16px; z-index: 10;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 7px 12px;
+    color: var(--muted); font-size: 12px;
+  }
+  .hint b { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div class="hud">
+  <div class="card">
+    <div class="title">赤翼飞龙 <span class="badge" id="formBadge">幼年形态</span></div>
+    <div class="sub">双形态模块化翼骨/多节鞭尾链 · 锁枢轴振翅 · 盘旋滑翔巡航 · 整体轮廓 120fps</div>
+
+    <div class="row-label">形态与蜕变</div>
+    <div class="controls">
+      <button id="btnYoung" class="on">幼年形态</button>
+      <button id="btnAdult">成年形态</button>
+      <button id="btnTransform" class="transform-btn">变身演出 (T)</button>
+    </div>
+
+    <div class="row-label">龙鳞色系（快捷键 C 零重建模切换）</div>
+    <div class="controls" id="skinBar"></div>
+
+    <div class="row-label" id="skillLabel">幼年技能（快捷键 1~4）</div>
+    <div class="controls" id="skillBar"></div>
+
+    <div class="row-label">常驻高空生态</div>
+    <div class="controls">
+      <button id="btnHover" class="on">空中悬停吐息</button>
+      <button id="btnSoar">盘旋翱翔巡航 (S)</button>
+    </div>
+
+    <div class="row-label">视角与渲染</div>
+    <div class="controls">
+      <button id="btnSpin">自动旋转</button>
+      <button id="btnOutline" class="on">整体描边</button>
+      <button id="btnMode" class="on">模式：游戏缓存</button>
+      <button id="btnExport">导出长条 PNG</button>
+      <button id="btnReset">重置视角</button>
+    </div>
+    <div class="stats" id="stats">初始化中...</div>
+  </div>
+</div>
+
+<div class="banner" id="banner"></div>
+
+<div class="hint">
+  <b>鼠标拖动</b> 360° 旋转 · <b>Q / E</b> 转 45° · <b>滚轮</b> 缩放 · <b>C</b> 换色 · <b>S</b> 巡航 · <b>T</b> 变身 · <b>1~5</b> 技能
+</div>
+
+<script>
+// === FEILONG_VOXEL_CORE_START ===
+'use strict';
+
+/*
+===============================================================================
+第 0 步：赤翼飞龙双形态骨骼架构 & 模块化部件预算表（正面 +Y）
+===============================================================================
+核心升级（v3 双形态翼手飞龙骨骼 + actorBuf(300×280) 整体外轮廓）：
+1. 【双形态 19 个轻量模块化部件 + 翼根严格锁枢轴 + 3 节实时鞭尾链】：
+   - 幼年形态（9 部件）：yTorso（圆滚短躯+浅米腹甲+后爪+背脊圆棘）、yHead（大头+口部炽核 0 遮挡+大眼 0 遮挡+短钝角）、
+     yTail（粗短摇摆尾，尾根锁躯干）、yWingL/R × 3 姿态（up/down/tuck，翼根枢轴锁死 ±4.0,0.6）。
+   - 成年形态（10 部件）：aTorso（厚实胸甲+胸口炽核+收拢利爪+背鳍）、aNeck（S 形长颈+喉部炽核）、
+     aHead（棱角龙头+带棘下颌+口部炽核 0 遮挡+锐利龙眼 0 遮挡+后弯双长角）、
+     aTailSeg1 / aTailSeg2 / aTailTip（3 节长鞭尾+箭头尾棘，实时 S 波动连杆）、
+     aWingL/R × 3 姿态（up/down/glide，58 格翼展 = 幼年 1.84×，翼根枢轴锁死 ±5.6,4.6）。
+2. 【真实飞龙双生态 + 完整四段式变身演出 (T)】：
+   - 空中悬停吐息：翼下拍滞后 0.72 rad 产生真实升力起伏 + S 形长颈呼吸 + 多节长尾行波摆动；
+   - 盘旋翱翔巡航 (S)：「强力扑翼爬升 → 展翼滑翔盘旋 → 倾侧大回环」真实大型飞禽/飞龙空战节律！
+   - 完整保留 5 套龙鳞色系（赤焰红/寒霜冰蓝/剧毒翠绿/雷电紫金/黑曜熔金）、幼年 4 技能、成年 5 技能与四段式变身！
+3. 【actorBuf(300×280) 整体 1px 外轮廓】：大画布完整容纳 58 格成年宽翼，内部零拼装黑线，120fps 满帧。
+===============================================================================
+*/
+
+// ---------------------------------------------------------------------------
+// 1. 统一调色板（35 色，严格 ≤ 48 色，零重色，自亮 3 色物理隔离）
+// ---------------------------------------------------------------------------
+const PAL = {
+  scaleDark:   '#7a1c1a',
+  scaleMid:    '#c83a24',
+  scaleHi:     '#f06834',
+  armorDark:   '#4a1216',
+  armorMid:    '#8c2220',
+  armorHi:     '#c4422c',
+  bellyDark:   '#a8875a',
+  bellyMid:    '#e2c99a',
+  bellyHi:     '#f7ead0',
+  wingDark:    '#9e3b24',
+  wingMid:     '#df6b38',
+  wingHi:      '#f7a05c',
+  hornDark:    '#362724',
+  hornMid:     '#6b5348',
+  hornHi:      '#b09886',
+  eyeDark:     '#120e16',
+  eyeIris:     '#f5be3b',
+  eyeGlint:    '#f7fbff',
+  emissiveMid: '#ff521b',
+  emissiveHot: '#ffaa2b',
+  emissiveCore:'#fff6c7',
+  stoneDeep:   '#1d1c24',
+  stoneDark:   '#32303c',
+  stoneMid:    '#4c4959',
+  stoneHi:     '#6d697d',
+  rustDark:    '#59261e',
+  rustMid:     '#8a3c29',
+  woodDark:    '#452b1c',
+  woodMid:     '#784c30',
+  woodHi:      '#a8724b',
+  ironDark:    '#2c3340',
+  ironMid:     '#566275',
+  ironHi:      '#8a99b0',
+  targetRed:   '#d12c2c',
+  targetCream: '#ede1c8'
+};
+
+const PAL_KEYS = Object.keys(PAL);
+const KEY_TO_ID = Object.create(null);
+const ID_TO_KEY = [null];
+const ID_TO_RGBA = [null];
+const GLOW_KEY_SET = new Set(['emissiveMid', 'emissiveHot', 'emissiveCore']);
+const GLOW_ID_SET = new Set();
+
+for (let i = 0; i < PAL_KEYS.length; i++) {
+  const k = PAL_KEYS[i];
+  const id = i + 1;
+  KEY_TO_ID[k] = id;
+  ID_TO_KEY[id] = k;
+  const n = parseInt(PAL[k].slice(1), 16);
+  ID_TO_RGBA[id] = [(n >> 16) & 255, (n >> 8) & 255, n & 255, 255];
+  if (GLOW_KEY_SET.has(k)) GLOW_ID_SET.add(id);
+}
+
+// ---------------------------------------------------------------------------
+// 1b. 5 套龙鳞色系（完整保留原版 5 色系 + 全技能特效联动）
+// ---------------------------------------------------------------------------
+const SKINS = [
+  {
+    id: 'crimson', name: '赤焰红', dot: '#e84c28', outline: '#120b10',
+    pal: {},
+    fx: {
+      core: '#fff6c7', hot: '#ffaa2b', mid: '#ff521b', outer: '#b82418', meteorBody: '#4a1216',
+      scorchBase: '#150d0e', scorchGlow: '#ff521b',
+      ringRGB: '255, 110, 32', crackRGB: '255, 120, 36', pileRGB: '255, 140, 32',
+      warnStroke: 'rgba(255, 68, 34, 0.92)', warnFillRGB: '255, 76, 32',
+      runeRGB: '255, 118, 38', runeDotRGB: '255, 224, 130',
+      flashRGB: '255, 246, 205', windArc: '#f7ead0', dust: '#a8875a', smoke: '#8a7a75',
+      skyHalo: 'rgba(255, 122, 48, 0.22)'
+    },
+    ui: { accent: '#f27c38', hot: '#ffbe4f', border: 'rgba(235, 148, 92, 0.28)' }
+  },
+  {
+    id: 'frost', name: '寒霜冰蓝', dot: '#48b8f0', outline: '#0b1422',
+    pal: {
+      scaleDark: '#1b4978', scaleMid: '#3486c2', scaleHi: '#74c8f5',
+      armorDark: '#13274f', armorMid: '#244b8a', armorHi: '#4a7ec4',
+      bellyDark: '#8baac4', bellyMid: '#c6e2f5', bellyHi: '#eaf7ff',
+      wingDark:  '#3f84a8', wingMid:  '#6ec4e3', wingHi:  '#b4ecff',
+      hornDark:  '#3b4859', hornMid:  '#72859c', hornHi:  '#b6cadb',
+      eyeIris:   '#4cf2ff',
+      emissiveMid: '#24b4ff', emissiveHot: '#7cf0ff', emissiveCore: '#e8feff'
+    },
+    fx: {
+      core: '#e8feff', hot: '#7cf0ff', mid: '#24b4ff', outer: '#1b5fa8', meteorBody: '#13274f',
+      scorchBase: '#122236', scorchGlow: '#48d6ff',
+      ringRGB: '72, 214, 255', crackRGB: '112, 234, 255', pileRGB: '56, 198, 255',
+      warnStroke: 'rgba(72, 214, 255, 0.92)', warnFillRGB: '56, 190, 255',
+      runeRGB: '64, 206, 255', runeDotRGB: '220, 252, 255',
+      flashRGB: '224, 252, 255', windArc: '#d8f4ff', dust: '#9ec4dc', smoke: '#7e9cb0',
+      skyHalo: 'rgba(64, 190, 255, 0.22)'
+    },
+    ui: { accent: '#48b8f0', hot: '#8ceeff', border: 'rgba(110, 204, 245, 0.30)' }
+  },
+  {
+    id: 'venom', name: '剧毒翠绿', dot: '#5cd645', outline: '#0c1a10',
+    pal: {
+      scaleDark: '#1b5e2d', scaleMid: '#37a64a', scaleHi: '#7be060',
+      armorDark: '#143b24', armorMid: '#246638', armorHi: '#429650',
+      bellyDark: '#9c9b5a', bellyMid: '#d9db8c', bellyHi: '#f3f5be',
+      wingDark:  '#5b8a24', wingMid:  '#98cc3b', wingHi:  '#ccf266',
+      hornDark:  '#3d3023', hornMid:  '#735c42', hornHi:  '#ad9472',
+      eyeIris:   '#ffe23b',
+      emissiveMid: '#48e639', emissiveHot: '#b7ff42', emissiveCore: '#f0ffd1'
+    },
+    fx: {
+      core: '#f0ffd1', hot: '#b7ff42', mid: '#48e639', outer: '#1f7a2c', meteorBody: '#1c3d22',
+      scorchBase: '#112113', scorchGlow: '#48e639',
+      ringRGB: '110, 238, 68', crackRGB: '154, 255, 76', pileRGB: '96, 232, 58',
+      warnStroke: 'rgba(130, 245, 66, 0.92)', warnFillRGB: '104, 230, 56',
+      runeRGB: '108, 236, 62', runeDotRGB: '234, 255, 190',
+      flashRGB: '236, 255, 204', windArc: '#dff7b2', dust: '#94ab68', smoke: '#738c6e',
+      skyHalo: 'rgba(92, 224, 72, 0.20)'
+    },
+    ui: { accent: '#5cd645', hot: '#b8ff5c', border: 'rgba(124, 226, 98, 0.30)' }
+  },
+  {
+    id: 'thunder', name: '雷电紫金', dot: '#9b66f2', outline: '#120b20',
+    pal: {
+      scaleDark: '#362375', scaleMid: '#6845c4', scaleHi: '#a47cf5',
+      armorDark: '#21144a', armorMid: '#432785', armorHi: '#724bc2',
+      bellyDark: '#7b7494', bellyMid: '#b7b0cf', bellyHi: '#e2ddf2',
+      wingDark:  '#6942a8', wingMid:  '#9c6ee3', wingHi:  '#cda8ff',
+      hornDark:  '#59421c', hornMid:  '#9e7832', hornHi:  '#e0b85c',
+      eyeIris:   '#ffdd47',
+      emissiveMid: '#a84cff', emissiveHot: '#ffd24a', emissiveCore: '#fff9d6'
+    },
+    fx: {
+      core: '#fff9d6', hot: '#ffd24a', mid: '#a84cff', outer: '#56229e', meteorBody: '#271752',
+      scorchBase: '#1b1126', scorchGlow: '#c84cff',
+      ringRGB: '188, 96, 255', crackRGB: '255, 206, 78', pileRGB: '176, 84, 255',
+      warnStroke: 'rgba(220, 112, 255, 0.92)', warnFillRGB: '184, 88, 255',
+      runeRGB: '182, 92, 255', runeDotRGB: '255, 232, 138',
+      flashRGB: '248, 238, 255', windArc: '#e6d4ff', dust: '#9a8eb8', smoke: '#7a7091',
+      skyHalo: 'rgba(164, 92, 255, 0.22)'
+    },
+    ui: { accent: '#9b66f2', hot: '#ffd45e', border: 'rgba(176, 124, 248, 0.32)' }
+  },
+  {
+    id: 'obsidian', name: '黑曜熔金', dot: '#f0a629', outline: '#0c0b10',
+    pal: {
+      scaleDark: '#23252e', scaleMid: '#3d414f', scaleHi: '#6b7285',
+      armorDark: '#161820', armorMid: '#2a2e3a', armorHi: '#52586b',
+      bellyDark: '#3f4552', bellyMid: '#646d7d', bellyHi: '#939eb0',
+      wingDark:  '#6e3214', wingMid:  '#b55d1c', wingHi:  '#eb9a38',
+      hornDark:  '#20242d', hornMid:  '#464e5e', hornHi:  '#7e889c',
+      eyeIris:   '#ff3b30',
+      emissiveMid: '#e83814', emissiveHot: '#ffc23d', emissiveCore: '#fffce0'
+    },
+    fx: {
+      core: '#fffce0', hot: '#ffc23d', mid: '#e83814', outer: '#6e190b', meteorBody: '#1c1e26',
+      scorchBase: '#100e12', scorchGlow: '#f5a82a',
+      ringRGB: '248, 178, 52', crackRGB: '255, 204, 76', pileRGB: '242, 152, 42',
+      warnStroke: 'rgba(255, 172, 46, 0.94)', warnFillRGB: '240, 146, 36',
+      runeRGB: '245, 168, 44', runeDotRGB: '255, 246, 198',
+      flashRGB: '255, 248, 214', windArc: '#e6d8b5', dust: '#747c8c', smoke: '#5e6470',
+      skyHalo: 'rgba(245, 162, 46, 0.22)'
+    },
+    ui: { accent: '#e89b2d', hot: '#ffd76b', border: 'rgba(240, 174, 72, 0.34)' }
+  }
+];
+
+function buildRgbaTable(skin) {
+  const tbl = ID_TO_RGBA.slice();
+  if (skin && skin.pal) {
+    for (const k in skin.pal) {
+      const id = KEY_TO_ID[k];
+      if (!id) continue;
+      const n = parseInt(skin.pal[k].slice(1), 16);
+      tbl[id] = [(n >> 16) & 255, (n >> 8) & 255, n & 255, 255];
+    }
+  }
+  return tbl;
+}
+
+function recolorAsset(asset, rgbaTable) {
+  const { w, d, h, grid, activeLayers, glowLayers, glowSlot, strip, glowStrip, sim, eim } = asset;
+  const stripW = w * h, glowW = w * glowLayers.length;
+  const sData = sim.data, eData = eim ? eim.data : null;
+  for (let li = 0; li < activeLayers.length; li++) {
+    const z = activeLayers[li], gxOff = z * w, gSlot = glowSlot[z], zBase = z * d * w;
+    for (let y = 0; y < d; y++) {
+      const row = zBase + y * w, sRow = y * stripW + gxOff;
+      const eRow = gSlot >= 0 ? (y * glowW + gSlot * w) : -1;
+      for (let x = 0; x < w; x++) {
+        const id = grid[row + x];
+        if (!id) continue;
+        const rgba = rgbaTable[id];
+        const si = (sRow + x) * 4;
+        sData[si] = rgba[0]; sData[si + 1] = rgba[1]; sData[si + 2] = rgba[2]; sData[si + 3] = 255;
+        if (eData && eRow >= 0 && GLOW_ID_SET.has(id)) {
+          const ei = (eRow + x) * 4;
+          eData[ei] = rgba[0]; eData[ei + 1] = rgba[1]; eData[ei + 2] = rgba[2]; eData[ei + 3] = 255;
+        }
+      }
+    }
+  }
+  strip.getContext('2d').putImageData(sim, 0, 0);
+  if (glowStrip && eim) glowStrip.getContext('2d').putImageData(eim, 0, 0);
+}
+
+const PART_NAMES = [
+  'none',
+  'body', 'belly', 'neck', 'head', 'snout', 'jaw',
+  'eye', 'horn', 'spine', 'leg', 'claw', 'tail', 'tailBarb',
+  'wingBone', 'wingMem', 'mouthCore', 'chestCore',
+  'dummyBase', 'dummyPost', 'dummyIron', 'dummyBoard'
+];
+const PART_ID = Object.create(null);
+for (let i = 0; i < PART_NAMES.length; i++) PART_ID[PART_NAMES[i]] = i;
+
+const NUM_PARTS = PART_NAMES.length;
+const NO_CREASE_LUT = new Uint8Array(NUM_PARTS * NUM_PARTS);
+for (const [a, b] of [
+  ['eye', 'head'], ['eye', 'snout'],
+  ['mouthCore', 'jaw'], ['mouthCore', 'snout'],
+  ['chestCore', 'body'], ['chestCore', 'belly'], ['chestCore', 'neck'],
+  ['head', 'neck'], ['body', 'neck'], ['body', 'tail'], ['dummyPost', 'dummyIron']
+]) {
+  const ia = PART_ID[a], ib = PART_ID[b];
+  NO_CREASE_LUT[ia * NUM_PARTS + ib] = 1;
+  NO_CREASE_LUT[ib * NUM_PARTS + ia] = 1;
+}
+
+const MATERIAL_KEYS = [null, 'scale', 'armor', 'belly', 'wing', 'horn', 'stone', 'wood', 'iron'];
+const MAT_ID = Object.create(null);
+for (let i = 1; i < MATERIAL_KEYS.length; i++) MAT_ID[MATERIAL_KEYS[i]] = i;
+const MAT_BASE = 128;
+const mat = name => MAT_BASE + MAT_ID[name];
+
+const RAMPS_BY_MAT = {
+  [MAT_ID.scale]: [KEY_TO_ID.scaleDark, KEY_TO_ID.scaleMid, KEY_TO_ID.scaleHi],
+  [MAT_ID.armor]: [KEY_TO_ID.armorDark, KEY_TO_ID.armorMid, KEY_TO_ID.armorHi],
+  [MAT_ID.belly]: [KEY_TO_ID.bellyDark, KEY_TO_ID.bellyMid, KEY_TO_ID.bellyHi],
+  [MAT_ID.wing]:  [KEY_TO_ID.wingDark,  KEY_TO_ID.wingMid,  KEY_TO_ID.wingHi],
+  [MAT_ID.horn]:  [KEY_TO_ID.hornDark,  KEY_TO_ID.hornMid,  KEY_TO_ID.hornHi],
+  [MAT_ID.stone]: [KEY_TO_ID.stoneDark, KEY_TO_ID.stoneMid, KEY_TO_ID.stoneHi],
+  [MAT_ID.wood]:  [KEY_TO_ID.woodDark,  KEY_TO_ID.woodMid,  KEY_TO_ID.woodHi],
+  [MAT_ID.iron]:  [KEY_TO_ID.ironDark,  KEY_TO_ID.ironMid,  KEY_TO_ID.ironHi]
+};
+
+// ---------------------------------------------------------------------------
+// 2. 数学原语与周期噪声
+// ---------------------------------------------------------------------------
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smoothstep = (e0, e1, x) => {
+  const t = clamp((x - e0) / (e1 - e0), 0, 1);
+  return t * t * (3 - 2 * t);
+};
+const smin = (a, b, k) => {
+  const h = clamp(0.5 + 0.5 * (b - a) / k, 0, 1);
+  return lerp(b, a, h) - k * h * (1 - h);
+};
+function localToWorldXY(rx, ry, yaw, lx, ly) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  return [rx + cy * lx - sy * ly, ry + sy * lx + cy * ly];
+}
+function hash2i(ix, iy, seed) {
+  let h = (ix * 374761393 + iy * 668265263 + seed * 1442695041) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+function periodicNoise2(x, y, periodX, periodY, cell, seed) {
+  const gx = x / cell, gy = y / cell;
+  const px = Math.max(1, Math.round(periodX / cell));
+  const py = Math.max(1, Math.round(periodY / cell));
+  const ix = Math.floor(gx), iy = Math.floor(gy);
+  const fx = gx - ix, fy = gy - iy;
+  const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+  const wMod = (v, m) => ((v % m) + m) % m;
+  const x0 = wMod(ix, px), x1 = wMod(ix + 1, px);
+  const y0 = wMod(iy, py), y1 = wMod(iy + 1, py);
+  return lerp(
+    lerp(hash2i(x0, y0, seed), hash2i(x1, y0, seed), ux),
+    lerp(hash2i(x0, y1, seed), hash2i(x1, y1, seed), ux),
+    uy
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 3. 高性能体素网格
+// ---------------------------------------------------------------------------
+class VoxelModel {
+  constructor(w, d, h) {
+    this.w = w; this.d = d; this.h = h;
+    const len = w * d * h;
+    this.grid = new Uint8Array(len);
+    this.parts = new Uint8Array(len);
+  }
+  idx(x, y, z) { return (z * this.d + y) * this.w + x; }
+  inB(x, y, z) { return x >= 0 && y >= 0 && z >= 0 && x < this.w && y < this.d && z < this.h; }
+  getId(x, y, z) { return this.inB(x, y, z) ? this.grid[this.idx(x, y, z)] : 0; }
+  getPartId(x, y, z) { return this.inB(x, y, z) ? this.parts[this.idx(x, y, z)] : 0; }
+  setRaw(x, y, z, val, partId) {
+    if (!this.inB(x, y, z)) return;
+    const i = this.idx(x, y, z);
+    this.grid[i] = val; this.parts[i] = partId;
+  }
+  fillAABB(X0, X1, Y0, Y1, Z0, Z1, fn) {
+    const hw = this.w * 0.5 - 0.5, hd = this.d * 0.5 - 0.5;
+    const x0 = clamp(Math.floor(X0 + hw), 0, this.w - 1);
+    const x1 = clamp(Math.ceil(X1 + hw),  0, this.w - 1);
+    const y0 = clamp(Math.floor(Y0 + hd), 0, this.d - 1);
+    const y1 = clamp(Math.ceil(Y1 + hd),  0, this.d - 1);
+    const z0 = clamp(Math.floor(Z0),      0, this.h - 1);
+    const z1 = clamp(Math.ceil(Z1),       0, this.h - 1);
+    for (let z = z0; z <= z1; z++) {
+      for (let y = y0; y <= y1; y++) {
+        const Y = y - hd;
+        for (let x = x0; x <= x1; x++) fn(x, y, z, x - hw, Y);
+      }
+    }
+  }
+  paintCapsule(ax, ay, az, bx, by, bz, r0, r1, val, partId, overwrite = true) {
+    const pad = Math.max(r0, r1) + 0.6;
+    const hw = this.w * 0.5 - 0.5, hd = this.d * 0.5 - 0.5;
+    const x0 = clamp(Math.floor(Math.min(ax, bx) - pad + hw), 0, this.w - 1);
+    const x1 = clamp(Math.ceil(Math.max(ax, bx) + pad + hw),  0, this.w - 1);
+    const y0 = clamp(Math.floor(Math.min(ay, by) - pad + hd), 0, this.d - 1);
+    const y1 = clamp(Math.ceil(Math.max(ay, by) + pad + hd),  0, this.d - 1);
+    const z0 = clamp(Math.floor(Math.min(az, bz) - pad),      0, this.h - 1);
+    const z1 = clamp(Math.ceil(Math.max(az, bz) + pad),       0, this.h - 1);
+    const abx = bx - ax, aby = by - ay, abz = bz - az;
+    const invDen = 1 / (abx * abx + aby * aby + abz * abz || 1);
+    const dr = r1 - r0;
+    const { w, d, grid, parts } = this;
+    for (let z = z0; z <= z1; z++) {
+      const apz = z - az, zOff = z * d * w;
+      for (let y = y0; y <= y1; y++) {
+        const apy = (y - hd) - ay, row = zOff + y * w, dotYZ = apy * aby + apz * abz;
+        for (let x = x0; x <= x1; x++) {
+          const i = row + x;
+          if (!overwrite && grid[i]) continue;
+          const apx = (x - hw) - ax;
+          let t = (apx * abx + dotYZ) * invDen;
+          if (t < 0) t = 0; else if (t > 1) t = 1;
+          const dx = apx - abx * t, dy = apy - aby * t, dz = apz - abz * t;
+          const r = r0 + dr * t;
+          if (dx * dx + dy * dy + dz * dz <= r * r) { grid[i] = val; parts[i] = partId; }
+        }
+      }
+    }
+  }
+  paintEllipsoid(cx, cy, cz, rx, ry, rz, val, partId, overwrite = true) {
+    this.fillAABB(cx - rx - 0.5, cx + rx + 0.5, cy - ry - 0.5, cy + ry + 0.5, cz - rz - 0.5, cz + rz + 0.5, (x, y, z, X, Y) => {
+      const i = this.idx(x, y, z);
+      if (!overwrite && this.grid[i]) return;
+      const dx = (X - cx) / rx, dy = (Y - cy) / ry, dz = (z - cz) / rz;
+      if (dx * dx + dy * dy + dz * dz <= 1.0) { this.grid[i] = val; this.parts[i] = partId; }
+    });
+  }
+  paintWingQuad(p00, p10, p11, p01, halfThick, val, partId, scallop = 0, overwrite = false) {
+    const pts = [p00, p10, p11, p01];
+    let x0 = 999, x1 = -999, y0 = 999, y1 = -999, z0 = 999, z1 = -999;
+    for (const p of pts) {
+      if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0];
+      if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1];
+      if (p[2] < z0) z0 = p[2]; if (p[2] > z1) z1 = p[2];
+    }
+    const pad = halfThick + 1.0, ux = p10[0] - p00[0], uSign = ux >= 0 ? 1 : -1;
+    const spanX = Math.max(0.5, Math.abs(ux));
+    this.fillAABB(x0 - 0.6, x1 + 0.6, y0 - 0.8, y1 + 0.8, z0 - pad, z1 + pad, (x, y, z, X, Y) => {
+      const i = this.idx(x, y, z);
+      if (!overwrite && this.grid[i]) return;
+      const u = clamp(uSign > 0 ? (X - p00[0]) / spanX : (p00[0] - X) / spanX, 0, 1);
+      const ly = lerp(p00[1], p10[1], u), lz = lerp(p00[2], p10[2], u);
+      const ty = lerp(p01[1], p11[1], u) + scallop * Math.sin(u * Math.PI), tz = lerp(p01[2], p11[2], u);
+      if (Y < Math.min(ly, ty) - 0.35 || Y > Math.max(ly, ty) + 0.35) return;
+      const v = clamp((ly - Y) / Math.max(0.5, ly - ty), 0, 1);
+      if (Math.abs(z - lerp(lz, tz, v)) <= halfThick) { this.grid[i] = val; this.parts[i] = partId; }
+    });
+  }
+  despeckle() {
+    const src = this.grid.slice(), prt = this.parts;
+    const { w, d, h } = this, wd = w * d;
+    const pEye = PART_ID.eye, pMC = PART_ID.mouthCore, pCC = PART_ID.chestCore;
+    for (let z = 0; z < h; z++) {
+      const zOff = z * wd;
+      for (let y = 0; y < d; y++) {
+        const row = zOff + y * w;
+        for (let x = 0; x < w; x++) {
+          const i = row + x;
+          if (!src[i]) continue;
+          const p = prt[i];
+          if (p === pEye || p === pMC || p === pCC) continue;
+          if ((x + 1 < w && src[i + 1]) || (x > 0 && src[i - 1]) ||
+              (y + 1 < d && src[i + w]) || (y > 0 && src[i - w]) ||
+              (z + 1 < h && src[i + wd]) || (z > 0 && src[i - wd])) continue;
+          this.grid[i] = 0; this.parts[i] = 0;
+        }
+      }
+    }
+  }
+  applyArtShading(keepSoftBottom = false) {
+    const { w, d, h } = this, wd = w * d;
+    const src = this.grid.slice(), prt = this.parts;
+    const pMinZ = new Int16Array(NUM_PARTS).fill(999);
+    const pMaxZ = new Int16Array(NUM_PARTS).fill(-1);
+    for (let z = 0; z < h; z++) {
+      const zOff = z * wd;
+      for (let i = zOff, end = zOff + wd; i < end; i++) {
+        const p = prt[i];
+        if (p) { if (z < pMinZ[p]) pMinZ[p] = z; if (z > pMaxZ[p]) pMaxZ[p] = z; }
+      }
+    }
+    const headId = PART_ID.head;
+    for (let z = 0; z < h; z++) {
+      const zOff = z * wd, hasUp = z + 1 < h, hasDn = z > 0;
+      for (let y = 0; y < d; y++) {
+        const row = zOff + y * w;
+        for (let x = 0; x < w; x++) {
+          const i = row + x, v = src[i];
+          if (v < MAT_BASE) continue;
+          const ramp = RAMPS_BY_MAT[v - MAT_BASE];
+          if (!ramp) continue;
+          const myP = prt[i], lutOff = myP * NUM_PARTS;
+          const topEmpty = !hasUp || !src[i + wd];
+          const botEmpty = hasDn && !src[i - wd];
+          let crease = false, np;
+          if (x + 1 < w && (np = prt[i + 1]) && np !== myP && !NO_CREASE_LUT[lutOff + np]) crease = true;
+          else if (x > 0 && (np = prt[i - 1]) && np !== myP && !NO_CREASE_LUT[lutOff + np]) crease = true;
+          else if (y + 1 < d && (np = prt[i + w]) && np !== myP && !NO_CREASE_LUT[lutOff + np]) crease = true;
+          else if (y > 0 && (np = prt[i - w]) && np !== myP && !NO_CREASE_LUT[lutOff + np]) crease = true;
+          else if (hasDn && (np = prt[i - wd]) && np !== myP && !NO_CREASE_LUT[lutOff + np]) crease = true;
+
+          let upperOcc = 0;
+          if (hasUp && !topEmpty) {
+            const up = i + wd;
+            for (let oy = -1; oy <= 1; oy++) {
+              const yy = y + oy;
+              if (yy < 0 || yy >= d) continue;
+              const uRow = up + oy * w;
+              for (let ox = -1; ox <= 1; ox++) {
+                const xx = x + ox;
+                if (xx >= 0 && xx < w && src[uRow + ox]) upperOcc++;
+              }
+            }
+          }
+          const span = Math.max(1, pMaxZ[myP] - pMinZ[myP]);
+          const localZ = (z - pMinZ[myP]) / span;
+          let idx = 1;
+          if (botEmpty || (!keepSoftBottom && z <= 1)) idx = 0;
+          else if (crease && !topEmpty) idx = 0;
+          else if (upperOcc >= 8 && localZ < 0.45) idx = 0;
+          else if (topEmpty) idx = (crease || upperOcc >= 8) ? 1 : 2;
+          else if (span >= 14 && localZ < 0.14) idx = 0;
+          else idx = 1;
+          if (myP === headId && idx === 2 && z < pMaxZ[myP] - 1) {
+            const edge2d = (x + 1 >= w || !src[i + 1]) || (x === 0 || !src[i - 1]) ||
+                           (y + 1 >= d || !src[i + w]) || (y === 0 || !src[i - w]);
+            if (!edge2d) idx = 1;
+          }
+          this.grid[i] = ramp[clamp(idx, 0, ramp.length - 1)];
+        }
+      }
+    }
+  }
+  toStripAsset(makeCanvas, meta = {}) {
+    const { w, d, h } = this;
+    const activeLayers = [], glowLayers = [];
+    for (let z = 0; z < h; z++) {
+      let hasPx = false, hasGlow = false;
+      const zBase = z * d * w;
+      for (let i = 0; i < d * w; i++) {
+        const id = this.grid[zBase + i];
+        if (!id) continue;
+        hasPx = true;
+        if (GLOW_ID_SET.has(id)) hasGlow = true;
+      }
+      if (hasPx) activeLayers.push(z);
+      if (hasGlow) glowLayers.push(z);
+    }
+    const strip = makeCanvas(w * h, d);
+    const sim = strip.getContext('2d').createImageData(w * h, d);
+    const hasGlow = glowLayers.length > 0;
+    const glowStrip = hasGlow ? makeCanvas(w * glowLayers.length, d) : null;
+    const eim = glowStrip ? glowStrip.getContext('2d').createImageData(w * glowLayers.length, d) : null;
+    const glowSlot = new Int16Array(h).fill(-1);
+    for (let i = 0; i < glowLayers.length; i++) glowSlot[glowLayers[i]] = i;
+
+    const foot = makeCanvas(w, d);
+    const fg = foot.getContext('2d');
+    const fim = fg.createImageData(w, d);
+    for (let y = 0; y < d; y++) for (let x = 0; x < w; x++) {
+      for (let z = 0; z < h; z++) {
+        if (this.grid[(z * d + y) * w + x]) {
+          const fi = (y * w + x) * 4;
+          fim.data[fi] = 14; fim.data[fi + 1] = 10; fim.data[fi + 2] = 16; fim.data[fi + 3] = 255;
+          break;
+        }
+      }
+    }
+    fg.putImageData(fim, 0, 0);
+
+    const asset = {
+      w, d, h, grid: this.grid,
+      strip, glowStrip, sim, eim,
+      glowSlot, activeLayers, glowLayers,
+      footShadow: foot,
+      meta: {
+        footRadius: meta.footRadius || 10.0,
+        headZ: meta.headZ || (activeLayers.length ? activeLayers[activeLayers.length - 1] + 2 : h),
+        centerZ: meta.centerZ || Math.round(h * 0.5)
+      }
+    };
+    recolorAsset(asset, ID_TO_RGBA);
+    return asset;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 4. 幼年飞龙模块化部件（圆滚短躯、大头炽口、粗短尾、锁枢轴肉翼）
+// ---------------------------------------------------------------------------
+function buildYoungTorsoPart() {
+  const m = new VoxelModel(14, 16, 17);
+  m.fillAABB(-5.6, 5.6, -6.8, 6.2, 1.5, 16.0, (x, y, z, X, Y) => {
+    const dBody = (Math.hypot(X / 5.1, (Y + 1.0) / 5.5, (z - 8.2) / 4.8) - 1) * 4.8;
+    const dNeck = (Math.hypot(X / 3.1, (Y - 4.2) / 3.0, (z - 13.0) / 2.8) - 1) * 2.8;
+    if (smin(dBody, dNeck, 1.5) <= 0) {
+      const isBelly = z < 7.0 && Math.abs(X) < 3.6 && Y > -4.2;
+      m.setRaw(x, y, z, isBelly ? mat('belly') : mat('scale'), isBelly ? PART_ID.belly : PART_ID.body);
+    }
+  });
+  for (const sp of [[0,1.8,13.2,1.25],[0,-1.0,13.4,1.3],[0,-3.8,12.6,1.2],[0,-6.0,11.2,1.1]]) {
+    m.paintEllipsoid(sp[0], sp[1], sp[2], sp[3]*0.85, sp[3], sp[3]*1.05, mat('horn'), PART_ID.spine, true);
+  }
+  for (const s of [-1, 1]) {
+    m.paintCapsule(s * 3.6, -2.5, 5.2, s * 4.4, -2.2, 1.8, 1.65, 1.3, mat('scale'), PART_ID.leg, true);
+    m.paintEllipsoid(s * 4.4, -1.0, 1.2, 1.35, 1.6, 1.05, mat('horn'), PART_ID.claw, true);
+  }
+  m.despeckle(); m.applyArtShading(true);
+  return m;
+}
+
+function buildYoungHeadPart() {
+  const W = 13, D = 18, H = 16;
+  const m = new VoxelModel(W, D, H);
+  const hz = 5.6, hy = -1.2;
+  m.paintEllipsoid(0, hy, hz, 4.8, 4.9, 4.2, mat('scale'), PART_ID.head, true);
+  m.paintEllipsoid(0, hy + 3.4, hz + 0.1, 2.9, 2.5, 1.55, mat('scale'), PART_ID.snout, true);
+  m.paintEllipsoid(0, hy + 4.0, hz - 2.6, 2.5, 2.9, 1.15, mat('belly'), PART_ID.jaw, true);
+  // 口部炽核（+Y 与 0.6 俯视严格 0 遮挡）
+  const mcZ = Math.round(hz - 1.3);
+  m.fillAABB(-1.6, 1.6, hy + 6.0, hy + 7.2, mcZ - 0.5, mcZ + 0.8, (x, y, z, X, Y) => {
+    if (Math.abs(X) <= 1.2 && Y >= hy + 6.1 && Y <= hy + 7.0 && z >= mcZ && z <= mcZ + 1) {
+      m.setRaw(x, y, z, Math.abs(X) <= 0.6 ? KEY_TO_ID.emissiveCore : KEY_TO_ID.emissiveHot, PART_ID.mouthCore);
+    }
+  });
+  for (const s of [-1, 1]) {
+    m.paintCapsule(s * 2.5, hy - 2.0, hz + 3.2, s * 3.7, hy - 4.6, hz + 6.4, 1.35, 0.9, mat('horn'), PART_ID.horn, true);
+  }
+  m.despeckle(); m.applyArtShading(true);
+
+  const eyeZ = Math.round(hz + 1.3), eyeY = Math.round(D * 0.5 - 0.5 + hy + 3.6);
+  for (const s of [-1, 1]) {
+    let sx = -1;
+    for (let step = 0; step < 6; step++) {
+      const x = Math.round(W * 0.5 - 0.5 + s * (5.2 - step));
+      if (m.getPartId(x, eyeY, eyeZ) === PART_ID.head) { sx = x; break; }
+    }
+    if (sx < 0) sx = Math.round(W * 0.5 - 0.5 + s * 3.8);
+    for (const dy of [0, 1]) for (const dz of [0, 1]) {
+      const kId = (dz === 1 && dy === 1) ? KEY_TO_ID.eyeGlint : (dy === 1 ? KEY_TO_ID.eyeDark : KEY_TO_ID.eyeIris);
+      m.setRaw(sx, eyeY + dy - 1, eyeZ + dz, kId, PART_ID.eye);
+    }
+  }
+  return m;
+}
+
+const Y_TAIL_PIVOT_Y = 5.4;
+function buildYoungTailPart() {
+  const m = new VoxelModel(8, 14, 9);
+  const ry = Y_TAIL_PIVOT_Y;
+  m.paintCapsule(0, ry, 3.2, 0, ry - 4.0, 2.6, 2.8, 2.2, mat('scale'), PART_ID.tail, true);
+  m.paintCapsule(0, ry - 4.0, 2.6, 0, ry - 7.8, 3.2, 2.2, 1.6, mat('scale'), PART_ID.tail, true);
+  m.paintCapsule(0, ry - 7.8, 3.2, 0, ry - 11.0, 4.6, 1.6, 1.15, mat('scale'), PART_ID.tail, true);
+  m.despeckle(); m.applyArtShading(true);
+  return m;
+}
+
+const Y_WING_PIVOT = { x: 5.8, y: 1.5 };
+function buildYoungWingPart(side, pose) {
+  const m = new VoxelModel(16, 12, 16);
+  const s = side, rx = -s * Y_WING_PIVOT.x, ry = Y_WING_PIVOT.y, rz = 6.2;
+  const flap = pose === 'up' ? 0.95 : (pose === 'down' ? -0.85 : -0.75);
+  const spread = pose === 'tuck' ? 0.58 : 1.0;
+  const pRoot = [rx, ry, rz];
+  const pElbow = [rx + s * 5.2 * spread, ry + 1.8, rz + 2.2 + flap * 3.0];
+  const pTip   = [rx + s * 11.0 * spread, ry - 0.2, rz + 1.2 + flap * 5.4];
+  const pTRoot = [rx, ry - 5.0, rz - 1.5];
+  const pTMid  = [rx + s * 5.2 * spread, ry - 5.4, pElbow[2] - 1.5];
+  const pTTip  = [rx + s * 10.4 * spread, ry - 1.8, pTip[2] - 0.6];
+  m.paintWingQuad(pRoot, pElbow, pTMid, pTRoot, 1.15, mat('wing'), PART_ID.wingMem, 0.8, false);
+  m.paintWingQuad(pElbow, pTip, pTTip, pTMid,  1.12, mat('wing'), PART_ID.wingMem, 1.0, false);
+  m.paintCapsule(pRoot[0], pRoot[1], pRoot[2], pElbow[0], pElbow[1], pElbow[2], 1.45, 1.25, mat('scale'), PART_ID.wingBone, true);
+  m.paintCapsule(pElbow[0], pElbow[1], pElbow[2], pTip[0], pTip[1], pTip[2], 1.25, 0.95, mat('scale'), PART_ID.wingBone, true);
+  m.paintCapsule(pElbow[0], pElbow[1], pElbow[2], pTMid[0], pTMid[1], pTMid[2], 1.1, 0.95, mat('horn'), PART_ID.wingBone, true);
+  m.despeckle(); m.applyArtShading(true);
+  return m;
+}
+
+// ---------------------------------------------------------------------------
+// 5. 成年飞龙模块化部件（壮硕胸甲+炽核、S形长颈、棱角龙头、3节鞭尾链、58格分段骨感宽翼）
+// ---------------------------------------------------------------------------
+function buildAdultTorsoPart() {
+  const m = new VoxelModel(18, 22, 26);
+  m.fillAABB(-7.6, 7.6, -9.2, 10.8, 7.5, 22.5, (x, y, z, X, Y) => {
+    const dTorso = (Math.hypot(X / 6.9, (Y - 0.4) / 9.0, (z - 14.8) / 6.0) - 1) * 6.0;
+    const dChest = (Math.hypot(X / 5.8, (Y - 6.0) / 5.2, (z - 16.0) / 5.4) - 1) * 5.2;
+    if (smin(dTorso, dChest, 2.2) <= 0) {
+      const isBelly = z < 13.0 && Math.abs(X) < 4.8 && Y > -5.5;
+      const isArmor = !isBelly && z > 17.0 && Math.abs(X) < 5.0;
+      m.setRaw(x, y, z, isBelly ? mat('belly') : (isArmor ? mat('armor') : mat('scale')), isBelly ? PART_ID.belly : PART_ID.body);
+    }
+  });
+  m.fillAABB(-3.0, 3.0, 7.6, 11.4, 12.0, 19.6, (x, y, z, X, Y) => {
+    const cd = Math.hypot(X / 2.6, (Y - 10.2) / 1.8, (z - 15.8) / 3.4);
+    if (cd <= 1.0) m.setRaw(x, y, z, cd <= 0.55 ? KEY_TO_ID.emissiveCore : (cd <= 0.82 ? KEY_TO_ID.emissiveHot : KEY_TO_ID.emissiveMid), PART_ID.chestCore);
+  });
+  for (const f of [[0,5.5,20.4,0,3.8,23.4,1.3],[0,1.2,20.6,0,-0.6,24.0,1.35],[0,-3.2,19.9,0,-5.2,23.0,1.3],[0,-7.4,18.0,0,-9.2,20.6,1.2]]) {
+    m.paintCapsule(f[0], f[1], f[2], f[3], f[4], f[5], f[6], 0.9, mat('horn'), PART_ID.spine, true);
+  }
+  for (const s of [-1, 1]) {
+    m.paintCapsule(s * 5.6, -4.4, 11.6, s * 6.8, -2.0, 6.4, 2.4, 1.85, mat('armor'), PART_ID.leg, true);
+    m.paintCapsule(s * 6.8, -2.0,  6.4, s * 5.6, -4.6, 2.6, 1.75, 1.45, mat('scale'), PART_ID.leg, true);
+    m.paintCapsule(s * 5.6, -4.6,  2.6, s * 5.6, -1.2, 1.4, 1.45, 1.15, mat('horn'), PART_ID.claw, true);
+    m.paintCapsule(s * 5.6, -1.6,  1.6, s * 6.6,  0.4, 0.8, 1.05, 0.85, mat('horn'), PART_ID.claw, true);
+  }
+  m.despeckle(); m.applyArtShading(true);
+  return m;
+}
+
+function buildAdultNeckPart() {
+  const m = new VoxelModel(10, 12, 18);
+  m.paintCapsule(0, -2.0, 1.5, 0,  1.6, 6.8, 4.0, 3.3, mat('scale'), PART_ID.neck, true);
+  m.paintCapsule(0,  1.6, 6.8, 0,  0.8, 12.2, 3.3, 3.0, mat('scale'), PART_ID.neck, true);
+  m.paintCapsule(0,  0.8, 12.2, 0, 3.2, 16.2, 3.0, 3.1, mat('scale'), PART_ID.neck, true);
+  // 喉缝炽核
+  m.fillAABB(-2.0, 2.0, 1.8, 5.2, 4.0, 10.6, (x, y, z, X, Y) => {
+    const td = Math.hypot(X / 1.7, (Y - 3.2) / 1.6, (z - 7.2) / 3.2);
+    if (td <= 1.0) m.setRaw(x, y, z, td <= 0.55 ? KEY_TO_ID.emissiveCore : (td <= 0.82 ? KEY_TO_ID.emissiveHot : KEY_TO_ID.emissiveMid), PART_ID.chestCore);
+  });
+  m.paintCapsule(0, -0.2, 8.8, 0, -2.0, 10.4, 1.2, 0.9, mat('horn'), PART_ID.spine, true);
+  m.paintCapsule(0, -0.4, 14.0, 0, -2.2, 15.6, 1.15, 0.9, mat('horn'), PART_ID.spine, true);
+  m.despeckle(); m.applyArtShading(true);
+  return m;
+}
+
+function buildAdultHeadPart() {
+  const W = 16, D = 26, H = 20;
+  const m = new VoxelModel(W, D, H);
+  const hz = 7.2, hy = 0.2;
+  m.paintEllipsoid(0, hy, hz, 4.7, 4.8, 3.6, mat('scale'), PART_ID.head, true);
+  m.paintEllipsoid(0, hy + 5.1, hz + 0.5, 3.1, 3.4, 1.55, mat('armor'), PART_ID.snout, true);
+  m.paintEllipsoid(0, hy + 7.6, hz + 1.5, 1.4, 1.1, 1.0, mat('horn'), PART_ID.horn, true);
+  m.paintEllipsoid(0, hy + 5.9, hz - 3.0, 2.8, 4.0, 1.35, mat('belly'), PART_ID.jaw, true);
+  m.paintCapsule(0, hy + 4.5, hz - 4.0, 0, hy + 2.3, hz - 5.2, 1.15, 0.85, mat('horn'), PART_ID.horn, true);
+  for (const s of [-1, 1]) {
+    m.paintCapsule(s * 2.1, hy + 4.0, hz - 3.6, s * 2.8, hy + 2.1, hz - 4.7, 1.05, 0.8, mat('horn'), PART_ID.horn, true);
+    m.paintCapsule(s * 2.8, hy - 2.3, hz + 2.6, s * 5.2, hy - 6.7, hz + 6.4, 1.55, 1.3, mat('horn'), PART_ID.horn, true);
+    m.paintCapsule(s * 5.2, hy - 6.7, hz + 6.4, s * 6.8, hy - 11.4, hz + 9.2, 1.3, 1.05, mat('horn'), PART_ID.horn, true);
+    m.paintCapsule(s * 4.2, hy - 2.5, hz - 0.4, s * 6.2, hy - 5.1, hz + 0.8, 1.15, 0.85, mat('horn'), PART_ID.horn, true);
+  }
+  const mcZ = Math.round(hz - 1.5);
+  m.fillAABB(-1.8, 1.8, hy + 8.5, hy + 10.0, mcZ - 0.5, mcZ + 1.2, (x, y, z, X, Y) => {
+    if (Math.abs(X) <= 1.5 && Y >= hy + 8.6 && Y <= hy + 9.6 && z >= mcZ && z <= mcZ + 1) {
+      m.setRaw(x, y, z, Math.abs(X) <= 0.7 ? KEY_TO_ID.emissiveCore : KEY_TO_ID.emissiveHot, PART_ID.mouthCore);
+    }
+  });
+  m.despeckle(); m.applyArtShading(true);
+
+  const eyeZ = Math.round(hz + 1.4), eyeY = Math.round(D * 0.5 - 0.5 + hy + 1.9);
+  for (const s of [-1, 1]) {
+    let sx = -1;
+    for (let step = 0; step < 6; step++) {
+      const x = Math.round(W * 0.5 - 0.5 + s * (5.2 - step));
+      if (m.getPartId(x, eyeY, eyeZ) === PART_ID.head) { sx = x; break; }
+    }
+    const minOuterX = Math.round(W * 0.5 - 0.5 + s * 3.6);
+    if (sx < 0 || (s > 0 ? sx < minOuterX : sx > minOuterX)) sx = minOuterX;
+    for (const dy of [0, 1]) for (const dz of [0, 1]) {
+      const kId = (dz === 1 && dy === 1) ? KEY_TO_ID.eyeGlint : (dy === 1 ? KEY_TO_ID.eyeDark : KEY_TO_ID.eyeIris);
+      m.setRaw(sx, eyeY + dy - 1, eyeZ + dz, kId, PART_ID.eye);
+    }
+  }
+  return m;
+}
+
+const A_TAIL_SEG_LEN = 7.4;
+function buildAdultTailSegPart(r0, r1, isTip = false) {
+  const m = new VoxelModel(isTip ? 9 : 8, isTip ? 12 : 11, 8);
+  const ry = 3.6;
+  m.paintCapsule(0, ry, 3.6, 0, ry - A_TAIL_SEG_LEN, isTip ? 4.8 : 3.2, r0, r1, mat('scale'), PART_ID.tail, true);
+  if (isTip) {
+    const ty = ry - A_TAIL_SEG_LEN;
+    m.paintCapsule(0, ty + 1.2, 4.5, -2.2, ty + 3.0, 5.2, 1.15, 0.9, mat('horn'), PART_ID.tailBarb, true);
+    m.paintCapsule(0, ty + 1.2, 4.5,  2.2, ty + 3.0, 5.2, 1.15, 0.9, mat('horn'), PART_ID.tailBarb, true);
+    m.paintCapsule(0, ty + 0.8, 4.8,  0,   ty - 1.8, 5.8, 1.2,  0.9, mat('horn'), PART_ID.tailBarb, true);
+  }
+  m.despeckle(); m.applyArtShading(true);
+  return m;
+}
+
+// 成年宽翼（单侧跨度 24 格，双翼合展 58 格 = 幼年 1.84×，翼根枢轴锁在 A_WING_PIVOT）
+const A_WING_PIVOT = { x: 11.4, y: 2.2 };
+function buildAdultWingPart(side, pose) {
+  const m = new VoxelModel(27, 22, 24);
+  const s = side, rx = -s * A_WING_PIVOT.x, ry = A_WING_PIVOT.y, rz = 10.0;
+  const flap = pose === 'up' ? 0.88 : (pose === 'down' ? -0.82 : 0.15);
+  const pRoot = [rx, ry, rz];
+  const pWrist = [rx + s * 10.6, ry + 3.8, rz + 4.4 + flap * 4.0];
+  const pTip   = [rx + s * 22.8, ry - 1.0, rz + 1.4 + flap * 7.6];
+  const pTRoot = [rx, ry - 11.0, rz - 3.0];
+  const pTRib3 = [rx + s * 7.6, ry - 14.5, pWrist[2] - 5.6];
+  const pTRib2 = [rx + s * 14.8, ry - 13.5, lerp(pWrist[2], pTip[2], 0.45) - 4.8];
+  const pTRib1 = [rx + s * 18.8, ry - 9.4, pTip[2] - 3.2];
+  const pTipBack = [rx + s * 22.4, ry - 3.0, pTip[2] - 0.8];
+
+  m.paintWingQuad(pRoot,  pWrist, pTRib3, pTRoot, 1.22, mat('wing'), PART_ID.wingMem, 1.5, false);
+  m.paintWingQuad(pWrist, pTRib1, pTRib2, pTRib3, 1.22, mat('wing'), PART_ID.wingMem, 1.6, false);
+  m.paintWingQuad(pWrist, pTip,   pTipBack, pTRib1, 1.18, mat('wing'), PART_ID.wingMem, 1.8, false);
+  m.paintCapsule(pRoot[0], pRoot[1], pRoot[2], pWrist[0], pWrist[1], pWrist[2], 1.9, 1.65, mat('armor'), PART_ID.wingBone, true);
+  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pTip[0], pTip[1], pTip[2], 1.6, 1.1, mat('armor'), PART_ID.wingBone, true);
+  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pWrist[0] + s * 1.2, pWrist[1] + 2.6, pWrist[2] + 1.8, 1.2, 0.9, mat('horn'), PART_ID.horn, true);
+  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pTRib1[0], pTRib1[1], pTRib1[2], 1.25, 1.0, mat('horn'), PART_ID.wingBone, true);
+  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pTRib2[0], pTRib2[1], pTRib2[2], 1.25, 1.0, mat('horn'), PART_ID.wingBone, true);
+  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pTRib3[0], pTRib3[1], pTRib3[2], 1.25, 1.0, mat('horn'), PART_ID.wingBone, true);
+  m.despeckle(); m.applyArtShading(true);
+  return m;
+}
+
+function buildTrainingDummy() {
+  const m = new VoxelModel(16, 16, 30);
+  const hw = 7.5, hd = 7.5;
+  for (let z = 0; z < 30; z++) for (let y = 0; y < 16; y++) {
+    const Y = y - hd;
+    for (let x = 0; x < 16; x++) {
+      const X = x - hw, r = Math.hypot(X, Y);
+      if (z < 5 && r <= (z < 2 ? 5.2 : 3.8)) { m.setRaw(x, y, z, mat('stone'), PART_ID.dummyBase); continue; }
+      if ((z === 8 || z === 22) && r <= 2.45) { m.setRaw(x, y, z, mat('iron'), PART_ID.dummyIron); continue; }
+      if (z >= 5 && z <= 27 && r <= 2.05) { m.setRaw(x, y, z, mat('wood'), PART_ID.dummyPost); continue; }
+      if (z === 28 && r <= 1.6) { m.setRaw(x, y, z, mat('iron'), PART_ID.dummyIron); continue; }
+    }
+  }
+  m.fillAABB(-5.6, 5.6, -4.4, -1.6, 13, 25, (x, y, z, X, Y) => {
+    const rd = Math.hypot(X, z - 19);
+    if (rd <= 5.2 && Y >= -4.0 && Y <= -1.8) {
+      if (Y <= -3.0) {
+        const col = rd <= 1.6 ? KEY_TO_ID.targetRed : (rd <= 3.3 ? KEY_TO_ID.targetCream : KEY_TO_ID.targetRed);
+        m.setRaw(x, y, z, col, PART_ID.dummyBoard);
+      } else m.setRaw(x, y, z, mat('wood'), PART_ID.dummyBoard);
+    }
+  });
+  m.despeckle(); m.applyArtShading(false);
+  return m;
+}
+
+function buildVolcanicPlatform(makeCanvas, size = 200) {
+  const base = makeCanvas(size, size);
+  const bg = base.getContext('2d');
+  const bim = bg.createImageData(size, size);
+  const half = size * 0.5, rOuter = size * 0.478, rInner = size * 0.425;
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const dx = x - half, dy = y - half, dist = Math.hypot(dx, dy);
+    if (dist > rOuter) continue;
+    const i = (y * size + x) * 4;
+    let key;
+    if (dist > rInner) {
+      const ang = Math.atan2(dy, dx), segF = ((ang + Math.PI) / (Math.PI * 2)) * 24;
+      const seam = Math.abs(segF - Math.round(segF)) < 0.08;
+      key = (seam || dist > rOuter - 2.2 || dist < rInner + 1.8) ? 'stoneDeep' : ((Math.floor(segF) & 1) ? 'stoneMid' : 'stoneDark');
+    } else {
+      const v = periodicNoise2(x, y, 64, 64, 16, 17) * 0.65 + periodicNoise2(x + 9, y + 5, 32, 32, 8, 53) * 0.35;
+      const tileSeam = (x % 16 === 0) || (y % 16 === 0);
+      const runeRing = Math.abs(dist - 32) < 1.2 || Math.abs(dist - 62) < 1.2;
+      key = runeRing ? (((x + y) & 2) ? 'rustMid' : 'rustDark') : (tileSeam ? 'stoneDeep' : (v > 0.64 ? 'stoneHi' : (v < 0.34 ? 'stoneDark' : 'stoneMid')));
+    }
+    const rgba = ID_TO_RGBA[KEY_TO_ID[key]];
+    bim.data[i] = rgba[0]; bim.data[i + 1] = rgba[1]; bim.data[i + 2] = rgba[2]; bim.data[i + 3] = 255;
+  }
+  bg.putImageData(bim, 0, 0);
+  return { size, base, rInner, rOuter };
+}
+// === FEILONG_VOXEL_CORE_END ===
+
+// ---------------------------------------------------------------------------
+// 6. 满帧像素堆叠渲染器 + actorBuf(300×280) 整体轮廓 + 双形态 + 变身 + 巡航 + 9 技能
+// ---------------------------------------------------------------------------
+(function initApp() {
+  const TILT = 0.6, HS = 0.8, TAU = Math.PI * 2;
+  const BAKE_SCALE = 2.5, BAKE_STEP = 2, BAKE_HALF = 1;
+  const ANGLE_QUANT_DEG = 3, GROUND_SUPERSAMPLE = 2;
+  const DUMMY_POS = { x: 0, y: 46 };
+
+  const ACTOR_W = 300, ACTOR_H = 280;
+  const ACTOR_AX = 150, ACTOR_AY = 200;
+
+  const cv = document.getElementById('view'), dctx = cv.getContext('2d');
+  const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, w); c.height = Math.max(1, h); return c; };
+
+  const bgc = mk(1, 1), bgctx = bgc.getContext('2d');
+  const mc = mk(1, 1), mctx = mc.getContext('2d');
+  const oc = mk(1, 1), octx = oc.getContext('2d');
+  const ec = mk(1, 1), ectx = ec.getContext('2d');
+  const eb = mk(1, 1), ebctx = eb.getContext('2d');
+  const gbuf = mk(200 * GROUND_SUPERSAMPLE, 200 * GROUND_SUPERSAMPLE), gbctx = gbuf.getContext('2d');
+
+  const actorRaw = mk(ACTOR_W, ACTOR_H), arCtx = actorRaw.getContext('2d');
+  const actorSil = mk(ACTOR_W, ACTOR_H), asCtx = actorSil.getContext('2d');
+  const actorOut = mk(ACTOR_W, ACTOR_H), aoCtx = actorOut.getContext('2d');
+  const actorGlow = mk(ACTOR_W, ACTOR_H), agCtx = actorGlow.getContext('2d');
+
+  const scratchRaw = mk(240, 240), srCtx = scratchRaw.getContext('2d');
+  const scratchSil = mk(240, 240), ssCtx = scratchSil.getContext('2d');
+
+  const canvasPool = [];
+  function acquireCanvas(w, h) {
+    const c = canvasPool.pop() || document.createElement('canvas');
+    if (c.width !== w) c.width = w;
+    if (c.height !== h) c.height = h;
+    return c;
+  }
+  function releaseCanvas(c) {
+    if (!c) return;
+    if (canvasPool.length < 360) canvasPool.push(c);
+  }
+
+  // 1. 极速构建双形态 19 个模块化部件
+  const tBuild0 = performance.now();
+  const parts = {
+    yTorso:      buildYoungTorsoPart().toStripAsset(mk,      { footRadius: 7.5 }),
+    yHead:       buildYoungHeadPart().toStripAsset(mk,       { footRadius: 5.5 }),
+    yTail:       buildYoungTailPart().toStripAsset(mk,       { footRadius: 3.5 }),
+    yWingL_up:   buildYoungWingPart(-1, 'up').toStripAsset(mk,   { footRadius: 6.0 }),
+    yWingR_up:   buildYoungWingPart( 1, 'up').toStripAsset(mk,   { footRadius: 6.0 }),
+    yWingL_dn:   buildYoungWingPart(-1, 'down').toStripAsset(mk, { footRadius: 6.0 }),
+    yWingR_dn:   buildYoungWingPart( 1, 'down').toStripAsset(mk, { footRadius: 6.0 }),
+    yWingL_tuck: buildYoungWingPart(-1, 'tuck').toStripAsset(mk, { footRadius: 4.5 }),
+    yWingR_tuck: buildYoungWingPart( 1, 'tuck').toStripAsset(mk, { footRadius: 4.5 }),
+
+    aTorso:       buildAdultTorsoPart().toStripAsset(mk,     { footRadius: 11.0 }),
+    aNeck:        buildAdultNeckPart().toStripAsset(mk,      { footRadius: 5.0 }),
+    aHead:        buildAdultHeadPart().toStripAsset(mk,      { footRadius: 6.5 }),
+    aTail1:       buildAdultTailSegPart(3.5, 2.5, false).toStripAsset(mk, { footRadius: 4.0 }),
+    aTail2:       buildAdultTailSegPart(2.4, 1.7, false).toStripAsset(mk, { footRadius: 3.0 }),
+    aTailTip:     buildAdultTailSegPart(1.6, 1.1, true).toStripAsset(mk,  { footRadius: 3.0 }),
+    aWingL_up:    buildAdultWingPart(-1, 'up').toStripAsset(mk,    { footRadius: 11.0 }),
+    aWingR_up:    buildAdultWingPart( 1, 'up').toStripAsset(mk,    { footRadius: 11.0 }),
+    aWingL_dn:    buildAdultWingPart(-1, 'down').toStripAsset(mk,  { footRadius: 11.0 }),
+    aWingR_dn:    buildAdultWingPart( 1, 'down').toStripAsset(mk,  { footRadius: 11.0 }),
+    aWingL_glide: buildAdultWingPart(-1, 'glide').toStripAsset(mk, { footRadius: 11.0 }),
+    aWingR_glide: buildAdultWingPart( 1, 'glide').toStripAsset(mk, { footRadius: 11.0 })
+  };
+  const dragonAssets = Object.values(parts);
+  const dummyAsset = buildTrainingDummy().toStripAsset(mk, { footRadius: 5.5, headZ: 29, centerZ: 15 });
+  const platform = buildVolcanicPlatform(mk, 200);
+  const buildMs = (performance.now() - tBuild0).toFixed(1);
+
+  let skinIdx = 0, curSkin = SKINS[0], skinMs = 0;
+  let form = 'young'; // 'young' | 'adult'
+  let baseMode = 'hover'; // 'hover' | 'soar'
+
+  const spriteCache = new Map();
+  const MAX_CACHE = 1024;
+  let cacheHits = 0, cacheMisses = 0;
+
+  function flushDragonCache() {
+    for (const [k, entry] of spriteCache.entries()) {
+      if (k.startsWith('dummy|')) continue;
+      releaseCanvas(entry.main); releaseCanvas(entry.glow);
+      spriteCache.delete(k);
+    }
+  }
+
+  function getBakedSprite(asset, assetId, angle, outlineHex, wantOutline, symDeg = 360) {
+    const rawDeg = (((angle * 180 / Math.PI) % symDeg) + symDeg) % symDeg;
+    const slots = Math.max(1, Math.round(symDeg / ANGLE_QUANT_DEG));
+    const degSlot = Math.round(rawDeg / ANGLE_QUANT_DEG) % slots;
+    const qAng = (degSlot * ANGLE_QUANT_DEG) * Math.PI / 180;
+    const key = `${assetId}|${degSlot}|${wantOutline ? outlineHex : 'raw'}`;
+    const hit = spriteCache.get(key);
+    if (hit) { cacheHits++; spriteCache.delete(key); spriteCache.set(key, hit); return hit; }
+    cacheMisses++;
+
+    const { w, d, activeLayers, glowLayers, glowSlot, glowStrip, strip } = asset;
+    const c = Math.cos(qAng), s = Math.sin(qAng), sc = BAKE_SCALE;
+    const maxZ = activeLayers.length ? activeLayers[activeLayers.length - 1] : 0;
+    const op = wantOutline ? 1 : 0, pad = op + 2;
+    const rxSpan = Math.ceil((Math.abs(c) * w * 0.5 + Math.abs(s) * d * 0.5) * sc);
+    const rySpan = Math.ceil((Math.abs(s) * w * 0.5 + Math.abs(c) * d * 0.5) * TILT * sc);
+    const bw = rxSpan * 2 + pad * 2, bh = rySpan * 2 + maxZ * BAKE_STEP + pad * 2 + BAKE_STEP;
+    const anchorX = Math.floor(bw / 2), anchorY = bh - rySpan - pad;
+
+    if (scratchRaw.width < bw) scratchRaw.width = bw;
+    if (scratchRaw.height < bh) scratchRaw.height = bh;
+    srCtx.setTransform(1, 0, 0, 1, 0, 0); srCtx.globalCompositeOperation = 'source-over';
+    srCtx.imageSmoothingEnabled = false; srCtx.clearRect(0, 0, bw, bh);
+
+    const hasGlow = !!glowStrip && glowLayers.length > 0;
+    const minGlowZ = hasGlow ? glowLayers[0] : 9999;
+    const glowC = hasGlow ? acquireCanvas(bw, bh) : null;
+    const glctx = hasGlow ? glowC.getContext('2d') : null;
+    if (glctx) {
+      glctx.setTransform(1, 0, 0, 1, 0, 0); glctx.globalCompositeOperation = 'source-over';
+      glctx.imageSmoothingEnabled = false; glctx.clearRect(0, 0, bw, bh);
+    }
+    const cs = c * sc, ss = s * sc, tss = TILT * ss, tcs = TILT * cs, hw = -w * 0.5, hd = -d * 0.5;
+    for (let li = 0; li < activeLayers.length; li++) {
+      const z = activeLayers[li], yy = anchorY - z * BAKE_STEP, sx = z * w;
+      srCtx.setTransform(cs, tss, -ss, tcs, anchorX, yy + BAKE_HALF); srCtx.drawImage(strip, sx, 0, w, d, hw, hd, w, d);
+      srCtx.setTransform(cs, tss, -ss, tcs, anchorX, yy); srCtx.drawImage(strip, sx, 0, w, d, hw, hd, w, d);
+      if (hasGlow && z >= minGlowZ) {
+        if (z > minGlowZ) {
+          glctx.globalCompositeOperation = 'destination-out';
+          glctx.setTransform(cs, tss, -ss, tcs, anchorX, yy + BAKE_HALF); glctx.drawImage(strip, sx, 0, w, d, hw, hd, w, d);
+          glctx.setTransform(cs, tss, -ss, tcs, anchorX, yy); glctx.drawImage(strip, sx, 0, w, d, hw, hd, w, d);
+        }
+        const gSlot = glowSlot[z];
+        if (gSlot >= 0) {
+          glctx.globalCompositeOperation = 'source-over';
+          glctx.setTransform(cs, tss, -ss, tcs, anchorX, yy);
+          glctx.drawImage(glowStrip, gSlot * w, 0, w, d, hw, hd, w, d);
+        }
+      }
+    }
+    const finalC = acquireCanvas(bw, bh), fctx = finalC.getContext('2d');
+    fctx.setTransform(1, 0, 0, 1, 0, 0); fctx.globalCompositeOperation = 'source-over';
+    fctx.imageSmoothingEnabled = false; fctx.clearRect(0, 0, bw, bh);
+    if (wantOutline) {
+      if (scratchSil.width < bw) scratchSil.width = bw;
+      if (scratchSil.height < bh) scratchSil.height = bh;
+      ssCtx.setTransform(1, 0, 0, 1, 0, 0); ssCtx.globalCompositeOperation = 'source-over'; ssCtx.clearRect(0, 0, bw, bh);
+      ssCtx.drawImage(scratchRaw, 0, 0, bw, bh, 0, 0, bw, bh);
+      ssCtx.globalCompositeOperation = 'source-in'; ssCtx.fillStyle = outlineHex; ssCtx.fillRect(0, 0, bw, bh);
+      fctx.drawImage(scratchSil, 0, 0, bw, bh, -op, 0, bw, bh); fctx.drawImage(scratchSil, 0, 0, bw, bh, op, 0, bw, bh);
+      fctx.drawImage(scratchSil, 0, 0, bw, bh, 0, -op, bw, bh); fctx.drawImage(scratchSil, 0, 0, bw, bh, 0, op, bw, bh);
+    }
+    fctx.drawImage(scratchRaw, 0, 0, bw, bh, 0, 0, bw, bh);
+    const entry = { main: finalC, glow: glowC, anchorX, anchorY, bw, bh };
+    spriteCache.set(key, entry);
+    if (spriteCache.size > MAX_CACHE) {
+      const ok = spriteCache.keys().next().value, old = spriteCache.get(ok);
+      spriteCache.delete(ok); releaseCanvas(old.main); releaseCanvas(old.glow);
+    }
+    return entry;
+  }
+
+  // 2. 飞龙 120fps 实时骨骼状态
+  const rig = {
+    x: 0, y: 0, lift: 6.0, yaw: 0, scaleMul: 1.0,
+    flapPhase: 0, wingPose: 'up', wingSweep: 0,
+    headYaw: 0, headLift: 0, tailPhase: 0,
+    pulseColor: null, pulseAlpha: 0, glowBoost: 1.0,
+    flameBeam: null, orbitOrbs: null, cocoonPhase: 0, runePower: 0
+  };
+
+  const MODES = ['cached', 'crisp', 'retro'];
+  const MODE_LABEL = { cached: '游戏缓存', crisp: '高清逐层', retro: '复古低分' };
+  let modeIdx = 0;
+  let CW = 0, CH = 0, EW = 0, EH = 0, DPR = 1, SCALE = 4, zoom = 0;
+  let th = 0.62, thTarget = 0.62;
+  let drag = null, autoSpin = false, useOutline = true;
+
+  let animTime = 0, soarPhase = 0, emberCd = 0;
+  let shakeMag = 0, flashAlpha = 0, dummyHit = 0, dummySmoke = 0;
+
+  const SKILLS = {
+    young: [
+      { id: 'fireballs', name: '召唤小火球', dur: 2.0 },
+      { id: 'sneeze',    name: '火苗喷嚏',   dur: 1.55 },
+      { id: 'rollRing',  name: '翻滚火环',   dur: 1.65 },
+      { id: 'pounce',    name: '低空扑咬',   dur: 1.65 }
+    ],
+    adult: [
+      { id: 'flameBreath', name: '烈焰喷吐',     dur: 2.9 },
+      { id: 'wingGust',    name: '双翼掀风',     dur: 2.0 },
+      { id: 'skySlam',     name: '高空俯冲砸地', dur: 2.25 },
+      { id: 'tailSweep',   name: '甩尾横扫',     dur: 1.65 },
+      { id: 'magmaRain',   name: '熔岩火雨',     dur: 2.6 }
+    ]
+  };
+  let activeAction = null;
+
+  const particles = [], groundDecals = [], warnings = [], projectiles = [], shockRings = [];
+  const ambientEmbers = Array.from({ length: 20 }, (_, i) => ({
+    x: Math.sin(i * 17.3) * 68, y: Math.cos(i * 11.7) * 68, z: 6 + (i * 9) % 36, sp: 8 + (i % 5) * 3.5, ph: i * 1.1
+  }));
+
+  function spawnParticle(x, y, z, vx, vy, vz, life, sz, color, glow = false, gravity = 0) {
+    if (particles.length > 360) particles.shift();
+    particles.push({ x, y, z, vx, vy, vz, t: 0, life, sz, color, glow, gravity });
+  }
+  function addDecal(type, x, y, r, life) {
+    if (groundDecals.length > 64) groundDecals.shift();
+    groundDecals.push({ type, x, y, r, t: 0, life });
+  }
+  function addRing(x, y, z, r0, r1, life, color, glow = true, arc = null) {
+    shockRings.push({ x, y, z, r0, r1, t: 0, life, color, glow, arc });
+  }
+  function hitDummy(power = 1.0, scorch = true) {
+    const fx = curSkin.fx;
+    dummyHit = Math.max(dummyHit, power);
+    dummySmoke = Math.max(dummySmoke, 1.4);
+    if (scorch) addDecal('scorch', DUMMY_POS.x + (Math.random() - 0.5) * 5, DUMMY_POS.y + (Math.random() - 0.5) * 5, 6 + power * 4, 5.5);
+    for (let i = 0; i < Math.round(7 * power); i++) {
+      const a = Math.random() * TAU, sp = 14 + Math.random() * 24;
+      spawnParticle(DUMMY_POS.x, DUMMY_POS.y - 2, 12 + Math.random() * 10,
+        Math.cos(a) * sp, Math.sin(a) * sp, 10 + Math.random() * 18,
+        0.45 + Math.random() * 0.35, 1.8, i & 1 ? fx.hot : fx.mid, true, 48);
+    }
+  }
+
+  let bannerTimer = 0;
+  function showBanner(msg, dur = 1.5) {
+    const b = document.getElementById('banner');
+    b.textContent = msg; b.classList.add('show'); bannerTimer = dur;
+  }
+
+  function applySkin(idx, showTip = true) {
+    const t0 = performance.now();
+    skinIdx = ((idx % SKINS.length) + SKINS.length) % SKINS.length;
+    curSkin = SKINS[skinIdx];
+    const rgbaTable = buildRgbaTable(curSkin);
+    for (let i = 0; i < dragonAssets.length; i++) recolorAsset(dragonAssets[i], rgbaTable);
+    flushDragonCache();
+    document.documentElement.style.setProperty('--accent', curSkin.ui.accent);
+    document.documentElement.style.setProperty('--hot', curSkin.ui.hot);
+    document.documentElement.style.setProperty('--border', curSkin.ui.border);
+    renderSkyCache();
+    skinMs = Number((performance.now() - t0).toFixed(2));
+    syncUI();
+    if (showTip) showBanner(`龙鳞色系 · ${curSkin.name} (${skinMs}ms)`, 1.4);
+  }
+
+  function startTransform() {
+    form = 'young';
+    activeAction = { kind: 'transform', id: 'evolve', t: 0, dur: 2.08, state: { burstDone: false, wave1: false, wave2: false } };
+    syncUI(); showBanner('蜕变演出 · 蓄势聚焰', 2.2);
+  }
+
+  function startSkill(idx) {
+    const list = SKILLS[form];
+    if (!list || !list[idx]) return;
+    const sk = list[idx];
+    activeAction = { kind: 'skill', id: sk.id, t: 0, dur: sk.dur, state: {} };
+    showBanner(`${form === 'young' ? '幼年' : '成年'}技能 · ${sk.name}`, sk.dur);
+    syncUI();
+  }
+
+  function renderSkyCache() {
+    bgc.width = Math.max(1, cv.width); bgc.height = Math.max(1, cv.height);
+    bgctx.setTransform(1, 0, 0, 1, 0, 0);
+    const sky = bgctx.createLinearGradient(0, 0, 0, bgc.height);
+    sky.addColorStop(0, '#120c14'); sky.addColorStop(0.62, '#28171c'); sky.addColorStop(1, '#47221d');
+    bgctx.fillStyle = sky; bgctx.fillRect(0, 0, bgc.width, bgc.height);
+    const halo = bgctx.createRadialGradient(bgc.width * 0.5, bgc.height * 0.44, 12, bgc.width * 0.5, bgc.height * 0.44, bgc.height * 0.54);
+    halo.addColorStop(0, curSkin.fx.skyHalo); halo.addColorStop(1, 'rgba(0,0,0,0)');
+    bgctx.fillStyle = halo; bgctx.fillRect(0, 0, bgc.width, bgc.height);
+  }
+
+  function fit() {
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    const cssW = window.innerWidth, cssH = window.innerHeight;
+    cv.width = Math.floor(cssW * DPR); cv.height = Math.floor(cssH * DPR);
+    const logicalScale = Math.max(2, Math.round(cssH / 146) + zoom);
+    SCALE = Math.max(2, Math.round(logicalScale * DPR));
+
+    const mode = MODES[modeIdx];
+    if (mode === 'retro') { CW = Math.ceil(cv.width / SCALE); CH = Math.ceil(cv.height / SCALE); }
+    else { CW = cv.width; CH = cv.height; }
+    if (mode === 'cached') { mc.width = oc.width = 1; mc.height = oc.height = 1; }
+    else { mc.width = oc.width = CW; mc.height = oc.height = CH; }
+    EW = Math.max(1, Math.ceil(cv.width / 4)); EH = Math.max(1, Math.ceil(cv.height / 4));
+    ec.width = eb.width = EW; ec.height = eb.height = EH;
+    renderSkyCache();
+  }
+
+  let shakeX = 0, shakeY = 0;
+  function proj(x, y, z, sc) {
+    const c = Math.cos(th), s = Math.sin(th);
+    const rx = c * x - s * y, ry = s * x + c * y;
+    const mode = MODES[modeIdx];
+    const step = mode === 'retro' ? HS : (mode === 'cached' ? HS * sc : Math.max(1, Math.round(HS * sc)));
+    const sx = mode === 'retro' ? shakeX / SCALE : shakeX;
+    const sy = mode === 'retro' ? shakeY / SCALE : shakeY;
+    return [CW / 2 + rx * sc + sx, CH / 2 + 18 * sc + ry * TILT * sc - z * step + sy, ry];
+  }
+
+  // 3. 120fps 飞龙骨骼运动学 + 盘旋翱翔 + 四段式变身 + 9 技能状态机
+  function updateDragonRig(dt) {
+    const fx = curSkin.fx;
+    const kSlow = 1 - Math.exp(-dt * 8);
+    const kFast = 1 - Math.exp(-dt * 15);
+    const isAdult = form === 'adult';
+
+    let flapFreq = isAdult ? 4.4 : 8.2;
+    let tgtX = 0, tgtY = 0, tgtYaw = 0, tgtScale = 1.0;
+    let tgtHeadYaw = Math.sin(animTime * 1.4) * 0.22;
+    let tgtHeadLift = Math.sin(animTime * 2.2) * 0.8;
+    let forcePose = null, tgtSweep = 0;
+    let tgtLift = (isAdult ? 9.0 : 5.8) + Math.sin(rig.flapPhase - 0.72) * (isAdult ? 2.4 : 1.5);
+    rig.pulseColor = null; rig.pulseAlpha = 0; rig.glowBoost = 1.0;
+    rig.flameBeam = null; rig.orbitOrbs = null; rig.cocoonPhase = 0; rig.runePower = 0;
+
+    if (!activeAction) {
+      if (baseMode === 'soar') {
+        // =========================================================================
+        // 真实飞龙盘旋翱翔巡航：强力拍翼爬升 → 展翼滑翔盘旋 → 倾侧大回环！
+        // =========================================================================
+        const beat = Math.sin(animTime * 0.95);
+        const gliding = beat > 0.15;
+        soarPhase += dt * (gliding ? 0.92 : 0.68);
+        flapFreq = gliding ? 1.4 : (isAdult ? 5.2 : 9.4);
+        const rx = isAdult ? 32.0 : 28.0, ry = isAdult ? 22.0 : 20.0;
+        tgtX = Math.sin(soarPhase) * rx;
+        tgtY = -Math.cos(soarPhase) * ry - 6.0;
+        const vx = Math.cos(soarPhase) * rx, vy = Math.sin(soarPhase) * ry;
+        tgtYaw = Math.atan2(-vx, vy);
+        tgtLift = (isAdult ? 15.5 : 11.5) + Math.sin(soarPhase * 2.0) * 4.5 + (gliding ? 1.8 : Math.sin(rig.flapPhase - 0.72) * 2.0);
+        if (gliding && isAdult) forcePose = 'glide';
+        tgtSweep = gliding ? -0.22 : Math.sin(rig.flapPhase) * 0.26;
+        tgtHeadYaw = Math.sin(animTime * 1.8) * 0.18;
+
+        emberCd -= dt;
+        if (emberCd <= 0) {
+          emberCd = 0.09;
+          const side = Math.random() < 0.5 ? -1 : 1;
+          const [wx, wy] = localToWorldXY(rig.x, rig.y, rig.yaw, side * (isAdult ? 22 : 12), -2);
+          spawnParticle(wx, wy, rig.lift + (isAdult ? 16 : 11), -vx * 0.18, -vy * 0.18, 2 + Math.random() * 4, 0.55, 1.5, fx.hot, true, 6);
+        }
+      }
+    } else {
+      const act = activeAction;
+      act.t += dt;
+      const t = act.t, st = act.state;
+
+      if (act.kind === 'transform') {
+        if (t < 0.55) {
+          const p = t / 0.55;
+          forcePose = 'tuck';
+          tgtLift = lerp(5.8, 12.5, smoothstep(0, 1, p));
+          tgtX = Math.sin(t * 68) * (0.5 + p * 0.9); tgtY = Math.cos(t * 54) * (0.4 + p * 0.7);
+          rig.runePower = p * 0.8; rig.glowBoost = 1.0 + p * 0.8;
+          if (Math.random() < 0.75) {
+            const ang = Math.random() * TAU, rad = 28 + Math.random() * 24;
+            const px = Math.cos(ang) * rad, py = Math.sin(ang) * rad;
+            spawnParticle(px, py, 2 + Math.random() * 4, -px * 2.1 - Math.sin(ang) * 18, -py * 2.1 + Math.cos(ang) * 18, 18 + Math.random() * 14, 0.48, 2.0, Math.random() < 0.4 ? fx.hot : fx.mid, true, -6);
+          }
+        } else if (t < 1.15) {
+          const p = (t - 0.55) / 0.60;
+          forcePose = 'tuck'; tgtLift = 12.5 + p * 4.5; tgtYaw = p * TAU * 1.5;
+          tgtScale = 1.0 + Math.sin(p * Math.PI * 5) * 0.06 + p * 0.14;
+          rig.pulseColor = (Math.floor(t * 18) & 1) ? fx.core : fx.hot;
+          rig.pulseAlpha = 0.35 + p * 0.55; rig.cocoonPhase = 0.45 + p * 0.55; rig.runePower = 0.8 + p * 0.2; rig.glowBoost = 2.0;
+          shakeMag = Math.max(shakeMag, 1.4 + p * 2.4);
+          if (Math.random() < 0.45) { const a = Math.random() * TAU, r = 18 + Math.random() * 26; spawnParticle(Math.cos(a) * r, Math.sin(a) * r, 1, (Math.random() - 0.5) * 4, (Math.random() - 0.5) * 4, 14 + Math.random() * 12, 0.55, 2.1, '#6d697d', false, 18); }
+        } else if (t < 1.45) {
+          const p = (t - 1.15) / 0.30;
+          if (!st.burstDone) {
+            st.burstDone = true; form = 'adult'; syncUI();
+            showBanner(`蜕变爆发 · 成年${curSkin.name}现身`, 1.3);
+            flashAlpha = 0.92; shakeMag = 10.5;
+            addDecal('crackRing', 0, 0, 44, 7.0);
+            addRing(0, 0, 3, 8, 72, 0.48, fx.core, true); addRing(0, 0, 6, 6, 60, 0.56, fx.mid, true);
+            for (let i = 0; i < 46; i++) {
+              const a = (i / 46) * TAU + Math.random() * 0.2, sp = 36 + Math.random() * 54;
+              spawnParticle(Math.cos(a) * 6, Math.sin(a) * 6, 14 + Math.random() * 16, Math.cos(a) * sp, Math.sin(a) * sp, 12 + Math.random() * 30, 0.55 + Math.random() * 0.45, 2.4 + Math.random() * 1.2, i % 3 === 0 ? fx.core : (i % 3 === 1 ? fx.hot : fx.mid), true, 44);
+            }
+            hitDummy(1.3, true);
+          }
+          forcePose = 'up'; tgtLift = 16.5; tgtHeadLift = 2.6; tgtSweep = -0.25;
+          tgtScale = 1.0 + 0.12 * Math.cos(p * Math.PI * 1.5) * (1 - p);
+          rig.pulseColor = fx.core; rig.pulseAlpha = Math.max(0, (1 - p) * 0.55); rig.runePower = (1 - p) * 0.9; rig.glowBoost = 2.4 - p * 0.7;
+        } else if (t < act.dur) {
+          const p = (t - 1.45) / (act.dur - 1.45);
+          if (!st.wave1 && p > 0.08) { st.wave1 = true; addRing(0, 0, 14, 14, 68, 0.52, fx.hot, true); hitDummy(1.4, false); shakeMag = Math.max(shakeMag, 4.0); }
+          if (!st.wave2 && p > 0.36) { st.wave2 = true; addRing(0, 0, 16, 12, 74, 0.56, fx.mid, true); hitDummy(1.1, false); }
+          if (p < 0.55) { forcePose = 'up'; tgtHeadLift = 2.2; }
+          tgtLift = p < 0.45 ? 16.5 : lerp(16.5, 9.0, smoothstep(0.45, 1.0, p));
+          rig.glowBoost = lerp(1.7, 1.0, p);
+        } else { activeAction = null; syncUI(); }
+      } else if (act.id === 'fireballs') {
+        flapFreq = 13.0; tgtLift = 6.5 + Math.sin(t * 16) * 1.2; rig.glowBoost = 1.6;
+        if (!st.orbs) st.orbs = [{ born: 0.22, launch: 0.72, ang: -0.6, launched: false }, { born: 0.38, launch: 0.96, ang: 1.5, launched: false }, { born: 0.54, launch: 1.20, ang: 3.6, launched: false }];
+        for (const o of st.orbs) {
+          if (t >= o.born && !o.launched) {
+            const ang = o.ang + t * 4.5, ox = Math.cos(ang) * 14, oy = Math.sin(ang) * 14, oz = rig.lift + 16 + Math.sin(t * 14 + o.ang) * 2;
+            if (t >= o.launch) { o.launched = true; projectiles.push({ type: 'smallFireball', x: ox, y: oy, z: oz, sx: ox, sy: oy, sz: oz, tx: DUMMY_POS.x + (Math.random() - 0.5) * 3, ty: DUMMY_POS.y - 2, tz: 17 + (Math.random() - 0.5) * 4, t: 0, dur: 0.44 }); }
+            else { rig.orbitOrbs = rig.orbitOrbs || []; rig.orbitOrbs.push({ x: ox, y: oy, z: oz }); }
+          }
+        }
+      } else if (act.id === 'sneeze') {
+        if (t < 0.52) {
+          const p = t / 0.52; forcePose = 'tuck'; tgtLift = 5.8 + p * 3.0; tgtY = -p * 3.0; tgtScale = 1.0 + p * 0.08;
+          if (Math.random() < 0.45) spawnParticle((Math.random() - 0.5) * 3, 12, rig.lift + 17, (Math.random() - 0.5) * 6, 4, 12, 0.42, 1.8, fx.smoke, false, -4);
+        } else if (t < 0.95) {
+          if (!st.sneezed) {
+            st.sneezed = true; shakeMag = 4.2; addDecal('scorch', 0, 24, 12, 4.5); hitDummy(0.85, true);
+            for (let i = 0; i < 34; i++) { const sp = 34 + Math.random() * 44, a = (Math.random() - 0.5) * 1.15; spawnParticle(0, 12, rig.lift + 14, Math.sin(a) * sp, Math.cos(a) * sp, (Math.random() - 0.35) * 14, 0.42 + Math.random() * 0.32, 2.0 + Math.random() * 1.2, i % 3 === 0 ? fx.core : (i % 3 === 1 ? fx.hot : fx.mid), true, 16); }
+            for (let i = 0; i < 10; i++) spawnParticle((Math.random() - 0.5) * 6, 16, rig.lift + 14, (Math.random() - 0.5) * 18, 22 + Math.random() * 16, 10 + Math.random() * 10, 0.55, 2.4, fx.smoke, false, -5);
+          }
+          const p = (t - 0.52) / 0.43; flapFreq = 15.0; tgtY = -Math.sin(p * Math.PI) * 10.5; tgtLift = 6.5 - Math.sin(p * Math.PI) * 2.5;
+        } else { tgtY = lerp(-2.0, 0, smoothstep(0, 1, (t - 0.95) / (act.dur - 0.95))); }
+      } else if (act.id === 'rollRing') {
+        if (t < 0.35) { forcePose = 'tuck'; tgtLift = lerp(5.8, 2.2, t / 0.35); }
+        else if (t < 1.15) {
+          const p = (t - 0.35) / 0.80; forcePose = 'tuck'; tgtLift = 2.4 + Math.sin(p * Math.PI) * 2.0; tgtYaw = p * TAU * 3.0;
+          if (!st.ringOut && p > 0.25) { st.ringOut = true; addRing(0, 0, 2.5, 8, 56, 0.62, fx.mid, true); addRing(0, 0, 3.5, 6, 48, 0.55, fx.hot, true); addDecal('burnRing', 0, 0, 34, 5.5); shakeMag = 3.5; hitDummy(0.95, true); }
+          if (Math.random() < 0.7) { const a = tgtYaw; spawnParticle(Math.cos(a) * 10, Math.sin(a) * 10, 4, Math.cos(a) * 28, Math.sin(a) * 28, 8, 0.35, 2.0, fx.hot, true, 12); }
+        } else { tgtLift = lerp(2.5, 5.8, smoothstep(0, 1, (t - 1.15) / (act.dur - 1.15))); }
+      } else if (act.id === 'pounce') {
+        if (t < 0.38) { forcePose = 'tuck'; tgtY = -(t / 0.38) * 6.0; tgtLift = lerp(5.8, 2.5, t / 0.38); }
+        else if (t < 0.72) { const p = (t - 0.38) / 0.34; forcePose = 'tuck'; tgtY = lerp(-6.0, DUMMY_POS.y - 12, p * p); tgtLift = lerp(2.5, 1.5, p); }
+        else if (t < 1.05) {
+          if (!st.hit) {
+            st.hit = true; shakeMag = 5.5; hitDummy(1.35, true);
+            for (let i = 0; i < 16; i++) { const a = Math.random() * TAU, sp = 14 + Math.random() * 24; spawnParticle(0, DUMMY_POS.y - 8, 2, Math.cos(a) * sp, Math.sin(a) * sp, 10 + Math.random() * 14, 0.45, 2.0, i & 1 ? fx.dust : fx.hot, i % 2 === 1, 36); }
+          }
+          const p = (t - 0.72) / 0.33; tgtY = lerp(DUMMY_POS.y - 12, DUMMY_POS.y - 20, p); tgtLift = 1.5 + Math.sin(p * Math.PI) * 5.5;
+        } else { const p = smoothstep(0, 1, (t - 1.05) / (act.dur - 1.05)); tgtY = lerp(DUMMY_POS.y - 20, 0, p); tgtLift = lerp(4.0, 5.8, p); }
+      } else if (act.id === 'flameBreath') {
+        if (t < 0.60) {
+          const p = t / 0.60; forcePose = 'up'; tgtLift = lerp(9.0, 11.5, p); tgtY = -p * 4.5; tgtHeadLift = 2.0; rig.glowBoost = 1.2 + p * 1.4;
+          if (Math.random() < 0.7) { const a = Math.random() * TAU; spawnParticle(Math.cos(a) * 14, 18 + Math.sin(a) * 10, rig.lift + 28, -Math.cos(a) * 24, -Math.sin(a) * 16, 4, 0.35, 2.0, fx.hot, true, 0); }
+        } else if (t < 2.40) {
+          const p = (t - 0.60) / 1.80, yaw = Math.sin(p * Math.PI * 2) * (15 * Math.PI / 180);
+          tgtYaw = yaw; tgtHeadYaw = yaw * 0.4; tgtY = 3.0; tgtLift = 7.0; rig.glowBoost = 2.4;
+          rig.flameBeam = { yaw, len: 62, power: Math.min(1, p * 6) * Math.min(1, (1 - p) * 6) };
+          shakeMag = Math.max(shakeMag, 2.2);
+          st.scorchCd = (st.scorchCd || 0) - dt;
+          if (st.scorchCd <= 0) {
+            st.scorchCd = 0.08; const dist = 28 + Math.random() * 30, gx = -Math.sin(yaw) * dist, gy = Math.cos(yaw) * dist;
+            addDecal('scorch', gx, gy, 7.5 + Math.random() * 3.5, 6.5);
+            if (Math.hypot(gx - DUMMY_POS.x, gy - DUMMY_POS.y) < 16) hitDummy(0.65, false);
+          }
+          for (let k = 0; k < 2; k++) {
+            const d0 = 24 + Math.random() * 44;
+            spawnParticle(-Math.sin(yaw) * d0 + (Math.random() - 0.5) * 6, Math.cos(yaw) * d0 + (Math.random() - 0.5) * 6, Math.max(2, lerp(rig.lift + 28, 4, d0 / 64)), -Math.sin(yaw) * 28 + (Math.random() - 0.5) * 14, Math.cos(yaw) * 28, 6 + Math.random() * 14, 0.32, 2.4, k ? fx.mid : fx.hot, true, -6);
+          }
+        } else { const p = smoothstep(0, 1, (t - 2.40) / (act.dur - 2.40)); tgtY = lerp(3.0, 0, p); tgtLift = lerp(7.0, 9.0, p); }
+      } else if (act.id === 'wingGust') {
+        if (t < 0.45) { forcePose = 'up'; tgtLift = lerp(9.0, 16.5, smoothstep(0, 1, t / 0.45)); }
+        else if (t < 1.55) {
+          const p = (t - 0.45) / 1.10, beat = Math.floor(p * 2), sub = (p * 2) % 1;
+          forcePose = sub < 0.35 ? 'up' : 'down'; tgtSweep = sub < 0.35 ? -0.35 : 0.42;
+          tgtLift = 16.5 - Math.sin(sub * Math.PI) * 3.0; tgtY = Math.sin(sub * Math.PI) * 3.5;
+          if (!st['gust' + beat] && sub > 0.32) {
+            st['gust' + beat] = true; shakeMag = 4.0;
+            addRing(0, 8, 6, 12, 68, 0.55, fx.windArc, false, { start: Math.PI * 0.22, end: Math.PI * 0.78 });
+            addRing(0, 10, 12, 10, 64, 0.52, fx.hot, true, { start: Math.PI * 0.25, end: Math.PI * 0.75 });
+            hitDummy(1.2, false);
+            for (let i = 0; i < 24; i++) { const sx = (Math.random() - 0.5) * 36; spawnParticle(sx, 8 + Math.random() * 14, 2 + Math.random() * 8, sx * 0.5, 65 + Math.random() * 40, 6 + Math.random() * 14, 0.55 + Math.random() * 0.25, i % 3 === 0 ? 2.6 : 2.0, i % 3 === 0 ? '#6d697d' : (i % 3 === 1 ? fx.hot : fx.windArc), i % 3 === 1, 22); }
+          }
+        } else { tgtLift = lerp(16.5, 9.0, smoothstep(0, 1, (t - 1.55) / (act.dur - 1.55))); }
+      } else if (act.id === 'skySlam') {
+        if (t < 0.72) {
+          const p = t / 0.72; flapFreq = 10.0;
+          if (!st.warned) { st.warned = true; warnings.push({ x: DUMMY_POS.x, y: DUMMY_POS.y - 6, r: 26, t: 0, dur: 0.85 }); }
+          tgtLift = lerp(9.0, 54.0, p * p); tgtY = lerp(0, DUMMY_POS.y - 8, smoothstep(0.15, 0.95, p));
+        } else if (t < 0.95) {
+          const p = (t - 0.72) / 0.23; forcePose = 'glide'; tgtSweep = -0.35; tgtY = DUMMY_POS.y - 8; tgtLift = lerp(54.0, 1.5, p * p * p);
+        } else if (t < 1.55) {
+          if (!st.slammed) {
+            st.slammed = true; shakeMag = 9.5; flashAlpha = 0.35;
+            addDecal('crackRing', DUMMY_POS.x, DUMMY_POS.y - 6, 30, 7.5);
+            addRing(DUMMY_POS.x, DUMMY_POS.y - 6, 3, 6, 56, 0.52, fx.hot, true);
+            addRing(DUMMY_POS.x, DUMMY_POS.y - 6, 5, 4, 46, 0.48, fx.core, true);
+            hitDummy(1.8, true);
+            for (let i = 0; i < 36; i++) { const a = Math.random() * TAU, sp = 24 + Math.random() * 48; spawnParticle(DUMMY_POS.x, DUMMY_POS.y - 6, 3, Math.cos(a) * sp, Math.sin(a) * sp, 18 + Math.random() * 34, 0.55 + Math.random() * 0.4, i & 1 ? 2.8 : 2.2, i % 3 === 0 ? '#6d697d' : (i % 3 === 1 ? fx.mid : fx.hot), i % 3 !== 0, 62); }
+          }
+          forcePose = 'up'; tgtY = DUMMY_POS.y - 8; tgtLift = 2.0;
+        } else { const p = smoothstep(0, 1, (t - 1.55) / (act.dur - 1.55)); tgtY = lerp(DUMMY_POS.y - 8, 0, p); tgtLift = lerp(2.0, 9.0, p); }
+      } else if (act.id === 'tailSweep') {
+        if (t < 0.30) { tgtLift = lerp(9.0, 3.0, t / 0.30); tgtYaw = -(t / 0.30) * 0.55; }
+        else if (t < 1.05) {
+          const p = (t - 0.30) / 0.75; tgtLift = 3.0; tgtYaw = -0.55 + smoothstep(0, 1, p) * (TAU + 0.55);
+          if (!st.swept && p > 0.2) { st.swept = true; addRing(0, 0, 5, 22, 48, 0.45, fx.mid, true); addDecal('burnRing', 0, 0, 38, 5.0); shakeMag = 4.8; hitDummy(1.3, true); }
+          const tailAng = tgtYaw - Math.PI * 0.5, tx = Math.cos(tailAng) * 32, ty = Math.sin(tailAng) * 32;
+          for (let k = 0; k < 2; k++) spawnParticle(tx + (Math.random() - 0.5) * 4, ty + (Math.random() - 0.5) * 4, 4 + Math.random() * 4, -Math.sin(tailAng) * 14, Math.cos(tailAng) * 14, 10 + Math.random() * 12, 0.32, 2.4, k ? fx.hot : fx.mid, true, 24);
+        } else { tgtLift = lerp(3.0, 9.0, smoothstep(0, 1, (t - 1.05) / (act.dur - 1.05))); }
+      } else if (act.id === 'magmaRain') {
+        if (t < 0.75) {
+          forcePose = 'up'; tgtLift = lerp(9.0, 14.5, smoothstep(0, 0.6, t)); tgtHeadLift = 2.4; rig.glowBoost = 2.1;
+          if (!st.targets) {
+            st.targets = [{ x:0,y:44,delay:0.55,dropped:false },{ x:-24,y:34,delay:0.72,dropped:false },{ x:25,y:36,delay:0.88,dropped:false },{ x:-16,y:54,delay:1.04,dropped:false },{ x:18,y:52,delay:1.20,dropped:false },{ x:-4,y:28,delay:1.36,dropped:false }];
+            for (const tg of st.targets) warnings.push({ x: tg.x, y: tg.y, r: 12, t: 0, dur: tg.delay + 0.42 });
+          }
+        } else { tgtLift = lerp(14.5, 9.0, smoothstep(0.4, 1.0, clamp((t - 0.75) / (act.dur - 0.75), 0, 1))); }
+        if (st.targets) for (const tg of st.targets) if (!tg.dropped && t >= tg.delay) { tg.dropped = true; projectiles.push({ type: 'magmaMeteor', x: tg.x - 10, y: tg.y - 12, z: 76, sx: tg.x - 10, sy: tg.y - 12, sz: 76, tx: tg.x, ty: tg.y, tz: 1, t: 0, dur: 0.42 }); }
+      }
+      if (act.t >= act.dur) { activeAction = null; syncUI(); }
+    }
+
+    rig.flapPhase += dt * flapFreq;
+    rig.tailPhase += dt * (isAdult ? 3.8 : 6.4);
+    rig.x = lerp(rig.x, tgtX, activeAction || baseMode === 'soar' ? kFast : kSlow);
+    rig.y = lerp(rig.y, tgtY, activeAction || baseMode === 'soar' ? kFast : kSlow);
+    rig.lift = lerp(rig.lift, tgtLift, kFast);
+    if (activeAction && (activeAction.id === 'rollRing' || activeAction.id === 'tailSweep' || (activeAction.kind === 'transform' && activeAction.t >= 0.55 && activeAction.t < 1.15))) {
+      rig.yaw = tgtYaw;
+    } else {
+      const dYaw = (((tgtYaw - rig.yaw + Math.PI) % TAU) + TAU) % TAU - Math.PI;
+      rig.yaw += dYaw * kFast;
+    }
+    rig.scaleMul = lerp(rig.scaleMul, tgtScale, kFast);
+    rig.headYaw = lerp(rig.headYaw, tgtHeadYaw, kFast);
+    rig.headLift = lerp(rig.headLift, tgtHeadLift, kFast);
+    rig.wingSweep = lerp(rig.wingSweep, tgtSweep || Math.sin(rig.flapPhase) * 0.22, kFast);
+    rig.wingPose = forcePose || (Math.sin(rig.flapPhase) >= 0 ? 'up' : 'down');
+  }
+
+  function buildDragonPartList() {
+    const list = [];
+    const yw = rig.yaw, hYaw = yw + rig.headYaw;
+
+    if (form === 'young') {
+      list.push({ id: 'yTorso', m: parts.yTorso, x: rig.x, y: rig.y, lift: 0, ro: yw, bias: 0.1 });
+      const [hx, hy] = localToWorldXY(rig.x, rig.y, yw, 0, 7.6);
+      list.push({ id: 'yHead', m: parts.yHead, x: hx, y: hy, lift: 11.4 + rig.headLift, ro: hYaw, bias: 0.45 });
+
+      const [tRootX, tRootY] = localToWorldXY(rig.x, rig.y, yw, 0, -5.6);
+      const tYaw = yw + Math.sin(rig.tailPhase) * 0.34;
+      const [tWx, tWy] = localToWorldXY(tRootX, tRootY, tYaw, 0, -Y_TAIL_PIVOT_Y);
+      list.push({ id: 'yTail', m: parts.yTail, x: tWx, y: tWy, lift: 4.5, ro: tYaw, bias: -0.3 });
+
+      const wp = rig.wingPose === 'tuck' ? 'tuck' : (rig.wingPose === 'down' ? 'dn' : 'up');
+      for (const s of [-1, 1]) {
+        const [shX, shY] = localToWorldXY(rig.x, rig.y, yw, s * 4.0, 0.6);
+        const wYaw = yw - s * rig.wingSweep;
+        const [wx, wy] = localToWorldXY(shX, shY, wYaw, s * Y_WING_PIVOT.x, -Y_WING_PIVOT.y);
+        const id = (s < 0 ? 'yWingL_' : 'yWingR_') + wp;
+        list.push({ id, m: parts[id], x: wx, y: wy, lift: 4.4, ro: wYaw, bias: -0.1 });
+      }
+    } else {
+      list.push({ id: 'aTorso', m: parts.aTorso, x: rig.x, y: rig.y, lift: 0, ro: yw, bias: 0.1 });
+      const [nx, ny] = localToWorldXY(rig.x, rig.y, yw, 0, 10.2);
+      const nYaw = yw + rig.headYaw * 0.45;
+      list.push({ id: 'aNeck', m: parts.aNeck, x: nx, y: ny, lift: 16.0, ro: nYaw, bias: 0.25 });
+      const [hx, hy] = localToWorldXY(nx, ny, nYaw, 0, 5.4);
+      list.push({ id: 'aHead', m: parts.aHead, x: hx, y: hy, lift: 26.8 + rig.headLift, ro: hYaw, bias: 0.48 });
+
+      // 3 节实时鞭尾链（逐节锁枢轴，S 形行波摆动 0 脱节！）
+      let [px, py] = localToWorldXY(rig.x, rig.y, yw, 0, -7.8);
+      const segs = ['aTail1', 'aTail2', 'aTailTip'];
+      const segZ = [11.2, 10.4, 11.4];
+      for (let i = 0; i < 3; i++) {
+        const sYaw = yw + Math.sin(rig.tailPhase - i * 0.85) * (0.22 + i * 0.12);
+        const [cx, cy] = localToWorldXY(px, py, sYaw, 0, -3.6);
+        list.push({ id: segs[i], m: parts[segs[i]], x: cx, y: cy, lift: segZ[i], ro: sYaw, bias: -0.3 - i * 0.08 });
+        [px, py] = localToWorldXY(px, py, sYaw, 0, -A_TAIL_SEG_LEN);
+      }
+
+      const wp = rig.wingPose === 'glide' ? 'glide' : (rig.wingPose === 'down' ? 'dn' : 'up');
+      for (const s of [-1, 1]) {
+        const [shX, shY] = localToWorldXY(rig.x, rig.y, yw, s * 5.6, 4.6);
+        const wYaw = yw - s * rig.wingSweep;
+        const [wx, wy] = localToWorldXY(shX, shY, wYaw, s * A_WING_PIVOT.x, -A_WING_PIVOT.y);
+        const id = (s < 0 ? 'aWingL_' : 'aWingR_') + wp;
+        list.push({ id, m: parts[id], x: wx, y: wy, lift: 8.6, ro: wYaw, bias: -0.1 });
+      }
+    }
+    return list;
+  }
+
+  function composeDragonActor(partList, c, s, outlineHex) {
+    arCtx.setTransform(1, 0, 0, 1, 0, 0); arCtx.globalCompositeOperation = 'source-over';
+    arCtx.globalAlpha = 1; arCtx.imageSmoothingEnabled = false; arCtx.clearRect(0, 0, ACTOR_W, ACTOR_H);
+    agCtx.setTransform(1, 0, 0, 1, 0, 0); agCtx.globalCompositeOperation = 'source-over';
+    agCtx.globalAlpha = 1; agCtx.imageSmoothingEnabled = false; agCtx.clearRect(0, 0, ACTOR_W, ACTOR_H);
+
+    let calls = 0, hasAnyGlow = false;
+    for (let i = 0; i < partList.length; i++) {
+      const p = partList[i], dxW = p.x - rig.x, dyW = p.y - rig.y;
+      const rx = c * dxW - s * dyW, ry = s * dxW + c * dyW;
+      p._lx = ACTOR_AX + rx * BAKE_SCALE;
+      p._ly = ACTOR_AY + ry * TILT * BAKE_SCALE - p.lift * BAKE_STEP;
+      p._depth = ry + p.lift * 0.08 + (p.bias || 0);
+    }
+    partList.sort((a, b) => a._depth - b._depth);
+
+    for (let i = 0; i < partList.length; i++) {
+      const p = partList[i];
+      const sp = getBakedSprite(p.m, p.id, p.ro + th, outlineHex, false, 360);
+      const dx = Math.round(p._lx - sp.anchorX), dy = Math.round(p._ly - sp.anchorY);
+      arCtx.drawImage(sp.main, dx, dy); calls++;
+      if (hasAnyGlow) { agCtx.globalCompositeOperation = 'destination-out'; agCtx.drawImage(sp.main, dx, dy); }
+      if (sp.glow) { hasAnyGlow = true; agCtx.globalCompositeOperation = 'source-over'; agCtx.drawImage(sp.glow, dx, dy); calls++; }
+    }
+    agCtx.globalCompositeOperation = 'source-over';
+    if (!useOutline) return { main: actorRaw, glow: hasAnyGlow ? actorGlow : null, calls };
+
+    asCtx.setTransform(1, 0, 0, 1, 0, 0); asCtx.globalCompositeOperation = 'source-over'; asCtx.clearRect(0, 0, ACTOR_W, ACTOR_H);
+    asCtx.drawImage(actorRaw, 0, 0);
+    asCtx.globalCompositeOperation = 'source-in'; asCtx.fillStyle = outlineHex; asCtx.fillRect(0, 0, ACTOR_W, ACTOR_H);
+
+    aoCtx.setTransform(1, 0, 0, 1, 0, 0); aoCtx.globalCompositeOperation = 'source-over'; aoCtx.imageSmoothingEnabled = false;
+    aoCtx.clearRect(0, 0, ACTOR_W, ACTOR_H);
+    aoCtx.drawImage(actorSil, -1, 0); aoCtx.drawImage(actorSil, 1, 0); aoCtx.drawImage(actorSil, 0, -1); aoCtx.drawImage(actorSil, 0, 1);
+    aoCtx.drawImage(actorRaw, 0, 0);
+    return { main: actorOut, glow: hasAnyGlow ? actorGlow : null, calls: calls + 5 };
+  }
+
+  function updateVFX(dt) {
+    const fx = curSkin.fx;
+    if (bannerTimer > 0) { bannerTimer -= dt; if (bannerTimer <= 0) document.getElementById('banner').classList.remove('show'); }
+    shakeMag = Math.max(0, shakeMag - dt * 16);
+    shakeX = shakeMag ? (Math.random() - 0.5) * shakeMag * SCALE * 0.65 : 0;
+    shakeY = shakeMag ? (Math.random() - 0.5) * shakeMag * SCALE * 0.65 : 0;
+    flashAlpha = Math.max(0, flashAlpha - dt * 3.4);
+    dummyHit = Math.max(0, dummyHit - dt * 2.8);
+    if (dummySmoke > 0) {
+      dummySmoke -= dt;
+      if (Math.random() < 0.35) spawnParticle(DUMMY_POS.x + (Math.random() - 0.5) * 4, DUMMY_POS.y, 20 + Math.random() * 6, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, 14 + Math.random() * 8, 0.65, 2.2, '#6d697d', false, -4);
+    }
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i]; p.t += dt;
+      if (p.t >= p.life) { particles.splice(i, 1); continue; }
+      p.vz -= p.gravity * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      if (p.z < 0.5) { p.z = 0.5; p.vz = Math.abs(p.vz) * 0.42; p.vx *= 0.72; p.vy *= 0.72; }
+    }
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+      const pr = projectiles[i]; pr.t += dt;
+      const u = clamp(pr.t / pr.dur, 0, 1);
+      pr.x = lerp(pr.sx, pr.tx, u); pr.y = lerp(pr.sy, pr.ty, u); pr.z = lerp(pr.sz, pr.tz, u) + (pr.type === 'smallFireball' ? Math.sin(u * Math.PI) * 8 : 0);
+      if (Math.random() < 0.85) spawnParticle(pr.x, pr.y, pr.z, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, 4, 0.26, pr.type === 'magmaMeteor' ? 2.6 : 1.7, Math.random() < 0.4 ? fx.hot : fx.mid, true, 0);
+      if (u >= 1) {
+        projectiles.splice(i, 1);
+        if (pr.type === 'smallFireball') { hitDummy(0.8, true); shakeMag = Math.max(shakeMag, 2.8); }
+        else {
+          shakeMag = Math.max(shakeMag, 4.6); addDecal('firePile', pr.tx, pr.ty, 10, 4.5); addDecal('crackRing', pr.tx, pr.ty, 14, 6.0); addRing(pr.tx, pr.ty, 2, 3, 20, 0.36, fx.hot, true);
+          if (Math.hypot(pr.tx - DUMMY_POS.x, pr.ty - DUMMY_POS.y) < 18) hitDummy(1.1, false);
+          for (let k = 0; k < 14; k++) { const a = Math.random() * TAU, sp = 14 + Math.random() * 26; spawnParticle(pr.tx, pr.ty, 2, Math.cos(a) * sp, Math.sin(a) * sp, 14 + Math.random() * 22, 0.48, 2.2, k & 1 ? fx.mid : '#6d697d', k % 2 === 1, 54); }
+        }
+      }
+    }
+    for (let i = groundDecals.length - 1; i >= 0; i--) {
+      const dc = groundDecals[i]; dc.t += dt;
+      if (dc.t >= dc.life) { groundDecals.splice(i, 1); continue; }
+      if (dc.type === 'firePile' && Math.random() < 0.35) spawnParticle(dc.x + (Math.random() - 0.5) * 8, dc.y + (Math.random() - 0.5) * 8, 2, (Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5, 14 + Math.random() * 10, 0.35, 1.9, Math.random() < 0.5 ? fx.hot : fx.mid, true, -6);
+    }
+    for (let i = warnings.length - 1; i >= 0; i--) { warnings[i].t += dt; if (warnings[i].t >= warnings[i].dur) warnings.splice(i, 1); }
+    for (let i = shockRings.length - 1; i >= 0; i--) { shockRings[i].t += dt; if (shockRings[i].t >= shockRings[i].life) shockRings.splice(i, 1); }
+  }
+
+  function drawStackRealtime(asset, x, y, zLift, ro, sc, scaleMul = 1) {
+    const effSc = sc * scaleMul;
+    const [X, Y] = proj(x, y, zLift, sc);
+    const a = ro + th, c = Math.cos(a), s = Math.sin(a), X0 = Math.round(X), Y0 = Math.round(Y);
+    const isRetro = MODES[modeIdx] === 'retro', step = isRetro ? HS * scaleMul : Math.max(1, Math.round(HS * effSc));
+    const halfStep = (!isRetro && step > Math.floor(TILT * effSc)) ? Math.max(1, Math.round(step * 0.5)) : 0;
+    const { w, d, activeLayers, glowLayers, glowSlot, glowStrip, strip } = asset;
+    const hasGlow = !!glowStrip && glowLayers.length > 0, minGlowZ = hasGlow ? glowLayers[0] : 9999;
+    const eScaleX = EW / CW, eScaleY = EH / CH;
+    let calls = 0;
+    for (let li = 0; li < activeLayers.length; li++) {
+      const z = activeLayers[li], yy = isRetro ? (Y0 - z * HS * scaleMul) : (Y0 - z * step), sx = z * w;
+      if (halfStep) { mctx.setTransform(c * effSc, TILT * s * effSc, -s * effSc, TILT * c * effSc, X0, yy + halfStep); mctx.drawImage(strip, sx, 0, w, d, -w / 2, -d / 2, w, d); calls++; }
+      mctx.setTransform(c * effSc, TILT * s * effSc, -s * effSc, TILT * c * effSc, X0, yy); mctx.drawImage(strip, sx, 0, w, d, -w / 2, -d / 2, w, d); calls++;
+      if (!hasGlow || z >= minGlowZ) {
+        ectx.globalCompositeOperation = 'destination-out';
+        ectx.setTransform(c * effSc * eScaleX, TILT * s * effSc * eScaleY, -s * effSc * eScaleX, TILT * c * effSc * eScaleY, X0 * eScaleX, yy * eScaleY);
+        ectx.drawImage(strip, sx, 0, w, d, -w / 2, -d / 2, w, d);
+      }
+      if (hasGlow && glowSlot[z] >= 0) { ectx.globalCompositeOperation = 'source-over'; ectx.drawImage(glowStrip, glowSlot[z] * w, 0, w, d, -w / 2, -d / 2, w, d); calls++; }
+    }
+    ectx.globalCompositeOperation = 'source-over';
+    return calls;
+  }
+
+  let last = 0, fpsAcc = 0, fpsFrames = 0, fpsVal = 60, statTimer = 0, cpuMsSmooth = 1.0;
+
+  function tick(ms) {
+    const tCpu0 = performance.now();
+    const t = ms / 1000, dt = Math.min(0.05, t - (last || t)); last = t;
+    animTime += dt; fpsAcc += dt; fpsFrames++;
+    if (fpsAcc >= 0.4) { fpsVal = Math.round(fpsFrames / fpsAcc); fpsAcc = 0; fpsFrames = 0; }
+    if (autoSpin && !drag) thTarget += dt * 0.55;
+    if (!drag) th += (thTarget - th) * Math.min(1, dt * 8);
+
+    updateDragonRig(dt);
+    updateVFX(dt);
+
+    const mode = MODES[modeIdx], sc = mode === 'retro' ? 1 : SCALE;
+    const c = Math.cos(th), s = Math.sin(th), eScale = EW / cv.width, fx = curSkin.fx;
+    let drawCalls = 0;
+
+    const dragonParts = buildDragonPartList();
+    const dummyShakeX = dummyHit > 0 ? Math.sin(animTime * 55) * dummyHit * 2.0 : 0;
+    const dummyShakeY = dummyHit > 0 ? Math.cos(animTime * 48) * dummyHit * 1.4 : 0;
+    const dummyObj = { id: 'dummy', m: dummyAsset, x: DUMMY_POS.x + dummyShakeX, y: DUMMY_POS.y + dummyShakeY, lift: 0, ro: 0 };
+
+    const bSize = platform.size, halfB = bSize * 0.5;
+    gbctx.setTransform(GROUND_SUPERSAMPLE, 0, 0, GROUND_SUPERSAMPLE, 0, 0);
+    gbctx.globalCompositeOperation = 'source-over'; gbctx.imageSmoothingEnabled = false;
+    gbctx.clearRect(0, 0, bSize, bSize); gbctx.drawImage(platform.base, 0, 0);
+
+    gbctx.save(); gbctx.translate(halfB, halfB);
+    gbctx.beginPath(); gbctx.arc(0, 0, platform.rInner, 0, TAU); gbctx.clip();
+
+    for (const dc of groundDecals) {
+      const fade = clamp(1 - dc.t / dc.life, 0, 1);
+      gbctx.save(); gbctx.translate(dc.x, dc.y);
+      if (dc.type === 'scorch') {
+        gbctx.globalAlpha = fade * 0.65; gbctx.fillStyle = fx.scorchBase; gbctx.fillRect(-dc.r, -dc.r * 0.7, dc.r * 2, dc.r * 1.4);
+        gbctx.globalAlpha = fade * 0.45; gbctx.fillStyle = fx.scorchGlow; gbctx.fillRect(-dc.r * 0.55, -dc.r * 0.35, dc.r * 1.1, dc.r * 0.7);
+      } else if (dc.type === 'burnRing') {
+        gbctx.strokeStyle = `rgba(${fx.ringRGB}, ${fade * 0.8})`; gbctx.lineWidth = 3; gbctx.beginPath(); gbctx.arc(0, 0, dc.r, 0, TAU); gbctx.stroke();
+        gbctx.strokeStyle = `rgba(20, 10, 12, ${fade * 0.7})`; gbctx.lineWidth = 5; gbctx.beginPath(); gbctx.arc(0, 0, dc.r + 3, 0, TAU); gbctx.stroke();
+      } else if (dc.type === 'crackRing') {
+        gbctx.strokeStyle = `rgba(18, 10, 12, ${fade * 0.85})`; gbctx.lineWidth = 2.2; gbctx.beginPath(); gbctx.arc(0, 0, dc.r * 0.7, 0, TAU); gbctx.stroke();
+        for (let k = 0; k < 10; k++) { const a = (k / 10) * TAU + 0.2; gbctx.beginPath(); gbctx.moveTo(Math.cos(a) * 4, Math.sin(a) * 4); gbctx.lineTo(Math.cos(a) * dc.r, Math.sin(a) * dc.r); gbctx.stroke(); }
+        gbctx.strokeStyle = `rgba(${fx.crackRGB}, ${fade * 0.75})`; gbctx.lineWidth = 1.4; gbctx.beginPath(); gbctx.arc(0, 0, dc.r * 0.45, 0, TAU); gbctx.stroke();
+      } else if (dc.type === 'firePile') {
+        gbctx.globalAlpha = fade * 0.75; gbctx.fillStyle = fx.scorchBase; gbctx.fillRect(-dc.r * 0.8, -dc.r * 0.8, dc.r * 1.6, dc.r * 1.6);
+        gbctx.globalAlpha = 1; gbctx.fillStyle = `rgba(${fx.pileRGB}, ${fade * 0.85})`; gbctx.fillRect(-dc.r * 0.45, -dc.r * 0.45, dc.r * 0.9, dc.r * 0.9);
+      }
+      gbctx.restore();
+    }
+    for (const w of warnings) {
+      const p = clamp(w.t / w.dur, 0, 1);
+      gbctx.save(); gbctx.translate(w.x, w.y);
+      gbctx.strokeStyle = fx.warnStroke; gbctx.lineWidth = 2; gbctx.beginPath(); gbctx.arc(0, 0, w.r, 0, TAU); gbctx.stroke();
+      gbctx.fillStyle = `rgba(${fx.warnFillRGB}, ${0.14 + p * 0.28})`; gbctx.beginPath(); gbctx.arc(0, 0, w.r * p, 0, TAU); gbctx.fill();
+      gbctx.restore();
+    }
+    if (rig.runePower > 0.01) {
+      const rp = rig.runePower, rr = 22 + rp * 24;
+      gbctx.save(); gbctx.rotate(animTime * 2.4);
+      gbctx.strokeStyle = `rgba(${fx.runeRGB}, ${rp * 0.95})`; gbctx.lineWidth = 2.4;
+      gbctx.beginPath(); gbctx.arc(0, 0, rr, 0, TAU); gbctx.stroke();
+      gbctx.beginPath(); gbctx.arc(0, 0, rr * 0.65, 0, TAU); gbctx.stroke();
+      for (let k = 0; k < 8; k++) { const a = (k / 8) * TAU; gbctx.fillStyle = `rgba(${fx.runeDotRGB}, ${rp * 0.9})`; gbctx.fillRect(Math.cos(a) * rr - 2, Math.sin(a) * rr - 2, 4, 4); }
+      gbctx.restore();
+    }
+
+    const lf = clamp(1 - rig.lift / 68, 0.25, 1.0);
+    const shR = (form === 'adult' ? 18.0 : 10.5) * (0.62 + 0.38 * lf);
+    gbctx.fillStyle = `rgba(8, 5, 10, ${0.50 * lf})`;
+    gbctx.beginPath(); gbctx.ellipse(rig.x + rig.lift * 0.14, rig.y - rig.lift * 0.14, shR * 1.15, shR * 0.88, rig.yaw, 0, TAU); gbctx.fill();
+
+    gbctx.save(); gbctx.translate(dummyObj.x, dummyObj.y);
+    gbctx.save(); gbctx.globalAlpha = 0.34; gbctx.translate(2.5, -2.5);
+    gbctx.drawImage(dummyAsset.footShadow, -dummyAsset.w / 2, -dummyAsset.d / 2); gbctx.restore();
+    gbctx.fillStyle = 'rgba(8, 5, 10, 0.52)';
+    gbctx.beginPath(); gbctx.arc(0, 0, dummyAsset.meta.footRadius, 0, TAU); gbctx.fill();
+    gbctx.restore(); gbctx.restore();
+
+    ectx.setTransform(1, 0, 0, 1, 0, 0); ectx.globalCompositeOperation = 'source-over';
+    ectx.imageSmoothingEnabled = false; ectx.clearRect(0, 0, EW, EH);
+    dctx.setTransform(1, 0, 0, 1, 0, 0); dctx.globalCompositeOperation = 'source-over';
+    dctx.imageSmoothingEnabled = false; dctx.drawImage(bgc, 0, 0); drawCalls++;
+
+    dctx.setTransform(c * SCALE, TILT * s * SCALE, -s * SCALE, TILT * c * SCALE, cv.width / 2 + shakeX, cv.height / 2 + 18 * SCALE + shakeY);
+    dctx.drawImage(gbuf, -halfB, -halfB, bSize, bSize);
+    dctx.setTransform(1, 0, 0, 1, 0, 0); drawCalls++;
+
+    if (mode === 'cached') {
+      const dispRatio = SCALE / BAKE_SCALE;
+      const composed = composeDragonActor(dragonParts, c, s, curSkin.outline);
+      drawCalls += composed.calls;
+      const [sx, sy, sry] = proj(rig.x, rig.y, rig.lift, SCALE);
+      const [dxP, dyP, dry] = proj(dummyObj.x, dummyObj.y, 0, SCALE);
+      const dummySp = getBakedSprite(dummyAsset, 'dummy', th, curSkin.outline, useOutline, 360);
+      ectx.setTransform(1, 0, 0, 1, 0, 0);
+
+      for (const who of (sry < dry ? ['dragon', 'dummy'] : ['dummy', 'dragon'])) {
+        if (who === 'dragon') {
+          const rMul = dispRatio * rig.scaleMul;
+          const dw = Math.round(ACTOR_W * rMul), dh = Math.round(ACTOR_H * rMul);
+          const dx = Math.round(sx - ACTOR_AX * rMul), dy = Math.round(sy - ACTOR_AY * rMul);
+          dctx.drawImage(composed.main, dx, dy, dw, dh); drawCalls++;
+          if (rig.pulseAlpha > 0.01 && rig.pulseColor) {
+            asCtx.setTransform(1, 0, 0, 1, 0, 0); asCtx.globalCompositeOperation = 'source-over'; asCtx.clearRect(0, 0, ACTOR_W, ACTOR_H);
+            asCtx.drawImage(composed.main, 0, 0);
+            asCtx.globalCompositeOperation = 'source-in'; asCtx.fillStyle = rig.pulseColor; asCtx.fillRect(0, 0, ACTOR_W, ACTOR_H);
+            dctx.save(); dctx.globalAlpha = rig.pulseAlpha; dctx.drawImage(actorSil, dx, dy, dw, dh); dctx.restore();
+            ectx.globalCompositeOperation = 'source-over'; ectx.globalAlpha = rig.pulseAlpha;
+            ectx.drawImage(actorSil, dx * eScale, dy * eScale, dw * eScale, dh * eScale); ectx.globalAlpha = 1; drawCalls++;
+          }
+          ectx.globalCompositeOperation = 'destination-out';
+          ectx.drawImage(composed.main, dx * eScale, dy * eScale, dw * eScale, dh * eScale);
+          if (composed.glow) { ectx.globalCompositeOperation = 'source-over'; ectx.drawImage(composed.glow, dx * eScale, dy * eScale, dw * eScale, dh * eScale); drawCalls++; }
+        } else {
+          const dw = Math.round(dummySp.bw * dispRatio), dh = Math.round(dummySp.bh * dispRatio);
+          const dx = Math.round(dxP - dummySp.anchorX * dispRatio), dy = Math.round(dyP - dummySp.anchorY * dispRatio);
+          dctx.drawImage(dummySp.main, dx, dy, dw, dh); drawCalls++;
+          ectx.globalCompositeOperation = 'destination-out';
+          ectx.drawImage(dummySp.main, dx * eScale, dy * eScale, dw * eScale, dh * eScale);
+        }
+      }
+      ectx.globalCompositeOperation = 'source-over';
+    } else {
+      mctx.setTransform(1, 0, 0, 1, 0, 0); mctx.globalCompositeOperation = 'source-over';
+      mctx.imageSmoothingEnabled = false; mctx.clearRect(0, 0, CW, CH);
+      const allObjs = [...dragonParts.map(p => ({ ...p, lift: rig.lift + p.lift, scaleMul: rig.scaleMul })), { ...dummyObj, scaleMul: 1.0 }];
+      for (const o of allObjs) o._depth = proj(o.x, o.y, o.lift, sc)[2] + o.lift * 0.08 + (o.bias || 0);
+      allObjs.sort((a, b) => a._depth - b._depth);
+      for (const o of allObjs) drawCalls += drawStackRealtime(o.m, o.x, o.y, o.lift, o.ro, sc, o.scaleMul);
+      const drawW = mode === 'retro' ? CW * SCALE : CW, drawH = mode === 'retro' ? CH * SCALE : CH;
+      if (useOutline) {
+        octx.setTransform(1, 0, 0, 1, 0, 0); octx.globalCompositeOperation = 'source-over'; octx.clearRect(0, 0, CW, CH);
+        octx.drawImage(mc, 0, 0); octx.globalCompositeOperation = 'source-in'; octx.fillStyle = curSkin.outline; octx.fillRect(0, 0, CW, CH);
+        octx.globalCompositeOperation = 'source-over';
+        const op = mode === 'retro' ? SCALE : Math.max(1, Math.round(SCALE * 0.30));
+        for (const [ox, oy] of [[-op, 0], [op, 0], [0, -op], [0, op]]) dctx.drawImage(oc, ox, oy, drawW, drawH);
+      }
+      dctx.drawImage(mc, 0, 0, drawW, drawH);
+    }
+
+    const pSc = mode === 'retro' ? 1 : SCALE, toMain = mode === 'retro' ? SCALE : 1, toE = toMain * eScale;
+    function drawVoxelBlock(wx, wy, wz, szVox, color, isGlow) {
+      const [px, py] = proj(wx, wy, wz, pSc);
+      const sx = Math.round(px * toMain), sy = Math.round(py * toMain), sPx = Math.max(2, Math.round(szVox * SCALE));
+      dctx.fillStyle = color; dctx.fillRect(sx - (sPx >> 1), sy - (sPx >> 1), sPx, sPx);
+      if (isGlow) {
+        const es = Math.max(1, Math.round(sPx * eScale));
+        ectx.fillStyle = color; ectx.fillRect(Math.round(px * toE) - (es >> 1), Math.round(py * toE) - (es >> 1), es, es);
+      }
+    }
+
+    if (rig.cocoonPhase > 0.01) {
+      const cp = rig.cocoonPhase;
+      for (let col = 0; col < 5; col++) for (let k = 0; k < 14; k++) {
+        const u = k / 13, ang = (col / 5) * TAU + animTime * 9.5 + u * 4.2, rad = (13 - u * 4.5) * (0.85 + cp * 0.35);
+        drawVoxelBlock(rig.x + Math.cos(ang) * rad, rig.y + Math.sin(ang) * rad, 2 + u * 34, 2.4 + (1 - u) * 1.4, u > 0.72 ? fx.core : (u > 0.32 ? fx.hot : fx.mid), true);
+      }
+    }
+    if (rig.flameBeam && rig.flameBeam.power > 0.05) {
+      const fb = rig.flameBeam, sx0 = -Math.sin(fb.yaw) * 24, sy0 = Math.cos(fb.yaw) * 24, sz0 = rig.lift + 33;
+      for (let i = 0; i < 24; i++) {
+        const u = i / 23, dist = u * fb.len * fb.power, bx = sx0 - Math.sin(fb.yaw) * dist, by = sy0 + Math.cos(fb.yaw) * dist;
+        const bz = lerp(sz0, 5.0, u * 0.92) + Math.sin(animTime * 28 - i * 0.7) * (1.2 + u * 2.5), wSpan = 1.6 + u * 6.5;
+        const ox = Math.cos(fb.yaw) * wSpan, oy = Math.sin(fb.yaw) * wSpan;
+        drawVoxelBlock(bx + ox, by + oy, bz, 2.6 + u * 2.2, fx.outer, true); drawVoxelBlock(bx - ox, by - oy, bz, 2.6 + u * 2.2, fx.outer, true);
+        drawVoxelBlock(bx + ox * 0.45, by + oy * 0.45, bz + 0.6, 2.5 + u * 1.8, fx.mid, true); drawVoxelBlock(bx - ox * 0.45, by - oy * 0.45, bz + 0.6, 2.5 + u * 1.8, fx.hot, true);
+        if (u < 0.72) drawVoxelBlock(bx, by, bz + 0.8, 2.2 + u * 1.2, fx.core, true);
+      }
+    }
+    if (rig.orbitOrbs) for (const ob of rig.orbitOrbs) { drawVoxelBlock(ob.x, ob.y, ob.z, 3.4, fx.mid, true); drawVoxelBlock(ob.x, ob.y, ob.z + 0.5, 2.0, fx.core, true); }
+    for (const pr of projectiles) {
+      const sz = pr.type === 'magmaMeteor' ? 4.8 : 3.4;
+      drawVoxelBlock(pr.x, pr.y, pr.z, sz, pr.type === 'magmaMeteor' ? fx.meteorBody : fx.mid, false);
+      drawVoxelBlock(pr.x, pr.y, pr.z + 0.5, sz * 0.75, fx.hot, true);
+      drawVoxelBlock(pr.x, pr.y, pr.z + 1.0, sz * 0.45, fx.core, true);
+    }
+    for (const rg of shockRings) {
+      const u = clamp(rg.t / rg.life, 0, 1), rad = lerp(rg.r0, rg.r1, smoothstep(0, 1, u));
+      const a0 = rg.arc ? rg.arc.start : 0, a1 = rg.arc ? rg.arc.end : TAU, segs = rg.arc ? 14 : 26, bSz = Math.max(1.2, (1 - u * 0.55) * 2.5);
+      for (let i = 0; i <= segs; i++) { const a = lerp(a0, a1, i / segs); drawVoxelBlock(rg.x + Math.cos(a) * rad, rg.y + Math.sin(a) * rad, rg.z, bSz, rg.color, rg.glow); }
+    }
+    for (const p of particles) drawVoxelBlock(p.x, p.y, p.z, p.sz * (1 - (p.t / p.life) * 0.65), p.color, p.glow);
+    for (const em of ambientEmbers) drawVoxelBlock(em.x + Math.sin(animTime * 1.6 + em.ph) * 5, em.y + Math.cos(animTime * 1.4 + em.ph) * 5, ((em.z + animTime * em.sp) % 44) + 2, 1.1, fx.hot, true);
+
+    ebctx.setTransform(1, 0, 0, 1, 0, 0); ebctx.clearRect(0, 0, EW, EH);
+    ebctx.filter = `blur(${Math.max(1, Math.round(SCALE * 0.16))}px)`; ebctx.drawImage(ec, 0, 0); ebctx.filter = 'none';
+    dctx.globalCompositeOperation = 'screen';
+    dctx.imageSmoothingEnabled = true; dctx.globalAlpha = clamp(0.75 * rig.glowBoost, 0, 1); dctx.drawImage(eb, 0, 0, cv.width, cv.height);
+    dctx.globalAlpha = clamp(0.55 * rig.glowBoost, 0, 1); dctx.imageSmoothingEnabled = false; dctx.drawImage(ec, 0, 0, cv.width, cv.height);
+    dctx.globalAlpha = 1; dctx.globalCompositeOperation = 'source-over'; drawCalls += 2;
+    if (flashAlpha > 0.01) { dctx.fillStyle = `rgba(${fx.flashRGB}, ${flashAlpha})`; dctx.fillRect(0, 0, cv.width, cv.height); }
+
+    const cpuMs = performance.now() - tCpu0;
+    cpuMsSmooth = cpuMsSmooth * 0.88 + cpuMs * 0.12;
+    statTimer += dt;
+    if (statTimer >= 0.25) {
+      statTimer = 0;
+      const hitRate = (cacheHits + cacheMisses) ? Math.round(cacheHits * 100 / (cacheHits + cacheMisses)) : 100;
+      $('stats').innerHTML =
+        `<span>建模 <b>${buildMs}ms</b></span>` +
+        (skinMs > 0 ? `<span>换色 <b>${skinMs}ms</b></span>` : '') +
+        `<span>帧率 <b>${fpsVal}fps</b></span>` +
+        `<span>单帧 <b>${cpuMsSmooth.toFixed(1)}ms</b></span>` +
+        `<span>绘制 <b>${drawCalls}次</b></span>` +
+        `<span>色表 <b>${PAL_KEYS.length}色</b></span>` +
+        (mode === 'cached' ? `<span>缓存 <b>${spriteCache.size}</b> (${hitRate}%)</span>` : '');
+    }
+    requestAnimationFrame(tick);
+  }
+
+  const $ = id => document.getElementById(id);
+  function syncUI() {
+    $('formBadge').textContent = form === 'young' ? '幼年形态' : '成年形态';
+    $('btnYoung').classList.toggle('on', form === 'young');
+    $('btnAdult').classList.toggle('on', form === 'adult');
+    $('skillLabel').textContent = form === 'young' ? '幼年技能（快捷键 1~4）' : '成年技能（快捷键 1~5）';
+    const sb = $('skinBar'); sb.innerHTML = '';
+    SKINS.forEach((sk, idx) => {
+      const btn = document.createElement('button'); btn.className = idx === skinIdx ? 'on' : '';
+      btn.innerHTML = `<span class="swatch" style="background:${sk.dot}"></span>${sk.name}`;
+      btn.onclick = () => applySkin(idx, true); sb.appendChild(btn);
+    });
+    const kb = $('skillBar'); kb.innerHTML = '';
+    SKILLS[form].forEach((sk, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'skill-btn' + (activeAction && activeAction.id === sk.id ? ' active' : '');
+      btn.textContent = `${idx + 1}. ${sk.name}`; btn.onclick = () => startSkill(idx); kb.appendChild(btn);
+    });
+    $('btnHover').classList.toggle('on', !activeAction && baseMode === 'hover');
+    $('btnSoar').classList.toggle('on', !activeAction && baseMode === 'soar');
+    $('btnSpin').classList.toggle('on', autoSpin);
+    $('btnOutline').classList.toggle('on', useOutline);
+    $('btnMode').textContent = '模式：' + MODE_LABEL[MODES[modeIdx]];
+    $('btnMode').classList.toggle('on', MODES[modeIdx] === 'cached');
+  }
+
+  $('btnYoung').onclick = () => { activeAction = null; form = 'young'; syncUI(); showBanner('切换至幼年飞龙', 1.1); };
+  $('btnAdult').onclick = () => { activeAction = null; form = 'adult'; syncUI(); showBanner('切换至成年飞龙', 1.1); };
+  $('btnTransform').onclick = () => startTransform();
+  $('btnHover').onclick = () => { activeAction = null; baseMode = 'hover'; syncUI(); showBanner('高空生态 · 空中悬停吐息', 1.1); };
+  $('btnSoar').onclick  = () => { activeAction = null; baseMode = 'soar';  syncUI(); showBanner('高空生态 · 盘旋翱翔巡航', 1.2); };
+  $('btnSpin').onclick = () => { autoSpin = !autoSpin; syncUI(); };
+  $('btnOutline').onclick = () => { useOutline = !useOutline; syncUI(); };
+  $('btnMode').onclick = () => { modeIdx = (modeIdx + 1) % MODES.length; fit(); syncUI(); };
+  $('btnReset').onclick = () => {
+    thTarget = 0.62;
+    th = thTarget + (((th - thTarget + Math.PI) % TAU + TAU) % TAU - Math.PI);
+    zoom = 0; autoSpin = false; baseMode = 'hover'; activeAction = null; fit(); syncUI();
+  };
+  $('btnExport').onclick = () => {
+    const asset = form === 'young' ? parts.yHead : parts.aHead;
+    const a = document.createElement('a');
+    a.download = `feilong_${form}_${curSkin.id}_head_${asset.w}x${asset.d}x${asset.h}.png`;
+    a.href = asset.strip.toDataURL('image/png'); a.click();
+  };
+
+  cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, th }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', e => { if (drag) { th = thTarget = drag.th + (e.clientX - drag.x) * 0.01; } });
+  cv.addEventListener('pointerup', () => { drag = null; });
+  cv.addEventListener('wheel', e => { zoom = clamp(zoom + (e.deltaY > 0 ? -1 : 1), -2, 5); fit(); e.preventDefault(); }, { passive: false });
+  window.addEventListener('keydown', e => {
+    if (e.key === 'q' || e.key === 'Q') thTarget -= Math.PI / 4;
+    if (e.key === 'e' || e.key === 'E') thTarget += Math.PI / 4;
+    if (e.key === 'c' || e.key === 'C') applySkin(skinIdx + 1, true);
+    if (e.key === 't' || e.key === 'T') startTransform();
+    if (e.key === 's' || e.key === 'S') {
+      activeAction = null; baseMode = baseMode === 'soar' ? 'hover' : 'soar'; syncUI();
+      showBanner(baseMode === 'soar' ? '高空生态 · 盘旋翱翔巡航' : '高空生态 · 空中悬停吐息', 1.2);
+    }
+    if (e.key >= '1' && e.key <= '5') startSkill(Number(e.key) - 1);
+  });
+  window.addEventListener('resize', fit);
+
+  window.__FEILONG_DEBUG__ = {
+    getStats: () => ({
+      buildMs: Number(buildMs), skinMs, skin: curSkin.id, form, baseMode,
+      fps: fpsVal, cpuMs: Number(cpuMsSmooth.toFixed(2)),
+      cacheSize: spriteCache.size, cacheHits, cacheMisses,
+      th, zoom, mode: MODES[modeIdx], paletteCount: PAL_KEYS.length,
+      activeAction: activeAction ? activeAction.id : null
+    }),
+    setAngle: a => { th = thTarget = a; },
+    setForm: f => { activeAction = null; form = f; syncUI(); },
+    setBaseMode: m => { activeAction = null; baseMode = m; syncUI(); },
+    setSkin: idOrIdx => { const idx = typeof idOrIdx === 'number' ? idOrIdx : SKINS.findIndex(s => s.id === idOrIdx); if (idx >= 0) applySkin(idx, false); },
+    cycleSkin: () => applySkin(skinIdx + 1, true),
+    getSkin: () => curSkin.id,
+    triggerTransform: () => startTransform(),
+    triggerSkill: i => startSkill(i),
+    setAutoSpin: v => { autoSpin = v; syncUI(); },
+    setZoom: z => { zoom = clamp(z, -2, 5); fit(); }
+  };
+
+  fit(); syncUI(); requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
