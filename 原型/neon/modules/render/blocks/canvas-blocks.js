@@ -286,6 +286,22 @@ export function createBlockRenderer(target, options = {}) {
   }
 
   /**
+   * 平移 + 旋转 + 缩放（弧形手牌、飘字弹一下、特效转圈都要用）。
+   * @param {{x?: number, y?: number, rotate?: number, scale?: number}} t rotate 用弧度
+   */
+  function transform({ x = 0, y = 0, rotate = 0, scale = 1 } = {}, drawFn) {
+    ctx.save();
+    ctx.translate(x, y);
+    if (rotate) ctx.rotate(rotate);
+    if (scale !== 1) ctx.scale(scale, scale);
+    try {
+      drawFn();
+    } finally {
+      ctx.restore();
+    }
+  }
+
+  /**
    * 实体色块占位接口：原型阶段用色块和标签表示角色、怪、道具；
    * 阶段 5 换像素堆叠渲染器时，保持同样参数签名替换内部实现即可。
    */
@@ -357,6 +373,7 @@ export function createBlockRenderer(target, options = {}) {
     clipRect,
     withAlpha,
     group,
+    transform,
     spriteSlot,
   };
 }

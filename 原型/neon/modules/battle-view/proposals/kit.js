@@ -118,7 +118,7 @@ export function gemDot(r, x, y, color, rad = 5) {
  * 宝石牌：上面是整块颜色（一眼数得出手里几张绿），下面一条深色带放宝石点（任何颜色的牌上都看得清）。
  * 宝石牌不写字：颜色就是它的名字。
  */
-export function gemCard(r, { x, y, w, h, color, gems, glow = null, dim = false, mult = null, fired = false, label = null }) {
+export function gemCard(r, { x, y, w, h, color, gems, glow = null, dim = false, mult = null, fired = false, label = null, multSize = F.xs }) {
   const a = dim ? 0.45 : 1;
   if (glow) {
     r.rect({ x: x - 3, y: y - 3, w: w + 6, h: h + 6, radius: 10, stroke: glow === 'connect' ? T.connect : T.complement, lineWidth: 3 });
@@ -139,9 +139,10 @@ export function gemCard(r, { x, y, w, h, color, gems, glow = null, dim = false, 
   const sx = cx - ((gems.length - 1) * gap) / 2;
   gems.forEach((g, i) => gemDot(r, sx + i * gap, y + h - 3 - bandH / 2, g, rad));
   if (mult) {
-    const mw = Math.max(26, r.measureText(mult, { size: F.xs, weight: 'bold', font: FONT }).width + 10);
-    r.rect({ x: cx - mw / 2, y: y - 9, w: mw, h: 18, radius: 9, fill: fired ? T.gold : '#0b0d12', stroke: fired ? '#fff2b3' : '#4a5470', lineWidth: 1 });
-    txt(r, mult, cx, y, { size: F.xs, weight: 'bold', align: 'center', color: fired ? '#1a1406' : T.text });
+    const mw = Math.max(multSize * 2.2, r.measureText(mult, { size: multSize, weight: 'bold', font: FONT }).width + 8);
+    const mh = multSize + 6;
+    r.rect({ x: cx - mw / 2, y: y - mh / 2, w: mw, h: mh, radius: mh / 2, fill: fired ? T.gold : '#0b0d12', stroke: fired ? '#fff2b3' : '#4a5470', lineWidth: 1 });
+    txt(r, mult, cx, y, { size: multSize, weight: 'bold', align: 'center', color: fired ? '#1a1406' : T.text });
   }
 }
 

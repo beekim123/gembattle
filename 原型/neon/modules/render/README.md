@@ -13,7 +13,7 @@
 - `createRenderer(target, options)`：创建当前默认渲染器
 - `createBlockRenderer(target, options)`：显式创建色块渲染器
 
-渲染器实例统一提供：`getSize`、`resize`、`clear`、`rect`、`circle`、`line`、`polygon`、`text`、`measureText`、`clipRect`、`withAlpha`、`group`、`spriteSlot`。
+渲染器实例统一提供：`getSize`、`resize`、`clear`、`rect`、`circle`、`line`、`polygon`、`text`、`measureText`、`clipRect`、`withAlpha`、`group`、`transform`（平移 + 旋转 + 缩放）、`spriteSlot`。
 
 ## 读写哪些数据
 

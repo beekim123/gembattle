@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>code00 · 上下布局候选（会动）</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 100%; height: 100%; background: #07080c; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; }
+  canvas { width: min(100vw, calc(100vh * 16 / 9)); height: min(100vh, calc(100vw * 9 / 16)); display: block; }
+  #tip { position: fixed; left: 8px; bottom: 6px; color: #6f7b92; font: 12px system-ui, "PingFang SC", sans-serif; }
+</style>
+</head>
+<body>
+<canvas id="stage" width="960" height="540"></canvas>
+<div id="tip">1 一只 · 2 一群 · 3 看门的 · 4 满手 · 空格 重播 · 鼠标放到怪、手牌上看细节</div>
+<script type="module">
+  // 用法：?scene=one|pack|gate|hand&t=1.2（定格在打出后第 1.2 秒，负数是排链的时候）&hover=0（鼠标在第几只怪上）&card=3（鼠标在第几张手牌上）
+  import { createRenderer } from '../../render/index.js';
+  import { drawUpDown, fanSlots, REGIONS } from './updown.js';
+  import { UPDOWN_SCENES } from './updown-scenes.js';
+
+  const q = new URLSearchParams(location.search);
+  const KEYS = ['one', 'pack', 'gate', 'hand'];
+  let sceneKey = q.get('scene') || 'one';
+  const frozenT = q.has('t') ? Number(q.get('t')) : null;
+  const canvas = document.getElementById('stage');
+  const renderer = createRenderer(canvas, { width: 960, height: 540, dpr: Math.min(window.devicePixelRatio || 1, 2) });
+  const LEAD = 2.6; // 打出前先看几秒排链
+  let start = performance.now() / 1000;
+  let end = 6;
+  let hoverMonster = q.has('hover') ? Number(q.get('hover')) : null;
+  let hoverCard = q.has('card') ? Number(q.get('card')) : null;
+  const mouseLocked = q.has('hover') || q.has('card');
+  if (frozenT != null) document.getElementById('tip').remove(); // 截图时不要提示字
+
+  function scene() {
+    const s = UPDOWN_SCENES[sceneKey];
+    return hoverCard != null ? { ...s, hoverCard } : s;
+  }
+
+  function frame() {
+    const clock = performance.now() / 1000;
+    const s = scene();
+    let t = frozenT ?? (clock - start - LEAD);
+    if (!s.chain.length) t = Math.min(t, -0.01); // 满手那一页不打出，只看手牌和悬停
+    const tl = drawUpDown(renderer, s, t, { clock, hoverMonster });
+    end = tl.end;
+    if (frozenT == null && t > end) start = clock; // 播完从头再来
+    window.__UPDOWN_READY__ = true;
+    if (frozenT == null || document.visibilityState === 'visible') requestAnimationFrame(frame);
+  }
+
+  // 鼠标：换算成 960×540 的逻辑坐标，再看落在哪只怪、哪张牌上
+  canvas.addEventListener('mousemove', (ev) => {
+    if (mouseLocked) return;
+    const rc = canvas.getBoundingClientRect();
+    const x = ((ev.clientX - rc.left) / rc.width) * 960;
+    const y = ((ev.clientY - rc.top) / rc.height) * 540;
+    const s = UPDOWN_SCENES[sceneKey];
+    const spots = REGIONS.monsters[s.monsters.length];
+    hoverMonster = null;
+    spots.forEach((sl, i) => {
+      if (Math.abs(x - sl.x) < sl.s * 0.45 && y > sl.y - sl.s - 24 && y < sl.y + 8) hoverMonster = i;
+    });
+    hoverCard = null;
+    const hand = s.hand;
+    if (y > 400) {
+      const fan = fanSlots(hand.length, -1);
+      let best = 1e9;
+      fan.forEach((f, i) => { const d = Math.abs(x - f.x); if (d < REGIONS.hand.cw * 0.6 && d < best) { best = d; hoverCard = i; } });
+    }
+  });
+  window.addEventListener('keydown', (ev) => {
+    const n = Number(ev.key);
+    if (n >= 1 && n <= 4) { sceneKey = KEYS[n - 1]; start = performance.now() / 1000; hoverMonster = null; hoverCard = null; }
+    if (ev.code === 'Space') { start = performance.now() / 1000 - LEAD; ev.preventDefault(); }
+  });
+
+  if (document.fonts?.ready) document.fonts.ready.then(() => requestAnimationFrame(frame));
+  else requestAnimationFrame(frame);
+</script>
+</body>
+</html>

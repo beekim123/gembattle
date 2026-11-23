@@ -32,6 +32,8 @@ function createFakeContext() {
     measureText: (s) => ({ width: String(s).length * 10 }),
     clip: () => ops.push(['clip']),
     translate: (...args) => ops.push(['translate', ...args]),
+    rotate: (...args) => ops.push(['rotate', ...args]),
+    scale: (...args) => ops.push(['scale', ...args]),
   };
   return { ctx, ops };
 }
@@ -90,4 +92,17 @@ test('resize 更新逻辑尺寸与物理画布，非法入参抛出错误', () =
   assert.throws(() => renderer.resize(0, 300), RangeError);
   assert.throws(() => renderer.resize(400, -10), RangeError);
   assert.throws(() => createBlockRenderer(null), TypeError);
+});
+
+test('transform 先平移再旋转再缩放，画完恢复', () => {
+  const ops = [];
+  const ctx = new Proxy({}, {
+    get: (_, k) => (k === 'canvas' || k === 'getContext' ? undefined : (...a) => ops.push([k, ...a])),
+    set: () => true,
+  });
+  const r = createBlockRenderer(ctx, { width: 960, height: 540 });
+  ops.length = 0;
+  r.transform({ x: 10, y: 20, rotate: 0.3, scale: 1.5 }, () => ops.push(['draw']));
+  const names = ops.map((o) => o[0]);
+  assert.deepEqual(names, ['save', 'translate', 'rotate', 'scale', 'draw', 'restore']);
 });
