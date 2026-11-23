@@ -22,6 +22,7 @@ import {
   computeChainRelation,
   gemLevelMultiplier,
   gemLevelThreshold,
+  pickColorsToRecord,
   resolveCardForChain,
 } from './chain-math.js';
 
@@ -45,6 +46,7 @@ function cloneCard(card) {
     color: card.color,
     gems: [...card.gems],
     enhanced: Boolean(card.enhanced),
+    enhance: card.enhance ? { ...card.enhance } : null, // 宝石强化的方向（6.3）：pain / more / shred / record
     drawAfterPlay: card.drawAfterPlay ?? 0,
     label: card.label || card.defId,
     description: card.description || '',
@@ -187,10 +189,20 @@ export function createBattle(startPacket, options = {}) {
   let chainRuleOverrides = {};
   /** 加成改的规则开没开（这条链 / 这回合 / 这一仗，哪层开了都算） */
   const ruleOn = (key) => Boolean(chainRuleOverrides[key] || turnRuleOverrides[key] || battleRuleOverrides[key]);
+  /** 加成改的数（几层都给了就加起来；没给是 null） */
+  const ruleVal = (key) => {
+    const vals = [chainRuleOverrides[key], turnRuleOverrides[key], battleRuleOverrides[key]].filter((v) => typeof v === 'number');
+    return vals.length ? vals.reduce((a, b) => a + b, 0) : null;
+  };
+  // 阶段 2 加成用的回合状态
+  let turnStartKeptCount = 0; // 回合开始摸牌前，手里留着几张
+  let bonusDrawNextTurn = 0; // 下回合多补几张（合白摸牌的加成）
+  let complementDrawUsedThisTurn = false;
   const colorAdvanceOpts = () => ({
     keepAll: ruleOn('keepRecordedColors'),
     keepOnComplement: ruleOn('complementKeepsRecorded'),
     rainbowKeepNeighbors: ruleOn('rainbowKeepsNeighbors'),
+    keepOnBreak: ruleOn('breakKeepsRecorded'),
   });
 
   // 战绩与试玩统计（10.3 + 10.4）
@@ -525,7 +537,8 @@ export function createBattle(startPacket, options = {}) {
 
     // 第 3 版 5.5：特性如「每被破一次盾倒计时 -1」盖掉基础推 1 格
     const traitDelta = getMonsterPassiveRule(mon, 'shieldBreakCountdownDelta');
-    const baseDelta = typeof traitDelta === 'number' ? traitDelta : cfg.shieldBreakPush;
+    // 加成「破盾更疼但不推倒计时」：基础推的那 1 格没了（怪的特性照旧）
+    const baseDelta = typeof traitDelta === 'number' ? traitDelta : (ruleOn('noBreakPush') ? 0 : cfg.shieldBreakPush);
 
     const beforeCd = mon.countdown;
     mon.countdown = Math.max(0, mon.countdown + baseDelta);
@@ -546,7 +559,11 @@ export function createBattle(startPacket, options = {}) {
 
   function getShieldDamageFactor(mon) {
     if (mon.shields.length === 0) return 1;
-    return mon.shieldBroken ? cfg.shieldBrokenMultiplier : cfg.shieldActiveMultiplier;
+    return mon.shieldBroken ? brokenMult() : cfg.shieldActiveMultiplier;
+  }
+
+  function brokenMult() {
+    return ruleVal('brokenMultiplier') ?? cfg.shieldBrokenMultiplier;
   }
 
   function getMonsterTraitDamageFactor(mon, cardColor, ignoreTraits) {
@@ -772,6 +789,8 @@ export function createBattle(startPacket, options = {}) {
     turnDamageMods = { attack: 0, damageBonus: 0, critRate: 0, critDamage: 0, hitPercent: 0 };
     turnRuleOverrides = {};
     turnStartRecordedCount = recordedColors.size;
+    turnStartKeptCount = hand.length;
+    complementDrawUsedThisTurn = false;
 
     // 取消上回合「本回合」挡与怪的回合临时标记
     player.blocks.thisTurn = 0;
@@ -791,8 +810,9 @@ export function createBattle(startPacket, options = {}) {
     } else {
       // 补到 N 张；如开启 freeKeepCount，留下的前 K 张不占名额（第 3 版开关）
       const kept = hand.length;
-      const freeKept = Math.min(kept, Math.max(0, cfg.freeKeepCount || 0));
-      const targetHand = Math.min(cfg.maxHandSize, player.drawTarget + freeKept);
+      const freeKept = Math.min(kept, Math.max(0, (cfg.freeKeepCount || 0) + (ruleVal('extraFreeKeep') || 0)));
+      const targetHand = Math.min(cfg.maxHandSize, player.drawTarget + freeKept + bonusDrawNextTurn);
+      bonusDrawNextTurn = 0;
       const need = Math.max(0, targetHand - kept);
       if (need > 0) drawCards(need);
     }
@@ -969,7 +989,8 @@ export function createBattle(startPacket, options = {}) {
 
     let cursor = currentColor;
     let rec = new Set(recordedColors);
-    let mult = 1;
+    let mult = ruleOn('keptStartsDouble') && turnStartKeptCount > 0 && chain.length > 0 ? 2 : 1;
+    let previewFirstMatch = false;
     let rainbow = false;
     let hasComplementWhite = false;
     let totalHits = 0;
@@ -1013,14 +1034,17 @@ export function createBattle(startPacket, options = {}) {
 
       let stepHits = 0;
       let stepDmg = 0;
+      const pDir = card.enhance?.dir || null;
+      const pPain = pDir === 'pain' ? 1.5 : 1;
+      const pGems = pDir === 'more' && resolved.gems.length ? [...resolved.gems, resolved.gems[0]] : resolved.gems;
 
       // 宝石发（先按当前盾状态算伤害）
       const hitTargets = resolved.isWhite ? simMonsters : (simTarget ? [simTarget] : []);
-      for (const gem of resolved.gems) {
-        const perHit = eff.attack * gemLevelMultiplier(player.gemLevels[gem].level) * baseHitMultiplier;
+      for (const gem of pGems) {
+        const perHit = eff.attack * gemLevelMultiplier(player.gemLevels[gem].level) * baseHitMultiplier * pPain;
         stepHits += mult * Math.max(1, hitTargets.length);
         for (const tm of hitTargets) {
-          const sf = tm.shields.length === 0 ? 1 : (tm.broken ? cfg.shieldBrokenMultiplier : cfg.shieldActiveMultiplier);
+          const sf = tm.shields.length === 0 ? 1 : (tm.broken ? brokenMult() : cfg.shieldActiveMultiplier);
           const tf = (tm.turnHalvedColor === resolved.color ? 0.5 : 1) * Math.max(0.1, 1 - tm.dimPer * turnStartRecordedCount);
           stepDmg += mult * perHit * sf * tf;
         }
@@ -1029,11 +1053,12 @@ export function createBattle(startPacket, options = {}) {
 
       // 合白那一轮白色群攻（不削盾）
       if (isComplement) {
+        for (let round = 0; round < (ruleOn('complementExtraRound') ? 2 : 1); round++)
         for (const gem of PRIMARY_GEMS) {
-          const perHit = eff.attack * gemLevelMultiplier(player.gemLevels[gem].level) * baseHitMultiplier;
+          const perHit = eff.attack * gemLevelMultiplier(player.gemLevels[gem].level) * baseHitMultiplier * pPain;
           stepHits += mult * Math.max(1, simMonsters.length);
           for (const tm of simMonsters) {
-            const sf = tm.shields.length === 0 ? 1 : (tm.broken ? cfg.shieldBrokenMultiplier : cfg.shieldActiveMultiplier);
+            const sf = tm.shields.length === 0 ? 1 : (tm.broken ? brokenMult() : cfg.shieldActiveMultiplier);
             const tf = (tm.turnHalvedColor === resolved.color ? 0.5 : 1) * Math.max(0.1, 1 - tm.dimPer * turnStartRecordedCount);
             stepDmg += mult * perHit * sf * tf;
           }
@@ -1043,12 +1068,18 @@ export function createBattle(startPacket, options = {}) {
 
       // 实时削盾（仅宝石削盾）
       const shredTargets = resolved.isWhite ? simMonsters : (simTarget ? [simTarget] : []);
+      let pPerGem = 1 + (pDir === 'shred' ? 1 : 0);
+      if (!resolved.isWhite && simTarget && !simTarget.broken && ruleOn('firstMatchExtraShred') && !previewFirstMatch
+        && resolved.gems.some((g) => simTarget.shields.some((sh) => sh.color === g && sh.current > 0))) {
+        previewFirstMatch = true;
+        pPerGem += 1;
+      }
       for (const gem of resolved.gems) {
-        shieldShred[gem] += 1;
+        shieldShred[gem] += pPerGem;
         for (const tm of shredTargets) {
           if (tm.broken || tm.shields.length === 0) continue;
           for (const sh of tm.shields) {
-            if (sh.color === gem && sh.current > 0) sh.current--;
+            if (sh.color === gem && sh.current > 0) sh.current = Math.max(0, sh.current - pPerGem);
           }
           if (tm.shields.every((s) => s.current <= 0)) {
             tm.broken = true;
@@ -1064,6 +1095,7 @@ export function createBattle(startPacket, options = {}) {
       const adv = advanceRecordedColors(rec, resolved.color, rel, rainbow, colorAdvanceOpts());
       rec = adv.nextRecorded;
       if (adv.triggeredRainbow) rainbow = true;
+      if (pDir === 'record') for (const c of pickColorsToRecord(rec, resolved.color, 'neighbors', 1)) rec.add(c);
       cursor = resolved.color;
 
       totalHits += stepHits;
@@ -1083,11 +1115,11 @@ export function createBattle(startPacket, options = {}) {
     // 彩虹再打两遍（吃链尾破盾状态、全体存活怪吃满、不削盾）
     if (rainbow) {
       for (const bt of gemBatchesForRainbow) {
-        const extraHits = bt.count * 2;
+        const extraHits = bt.count * (ruleOn('rainbowExtraRepeat') ? 3 : 2);
         const perHit = eff.attack * gemLevelMultiplier(player.gemLevels[bt.gem].level) * baseHitMultiplier;
         totalHits += extraHits * Math.max(1, simMonsters.length);
         for (const tm of simMonsters) {
-          const sf = tm.shields.length === 0 ? 1 : (tm.broken ? cfg.shieldBrokenMultiplier : cfg.shieldActiveMultiplier);
+          const sf = tm.shields.length === 0 ? 1 : (tm.broken ? brokenMult() : cfg.shieldActiveMultiplier);
           const tf = Math.max(0.1, 1 - tm.dimPer * turnStartRecordedCount);
           totalEstDmg += extraHits * perHit * sf * tf;
         }
@@ -1291,8 +1323,12 @@ export function createBattle(startPacket, options = {}) {
     if (playedCount > stats.maxChainLength) stats.maxChainLength = playedCount;
 
     const eff = getEffectiveStats();
-    let multRef = { value: 1 };
+    // 加成「回合结束手里留着牌，下回合的链从 ×2 起」
+    const startDouble = ruleOn('keptStartsDouble') && turnStartKeptCount > 0 && chain.length > 0;
+    let multRef = { value: startDouble ? 2 : 1 };
+    if (startDouble) emit(BATTLE_EVENT_TYPES.EFFECT_TRIGGERED, { source: '留着牌，链从 ×2 起', label: '从 ×2 起' });
     activeChainMultRef = multRef;
+    let firstMatchUsed = false;
     let rainbowTriggered = false;
     let turnTotalDamage = 0;
     let turnTotalHits = 0;
@@ -1331,13 +1367,18 @@ export function createBattle(startPacket, options = {}) {
         player.pendingGemExp[gem] += 1;
       }
 
+      // 宝石强化（6.3）：疼 = 这张每发 +50%；多 = 多算 1 颗宝石来打发（不多削盾）
+      const enhDir = card.enhance?.dir || null;
+      const painFactor = enhDir === 'pain' ? 1.5 : 1;
+      const damageGems = enhDir === 'more' && resolved.gems.length ? [...resolved.gems, resolved.gems[0]] : resolved.gems;
+
       // 1. 先按当前盾状态打出这张牌自带宝石的发（第 3 版 5.5：破盾那张吃 ×0.75）
-      const baseDmgMod = 1 + eff.damageBonus + eff.hitPercent;
+      const baseDmgMod = (1 + eff.damageBonus + eff.hitPercent) * painFactor;
       if (getAliveMonsters().length > 0) {
         if (resolved.isWhite) {
           // 白牌群攻：打所有存活怪，每只吃满
           const aliveNow = getAliveMonsters();
-          for (const gem of resolved.gems) {
+          for (const gem of damageGems) {
             const perHitBase = eff.attack * gemLevelMultiplier(player.gemLevels[gem].level) * baseDmgMod;
             for (const mon of aliveNow) {
               if (!mon.alive) continue;
@@ -1363,7 +1404,7 @@ export function createBattle(startPacket, options = {}) {
           }
         } else if (currentTarget) {
           // 单攻：打选中的怪，死了自动转下一只
-          for (const gem of resolved.gems) {
+          for (const gem of damageGems) {
             const perHitBase = eff.attack * gemLevelMultiplier(player.gemLevels[gem].level) * baseDmgMod;
             const hitRes = applyRawHitsToMonster(currentTarget, {
               hits: multRef.value,
@@ -1393,6 +1434,15 @@ export function createBattle(startPacket, options = {}) {
             multiplier: multRef.value,
           });
           const aliveNow = getAliveMonsters();
+          // 加成「合白多打的那一轮，再多打一轮」
+          const whiteRounds = ruleOn('complementExtraRound') ? 2 : 1;
+          if (whiteRounds > 1) emit(BATTLE_EVENT_TYPES.EFFECT_TRIGGERED, { source: '合白再多打一轮', label: '再一轮白' });
+          if (ruleOn('complementBonusDraw') && !complementDrawUsedThisTurn) {
+            complementDrawUsedThisTurn = true;
+            bonusDrawNextTurn += 1;
+            emit(BATTLE_EVENT_TYPES.EFFECT_TRIGGERED, { source: '合白：下回合多摸 1 张', label: '下回合 +1 张' });
+          }
+          for (let round = 0; round < whiteRounds; round++)
           for (const gem of PRIMARY_GEMS) {
             const perHitBase = eff.attack * gemLevelMultiplier(player.gemLevels[gem].level) * baseDmgMod;
             for (const mon of aliveNow) {
@@ -1425,15 +1475,17 @@ export function createBattle(startPacket, options = {}) {
             if (!mon.alive || mon.shieldBroken || mon.shields.length === 0) continue;
             // 白牌对场上仍处于出牌前那条血的怪削三色盾各 1 格
             let anyShred = false;
+            const perGemW = 1 + (enhDir === 'shred' ? 1 : 0);
             for (const gem of resolved.gems) {
               for (const sh of mon.shields) {
                 if (sh.color === gem && sh.current > 0) {
-                  sh.current--;
+                  const cutW = Math.min(sh.current, perGemW);
+                  sh.current -= cutW;
                   anyShred = true;
                   emit(BATTLE_EVENT_TYPES.SHIELD_SHRED, {
                     targetUid: mon.uid,
                     color: sh.color,
-                    amount: 1,
+                    amount: cutW,
                     remaining: sh.current,
                   });
                 }
@@ -1444,15 +1496,24 @@ export function createBattle(startPacket, options = {}) {
         } else if (currentTarget && currentTarget.alive && !targetBarClearedByCard && currentTarget.barIndex === targetBarBefore) {
           if (!currentTarget.shieldBroken && currentTarget.shields.length > 0) {
             let anyShred = false;
+            // 加成「每条链第一张对色的牌，每颗宝石多削 1 格」；强化「破盾：每颗多削 1 格」
+            const matches = resolved.gems.some((g) => currentTarget.shields.some((sh) => sh.color === g && sh.current > 0));
+            let perGem = 1 + (enhDir === 'shred' ? 1 : 0);
+            if (matches && ruleOn('firstMatchExtraShred') && !firstMatchUsed) {
+              firstMatchUsed = true;
+              perGem += 1;
+              emit(BATTLE_EVENT_TYPES.EFFECT_TRIGGERED, { source: '第一张对色多削 1 格', label: '多削 1 格' });
+            }
             for (const gem of resolved.gems) {
               for (const sh of currentTarget.shields) {
                 if (sh.color === gem && sh.current > 0) {
-                  sh.current--;
+                  const cut = Math.min(sh.current, perGem);
+                  sh.current -= cut;
                   anyShred = true;
                   emit(BATTLE_EVENT_TYPES.SHIELD_SHRED, {
                     targetUid: currentTarget.uid,
                     color: sh.color,
-                    amount: 1,
+                    amount: cut,
                     remaining: sh.current,
                   });
                 }
@@ -1479,6 +1540,10 @@ export function createBattle(startPacket, options = {}) {
         rainbowTriggered = true;
         stats.rainbowCount++;
       }
+      // 强化「集色：打出时顺带记上旁边一色」
+      if (enhDir === 'record') {
+        for (const c of pickColorsToRecord(recordedColors, resolved.color, 'neighbors', 1)) recordedColors.add(c);
+      }
       currentColor = resolved.color;
       discardPile.push(card);
 
@@ -1495,9 +1560,9 @@ export function createBattle(startPacket, options = {}) {
         batches: rainbowBatches.length,
         repeats: 2,
       });
-      const baseDmgMod = 1 + eff.damageBonus + eff.hitPercent;
+      const baseDmgMod = (1 + eff.damageBonus + eff.hitPercent) * (1 + (ruleVal('rainbowHitBonus') || 0));
       for (const bt of rainbowBatches) {
-        const extraHits = bt.hits * 2;
+        const extraHits = bt.hits * (ruleOn('rainbowExtraRepeat') ? 3 : 2);
         const perHitBase = eff.attack * gemLevelMultiplier(player.gemLevels[bt.gem].level) * baseDmgMod;
         for (const mon of getAliveMonsters()) {
           if (!mon.alive) continue;

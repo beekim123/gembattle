@@ -22,7 +22,7 @@ import {
   PLAYER_PRESETS,
   STAGE1_CORE_ENCOUNTERS,
 } from './monsters/encounters.js';
-import { BUFF_DEFS, BUFF_LIST } from './buffs/buffs.js';
+import { BUFF_DEFS, BUFF_LIST, BUFF_POOL, STAGE1_BUFF_IDS } from './buffs/buffs.js';
 import { ALLY_DEFS, ALLY_LIST, STAGE1_ALLY_IDS } from './allies/allies.js';
 
 export {
@@ -39,6 +39,7 @@ export {
   PLAYER_PRESETS,
   BUFF_DEFS,
   BUFF_LIST,
+  BUFF_POOL,
   ALLY_DEFS,
   ALLY_LIST,
   FUNCTION_ENHANCE,
@@ -55,7 +56,7 @@ export {
 };
 
 /** 加成、队友试打默认带哪些（claude 的倾向，用户还没拍板，试打台上能换） */
-export const DEFAULT_BUFF_IDS = Object.freeze(BUFF_LIST.map((b) => b.id));
+export const DEFAULT_BUFF_IDS = STAGE1_BUFF_IDS;
 export const DEFAULT_ALLY_IDS = STAGE1_ALLY_IDS;
 
 function cloneEffects(effects) {
@@ -72,7 +73,7 @@ function buildBuffs(ids) {
   return ids.map((id) => {
     const def = BUFF_DEFS[id];
     if (!def) throw new Error(`未知的加成：${id}`);
-    return { id: def.id, slot: def.slot, lane: def.lane, label: def.label, description: def.description, effects: cloneEffects(def.effects) };
+    return { id: def.id, slot: def.slot, lane: def.lane, lanes: def.lanes, label: def.label, description: def.description, effects: cloneEffects(def.effects) };
   });
 }
 
@@ -216,7 +217,7 @@ export function createRunContent() {
     functionEnhance: FUNCTION_ENHANCE,
     junkCardId: Object.keys(JUNK_CARD_DEFS)[0],
     buffDefs: BUFF_DEFS,
-    buffList: BUFF_LIST,
+    buffList: BUFF_POOL,
     allyDefs: ALLY_DEFS,
     encounters: ENCOUNTERS,
     events: EVENT_DEFS,

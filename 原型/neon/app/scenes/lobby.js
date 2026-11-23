@@ -208,23 +208,26 @@ export function createLobbyScene(context) {
     });
 
     section(r, P, P.y + 306, '带上', '加成和队友先照倾向做的，还没拍板');
-    const items = [
-      ...BUFF_LIST.map((d) => ({ kind: 'buff', d, set: buffIds, label: d.label })),
-      ...ALLY_LIST.map((d) => ({ kind: 'ally', d, set: allyIds, label: `${d.roleTag} · ${d.label}` })),
-    ];
-    const iw = (P.w - 48 - 10) / 2;
-    items.forEach((it, i) => {
-      const b = { id: `take-${it.d.id}`, x: x0 + (i % 2) * (iw + 10), y: P.y + 318 + Math.floor(i / 2) * 34, w: iw, h: 28 };
-      const on = it.set.has(it.d.id);
+    // 加成：一排小图标（鼠标放上去看说明，点一下带 / 不带）；队友：一排小牌子
+    BUFF_LIST.forEach((d, i) => {
+      const b = { id: `take-${d.id}`, x: x0 + i * 37, y: P.y + 318, w: 32, h: 32 };
+      const on = buffIds.has(d.id);
+      r.withAlpha(on ? 1 : 0.35, () => buffIcon(r, b.x + 2, b.y + 2, { lane: LANE[d.lane] ? d.lane : 'chain', flash: hot === b.id }, 28));
+      boxes.push({ ...b, info: `加成${on ? '' : '（没带）'}：${d.label}。${d.description}${d.locked ? '（要解锁）' : ''}`, onClick: () => { if (on) buffIds.delete(d.id); else buffIds.add(d.id); } });
+    });
+    const aw = (P.w - 48 - 30) / 4;
+    ALLY_LIST.forEach((d, i) => {
+      const b = { id: `take-${d.id}`, x: x0 + i * (aw + 10), y: P.y + 360, w: aw, h: 28 };
+      const on = allyIds.has(d.id);
       chip(r, b, {
         on,
-        label: it.label,
+        label: `${d.roleTag} · ${d.label}`,
         icon: (x) => {
-          const col = it.kind === 'buff' ? (LANE[it.d.lane]?.color || T.text2) : (ROLE_COLOR[it.d.role] || T.text2);
+          const col = ROLE_COLOR[d.role] || T.text2;
           r.circle({ x: x + 4, y: b.y + b.h / 2, r: 6, fill: on ? col : '#151821', stroke: col, lineWidth: 1.5 });
         },
       });
-      boxes.push({ ...b, info: `${it.kind === 'buff' ? '加成' : '队友'}：${it.d.description}`, onClick: () => { if (on) it.set.delete(it.d.id); else it.set.add(it.d.id); } });
+      boxes.push({ ...b, info: `队友：${d.description}`, onClick: () => { if (on) allyIds.delete(d.id); else allyIds.add(d.id); } });
     });
 
     // 底下：说明一行 + 出发
@@ -318,17 +321,21 @@ export function createLobbyScene(context) {
     } else {
       const list = albumTab === 'buffs' ? BUFF_LIST : ALLY_LIST;
       txt(r, '先照倾向做的，还没跟用户拍板', x0, P.y + 104, { size: F.xs, color: T.text3 });
+      const cols = albumTab === 'buffs' ? 3 : 2;
+      const cw = (P.w - 32 - (cols - 1) * 8) / cols;
       list.forEach((d, i) => {
-        const y = P.y + 122 + i * 76;
-        r.rect({ x: x0 - 8, y, w: P.w - 32, h: 66, radius: 10, fill: '#11151d', stroke: '#2c3446', lineWidth: 1 });
-        if (albumTab === 'buffs') buffIcon(r, x0, y + 10, { lane: LANE[d.lane] ? d.lane : 'chain' }, 26);
+        const x = x0 - 8 + (i % cols) * (cw + 8);
+        const y = P.y + 122 + Math.floor(i / cols) * 70;
+        r.rect({ x, y, w: cw, h: 62, radius: 10, fill: '#11151d', stroke: '#2c3446', lineWidth: 1 });
+        if (albumTab === 'buffs') buffIcon(r, x + 8, y + 8, { lane: LANE[d.lane] ? d.lane : 'chain' }, 22);
         else {
           const col = ROLE_COLOR[d.role] || T.text2;
-          r.circle({ x: x0 + 13, y: y + 23, r: 13, fill: '#0b0d12', stroke: col, lineWidth: 2 });
-          txt(r, d.roleTag || '友', x0 + 13, y + 23, { size: F.s, weight: 'bold', align: 'center', color: col });
+          r.circle({ x: x + 19, y: y + 19, r: 11, fill: '#0b0d12', stroke: col, lineWidth: 2 });
+          txt(r, d.roleTag || '友', x + 19, y + 19, { size: F.xs, weight: 'bold', align: 'center', color: col });
         }
-        txt(r, d.label, x0 + 38, y + 22, { size: F.m, weight: 'bold', color: CREAM });
-        wrap(r, d.description, P.w - 90, F.xs).slice(0, 2).forEach((line, j) => txt(r, line, x0 + 38, y + 42 + j * 16, { size: F.xs, color: T.text2 }));
+        txt(r, d.label + (d.locked ? '（锁）' : ''), x + 38, y + 19, { size: F.s, weight: 'bold', color: CREAM });
+        wrap(r, d.description, cw - 16, F.xs).slice(0, 2).forEach((line, j) => txt(r, line, x + 8, y + 38 + j * 14, { size: F.xs, color: T.text2 }));
+        boxes.push({ id: `album-${d.id}`, x, y, w: cw, h: 62, info: d.description, onClick: () => {} });
       });
     }
   }
