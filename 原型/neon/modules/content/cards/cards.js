@@ -65,7 +65,7 @@ export const FUNCTION_CARD_DEFS = Object.freeze({
     color: 'colorless',
     gems: Object.freeze([]),
     drawAfterPlay: 1,
-    label: '本回合\n每发 +50%',
+    label: '本回合每发 +50%',
     description: '马上用：这回合每发伤害 +50%，用完补摸 1 张',
     effects: Object.freeze([
       Object.freeze({

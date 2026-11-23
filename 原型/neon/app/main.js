@@ -85,4 +85,7 @@ window.__CODE00_APP__ = Object.freeze({
   getLogicalSize: () => renderer.getSize(),
   getBackend: () => RENDER_BACKEND,
   getLoopStats: () => loop.getStats(),
+  // 截图用：停住主循环，让飘字定在画面上（再调 unfreeze 接着走）
+  freeze: () => { loop.stop(); sceneManager.render(renderer); },
+  unfreeze: () => loop.start(),
 });

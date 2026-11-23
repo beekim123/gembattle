@@ -6,6 +6,7 @@ import {
   validateBattleStartPacket,
 } from '../../shared/index.js';
 import {
+  ALL_CARD_DEFS,
   ALL_ENCOUNTERS,
   DECK_LOADOUTS,
   FUNCTION_CARD_LIST,
@@ -40,5 +41,11 @@ test('阶段 1 核心 5 种仗与全部 7 种仗拼出的开战包全部通过 s
     });
     const res = validateBattleStartPacket(packet);
     assert.equal(res.ok, true, `${encounter.id} 开战包校验失败：\n${res.errors.join('\n')}`);
+  }
+});
+
+test('牌的名字里不写换行符：排版交给画面按宽度换行', () => {
+  for (const def of Object.values(ALL_CARD_DEFS)) {
+    assert.doesNotMatch(def.label, /\n/, `${def.defId} 的名字里有换行符`);
   }
 });

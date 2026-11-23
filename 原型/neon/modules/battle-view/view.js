@@ -39,14 +39,27 @@ function isLightSwatch(colorId) {
 function drawGemDots(renderer, centerX, y, gems, radius = 5, gap = 14) {
   if (!Array.isArray(gems) || gems.length === 0) return;
   const startX = centerX - ((gems.length - 1) * gap) / 2;
+  // 深色底托：不管牌面是什么颜色（包括蓝点画在蓝牌上），宝石点都落在同一块深色底上
+  const padX = radius + 4;
+  renderer.rect({
+    x: startX - padX,
+    y: y - radius - 3,
+    w: (gems.length - 1) * gap + padX * 2,
+    h: radius * 2 + 6,
+    fill: '#12151c',
+    stroke: '#eef2f9',
+    lineWidth: 1,
+    radius: radius + 3,
+    alpha: 0.9,
+  });
   gems.forEach((g, idx) => {
     renderer.circle({
       x: startX + idx * gap,
       y,
       r: radius,
       fill: COLOR_META[g]?.swatch || '#ffffff',
-      stroke: '#12151c',
-      lineWidth: 1.5,
+      stroke: '#ffffff',
+      lineWidth: 1.2,
     });
   });
 }
@@ -110,6 +123,7 @@ export function createBattleView(options = {}) {
   let hoveredMonsterUid = null;
   let hoveredChainUid = null;
 
+  // 飘字的落点：怪卡片正下方那一条（排链面板的上半截），往上飘到卡片底边为止，不压怪的名字和信息
   function computeMonsterAnchors(snap) {
     const anchors = new Map();
     if (!snap || !Array.isArray(snap.monsters)) return anchors;
@@ -119,7 +133,7 @@ export function createBattleView(options = {}) {
     const totalW = count * cardW + (count - 1) * gap;
     const startX = (LOGICAL_W - totalW) / 2;
     snap.monsters.forEach((m, idx) => {
-      anchors.set(m.uid, { x: startX + idx * (cardW + gap) + cardW / 2, y: 148 });
+      anchors.set(m.uid, { x: startX + idx * (cardW + gap) + cardW / 2, y: 292, minY: 248 });
     });
     return anchors;
   }
@@ -996,10 +1010,10 @@ export function createBattleView(options = {}) {
       const sb = state.summaryBanner;
       const alpha = Math.max(0, Math.min(1, sb.life / 0.5));
       renderer.rect({
-        x: 112,
-        y: 252,
-        w: 460,
-        h: 58,
+        x: 26,
+        y: 318,
+        w: 632,
+        h: 46,
         fill: '#10141f',
         stroke: sb.rainbow ? '#ffd559' : '#5778c4',
         lineWidth: 2,
@@ -1010,8 +1024,8 @@ export function createBattleView(options = {}) {
         value: sb.totalDamage,
         prefix: '本回合总伤害：',
         x: 342,
-        y: 263,
-        size: 19,
+        y: 322,
+        size: 18,
         tone: sb.rainbow ? 'accent' : 'normal',
         align: 'center',
         alpha,
@@ -1020,7 +1034,7 @@ export function createBattleView(options = {}) {
         drawText(renderer, {
           text: sb.formulaLines[0],
           x: 342,
-          y: 290,
+          y: 346,
           size: 11,
           color: UI_THEME.textSecondary,
           align: 'center',
@@ -1128,9 +1142,10 @@ export function createBattleView(options = {}) {
     renderMonsters(renderer);
     renderChainAndPreview(renderer);
     renderHand(renderer);
+    ui.render(renderer);
     renderFx(renderer);
     renderOutcomeModal(renderer);
-    ui.render(renderer);
+    if (snapshot.outcome !== null) ui.render(renderer);
     renderHoverTooltip(renderer);
   }
 

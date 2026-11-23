@@ -76,6 +76,7 @@ export function createBattleFx() {
             color,
             size,
             isCrit: Boolean(p.isCrit),
+            minY: anchor.minY ?? -Infinity,
             delay: Math.min(0.45, packetIndex * 0.02),
             life: 1.15,
             maxLife: 1.15,
@@ -155,7 +156,7 @@ export function createBattleFx() {
         f.delay -= step;
         continue;
       }
-      f.y += f.vy * step;
+      f.y = Math.max(f.minY ?? -Infinity, f.y + f.vy * step);
       f.life -= step;
       if (f.life <= 0) floaters.splice(i, 1);
     }

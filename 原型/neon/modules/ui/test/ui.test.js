@@ -154,3 +154,10 @@ test('createUiLayer 正确处理按钮命中、悬停、按下、点击与禁用
   assert.equal(offRes.clickedId, null);
   assert.equal(disabledClicked, 0);
 });
+
+test('wrapText 不把「+50%」这类数字记号从中间断开', () => {
+  const { renderer } = makeRecordingRenderer();
+  const lines = wrapText(renderer, '本回合每发 +50%', 60, { size: 14 });
+  assert.ok(lines.length >= 2);
+  assert.ok(lines.some((l) => l.includes('+50%')), `断行结果：${JSON.stringify(lines)}`);
+});

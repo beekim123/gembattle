@@ -32,6 +32,15 @@ export function formatNumber(value, { decimals = 0, prefix = '', suffix = '' } =
 const NO_LINE_START_PUNCT = new Set(['，', '。', '；', '：', '、', '！', '？', '）', '》', '」', '』', ',', '.', ';', ':', '!', '?', ')']);
 
 /**
+ * 断行用的小块：中文一个字一块；连着的字母、数字、符号（如「+50%」「×2」）算一块，不从中间断开。
+ * @param {string} para
+ * @returns {string[]}
+ */
+export function splitWrapTokens(para) {
+  return String(para).match(/[A-Za-z0-9+\-×%.,:/#]+|\s+|[\s\S]/gu) || [];
+}
+
+/**
  * 按最大像素宽度把字符串拆成多行（兼容中文无空格断行、显式换行符与基础避头标点）。
  * @param {object} renderer
  * @param {string} content
@@ -52,18 +61,18 @@ export function wrapText(renderer, content, maxWidth, style = {}) {
       continue;
     }
     let current = '';
-    for (const ch of para) {
-      const candidate = current + ch;
+    for (const token of splitWrapTokens(para)) {
+      const candidate = current + token;
       if (current.length > 0 && renderer.measureText(candidate, style).width > maxWidth) {
         // 避免常见中文标点落在行首
-        if (NO_LINE_START_PUNCT.has(ch) && current.length > 1) {
+        if (NO_LINE_START_PUNCT.has(token) && current.length > 1) {
           const chars = Array.from(current);
           const tail = chars.pop();
-          lines.push(chars.join(''));
-          current = tail + ch;
+          lines.push(chars.join('').trimEnd());
+          current = tail + token;
         } else {
-          lines.push(current);
-          current = ch;
+          lines.push(current.trimEnd());
+          current = token.trimStart();
         }
       } else {
         current = candidate;

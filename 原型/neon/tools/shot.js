@@ -55,8 +55,9 @@ const DEFAULT_JOBS = [
     full: false,
     clicks: [
       { x: 750, y: 306 }, // 点「自动帮排」
-      { x: 780, y: 260 }, // 点「打出」看飘字与总伤面板
+      { x: 780, y: 260, frames: 1, waitMs: 650 }, // 点「打出」看飘字与总伤面板
     ],
+    freeze: true,
   },
   {
     name: '实战·看门的 3 条血',
@@ -75,8 +76,9 @@ const DEFAULT_JOBS = [
     full: false,
     clicks: [
       { x: 750, y: 306 }, // 自动帮排 12 张
-      { x: 780, y: 260 }, // 打出上万发
+      { x: 780, y: 260, frames: 1, waitMs: 650 }, // 打出上万发
     ],
+    freeze: true,
   },
   {
     name: 'battle-view 假数据演示页',
@@ -285,7 +287,7 @@ async function waitFrames(cdp, count = 3) {
   });
 }
 
-async function clickLogicalCanvas(cdp, lx, ly) {
+async function clickLogicalCanvas(cdp, lx, ly, settleFrames = 6) {
   const evalRes = await cdp.send('Runtime.evaluate', {
     returnByValue: true,
     expression: `(() => {
@@ -306,7 +308,7 @@ async function clickLogicalCanvas(cdp, lx, ly) {
   await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: pt.x, y: pt.y, button: 'left', clickCount: 1 });
   await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: pt.x, y: pt.y, button: 'left', clickCount: 1 });
   await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 12, y: 12, button: 'none' });
-  await waitFrames(cdp, 6);
+  await waitFrames(cdp, settleFrames);
 }
 
 async function runJob(cdp, origin, job) {
@@ -336,8 +338,15 @@ async function runJob(cdp, origin, job) {
 
     if (Array.isArray(job.clicks)) {
       for (const pt of job.clicks) {
-        await clickLogicalCanvas(cdp, pt.x, pt.y);
+        await clickLogicalCanvas(cdp, pt.x, pt.y, pt.frames ?? 6);
+        if (pt.waitMs) {
+          await cdp.send('Runtime.evaluate', { awaitPromise: true, expression: `new Promise((r) => setTimeout(r, ${Number(pt.waitMs)}))` });
+        }
       }
+    }
+    if (job.freeze) {
+      // 停住主循环再截：飘字只活一秒多，截图本身就要几百毫秒
+      await cdp.send('Runtime.evaluate', { expression: 'window.__CODE00_APP__?.freeze?.()' });
     }
 
     let captureParams = { format: 'png' };
