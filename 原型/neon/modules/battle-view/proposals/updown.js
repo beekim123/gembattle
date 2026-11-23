@@ -212,14 +212,14 @@ function buildTimeline(s) {
   s.chain.forEach((c, i) => {
     const fire = i * iv;
     ev.push({ k: 'fire', i, t: fire });
-    ev.push({ k: 'hit', i, t: fire + flight, target: s.target ?? 0, dmg: c.dmg, label: c.label, kind: c.kind || 'normal', shred: c.shred, crit: c.crit });
-    if (c.white) ev.push({ k: 'white', i, t: fire + flight + 0.08, dmgs: c.white.dmgs, label: c.white.label });
+    ev.push({ k: 'hit', i, t: fire + flight, target: s.target ?? 0, dmg: c.dmg, hits: c.hits, per: c.per, critShare: c.critShare, critPer: c.critPer, kind: 'normal', shred: c.shred });
+    if (c.white) ev.push({ k: 'white', i, t: fire + flight + 0.08, hits: c.white.hits, per: c.white.per });
     if (c.ally) ev.push({ k: 'ally', t: fire + flight + 0.28, ally: c.ally });
     t = Math.max(t, fire + flight, c.ally ? fire + flight + 0.28 + 0.3 : 0); // 队友那一刀砍完才算打完
   });
   if (s.rainbow) {
     ev.push({ k: 'rainbowRing', t: t + 0.25 });
-    s.rainbow.forEach((p, j) => ev.push({ k: 'hit', i: -1, t: t + 0.45 + j * 0.3, target: s.target ?? 0, dmg: p.dmg, label: p.label, kind: 'rainbow' }));
+    s.rainbow.forEach((p, j) => ev.push({ k: 'hit', i: -1, t: t + 0.45 + j * 0.3, target: s.target ?? 0, dmg: p.hits * p.per, hits: p.hits, per: p.per, kind: 'rainbow' }));
     t += 0.45 + s.rainbow.length * 0.3;
   }
   ev.push({ k: 'total', t: t + 0.35 });
@@ -238,6 +238,17 @@ function stateAt(s, t) {
     traits: m.traits,
   }));
   const fx = { hits: [], floaters: [], whites: [], allyAt: [], slashes: [], frags: [], rainbowAt: -10, totalAt: -10, monAt: -10, fired: -1 };
+  // 飘字（设计稿 5.3）：一发一个数，数是这一发打了多少。同一张牌的几发连着冒出来；
+  // 一张牌最多冒 packBudget 个，发数再多就几发合成一包，包上还是写一发多少。
+  const emit = (m, t0, hits, per, kind, critShare = 0, critPer = 0) => {
+    const budget = (s.packBudget ?? 8) * (kind === 'rainbow' ? 3 : 1); // 彩虹是压轴，满屏多冒一些
+    const n = Math.max(1, Math.min(hits, budget));
+    for (let i = 0; i < n; i++) {
+      const cnt = Math.round((hits * (i + 1)) / n) - Math.round((hits * i) / n);
+      const crit = critShare > 0 && Math.floor((i + 1) * critShare) > Math.floor(i * critShare);
+      fx.floaters.push({ t: t0 + (i / n) * (kind === 'rainbow' ? 0.3 : 0.24), m, text: String(crit ? critPer : per), count: cnt > 1 ? cnt : 0, kind: crit ? 'crit' : kind, n: fx.floaters.length });
+    }
+  };
   let total = 0; // 这一下一共打了多少（溢出的也算，玩家看的就是这个数）
   const applyDmg = (mi, dmg, at) => {
     const st = ms[mi];
@@ -264,8 +275,7 @@ function stateAt(s, t) {
     if (e.k === 'hit') {
       applyDmg(e.target, e.dmg, e.t);
       fx.hits.push({ i: e.i, t: e.t, target: e.target, kind: e.kind });
-      fx.floaters.push({ t: e.t, m: e.target, text: e.label, kind: e.kind, n: fx.floaters.length });
-      if (e.crit) fx.floaters.push({ t: e.t + 0.05, m: e.target, text: e.crit, kind: 'crit', n: fx.floaters.length });
+      emit(e.target, e.t, e.hits, e.per, e.kind, e.critShare, e.critPer);
       const st = ms[e.target];
       if (e.shred && !st.broken && st.alive) {
         for (const [c, n] of Object.entries(e.shred)) { const sh = st.shields.find((x) => x.color === c); if (sh) sh.cur = Math.max(0, sh.cur - n); }
@@ -276,15 +286,15 @@ function stateAt(s, t) {
       fx.whites.push({ t: e.t });
       s.monsters.forEach((m, mi) => {
         if (!ms[mi].alive) return;
-        applyDmg(mi, e.dmgs[mi], e.t);
-        fx.floaters.push({ t: e.t, m: mi, text: e.label[mi], kind: 'white', n: fx.floaters.length });
+        applyDmg(mi, e.hits * e.per[mi], e.t);
+        emit(mi, e.t, e.hits, e.per[mi], 'white');
       });
     }
     if (e.k === 'ally') {
       fx.allyAt.push({ t: e.t, idx: e.ally.idx, say: e.ally.say });
       fx.slashes.push({ t: e.t + 0.3, m: s.target ?? 0, color: e.ally.color });
       applyDmg(s.target ?? 0, e.ally.dmg, e.t + 0.3);
-      fx.floaters.push({ t: e.t + 0.3, m: s.target ?? 0, text: String(e.ally.dmg), kind: 'ally', n: fx.floaters.length });
+      fx.floaters.push({ t: e.t + 0.3, m: s.target ?? 0, text: String(e.ally.dmg), count: 0, kind: 'ally', n: fx.floaters.length });
     }
     if (e.k === 'rainbowRing') fx.rainbowAt = e.t;
     if (e.k === 'total') fx.totalAt = e.t;
@@ -475,29 +485,29 @@ export function drawUpDown(r, s, t, opts = {}) {
         r.transform({ x: tg.x + tg.s * 0.5 + 72, y: tg.y - tg.s * 0.45, scale: pop(k * 2) }, () => rainbowText(r, '彩虹 ×3', 0, 0, F.xl));
       }
     }
-    // 飘字：每只怪一列，新的从下面弹出来，旧的往上推、过一会淡掉。长链十几个数也不叠
+    // 飘字：一发一个数，散在怪身上，冒出来弹一下、往上飘一点、0.75 秒淡掉
     {
-      const lineH = (f) => (f.kind === 'crit' ? 34 : f.kind === 'ally' || f.kind === 'rainbow' ? 30 : 26);
-      const sizeOf = (f) => (f.kind === 'crit' ? 30 : f.kind === 'ally' || f.kind === 'rainbow' ? 26 : 22);
-      s.monsters.forEach((m, mi) => {
-        const col = fx.floaters.filter((f) => f.m === mi && f.t <= now).sort((a, b) => a.t - b.t);
-        const sl = slots[mi];
-        const baseY = sl.y - sl.s * 0.18;
-        const room = baseY - (sl.y - sl.s - REGIONS.overhead.gap + REGIONS.overhead.barH + REGIONS.overhead.toughH + 22); // 往上推到血条下面为止
-        let up = 0;
-        for (let j = col.length - 1; j >= 0; j--) {
-          const f = col[j];
-          const k = life(now, f.t, 1.3);
-          if (k > 1 || up > room) break;
-          const x = sl.x + (j % 2 ? 14 : -14);
-          const y = baseY - up - Math.min(1, k * 4) * 6;
-          const a = Math.min(k < 0.75 ? 1 : (1 - k) / 0.25, up > room - 30 ? (room - up) / 30 : 1);
-          r.withAlpha(Math.max(0, a), () => r.transform({ x, y, scale: pop(k * 5) }, () => {
-            if (f.kind === 'rainbow') rainbowText(r, f.text, 0, 0, sizeOf(f));
-            else bold(r, f.text, 0, 0, { size: sizeOf(f), align: 'center', color: f.kind === 'crit' ? T.crit : f.kind === 'ally' ? '#ffd9a8' : '#ffffff', outline: f.kind === 'white' ? '#1d4a8a' : f.kind === 'ally' ? '#5a2a0a' : '#07080c' });
-          }));
-          up += lineH(f);
-        }
+      const rnd = (n, k) => { const v = Math.sin(n * 12.9898 + k * 78.233) * 43758.5453; return v - Math.floor(v); };
+      const SIZE = { normal: 17, white: 17, rainbow: 19, crit: 23, ally: 26 };
+      const COLOR = { normal: '#ffffff', white: '#ffffff', crit: T.crit, ally: '#ffd9a8' };
+      const EDGE = { normal: '#07080c', white: '#1d4a8a', crit: '#3a1a00', ally: '#5a2a0a' };
+      fx.floaters.forEach((f) => {
+        const dur = f.kind === 'ally' ? 1.1 : (s.floatLife ?? 0.75);
+        const k = life(now, f.t, dur);
+        if (k < 0 || k > 1) return;
+        const sl = slots[f.m];
+        const w = Math.max(sl.s, 100);
+        const x = f.kind === 'ally' ? sl.x + w * 0.42 : sl.x + (rnd(f.n, 1) - 0.5) * w * 1.25;
+        const y = (f.kind === 'ally' ? sl.y - sl.s * 0.75 : sl.y - sl.s * (0.15 + rnd(f.n, 2) * 0.7)) - k * 16;
+        const size = SIZE[f.kind];
+        r.withAlpha(k < 0.7 ? 1 : (1 - k) / 0.3, () => r.transform({ x, y, scale: pop(k * 6) }, () => {
+          if (f.kind === 'rainbow') rainbowText(r, f.text, 0, 0, size);
+          else bold(r, f.text, 0, 0, { size, align: 'center', color: COLOR[f.kind], outline: EDGE[f.kind] });
+          if (f.count && s.showPackCount) { // 合成的一包：要不要小字写几发，先关着（太乱），见候选说明 B 第 3 问
+            const tw = r.measureText(f.text, { size, weight: 'bold' }).width;
+            bold(r, `×${f.count}`, tw / 2 + 3, 3, { size: 11, color: '#c9d3e6', align: 'left' });
+          }
+        }));
       });
     }
     // 总数：链飞走以后，在链那里弹出来

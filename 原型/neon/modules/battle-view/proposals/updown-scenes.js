@@ -5,6 +5,11 @@
 // hand：一群 4 只，回合刚开始，手里 12 张（最多就是 12），鼠标放在一张牌和一只怪上。
 
 const g = (color, gems, extra = {}) => ({ color, gems, ...extra });
+// 链里一张牌打出去：hits 发，每发 per；critShare 是暴击的比例，暴击那几发每发 critPer
+const hit = (hits, per, critShare = 0, critPer = 0) => {
+  const critHits = Math.round(hits * critShare);
+  return { hits, per, critShare, critPer, dmg: (hits - critHits) * per + critHits * critPer };
+};
 
 const DECK = { red: 3, yellow: 2, green: 4, cyan: 3, blue: 4, purple: 2, white: 1 };
 
@@ -39,17 +44,17 @@ const ONE = {
   ],
   flyIn: 1, // 链尾那张是从手里第 2 个位子飞过去的
   chain: [
-    g('red', ['red'], { mult: '×1', dmg: 15, label: '15', shred: { red: 1 } }),
-    g('purple', ['red', 'blue'], { mult: '×2', rel: 'connect', dmg: 60, label: '60', shred: { red: 1, blue: 1 } }),
-    g('blue', ['blue'], { mult: '×4', rel: 'connect', dmg: 60, label: '60', shred: { blue: 1 }, ally: { idx: 0, say: '补刀', color: '#c9a8ff', dmg: 120 } }),
-    g('cyan', ['green', 'blue'], { mult: '×8', rel: 'connect', dmg: 720, label: '720', kind: 'crit' }), // 16 发 × 30，里面有几发暴击
+    g('red', ['red'], { mult: '×1', ...hit(1, 15), shred: { red: 1 } }),
+    g('purple', ['red', 'blue'], { mult: '×2', rel: 'connect', ...hit(4, 15), shred: { red: 1, blue: 1 } }),
+    g('blue', ['blue'], { mult: '×4', rel: 'connect', ...hit(4, 15), shred: { blue: 1 }, ally: { idx: 0, say: '补刀', color: '#c9a8ff', dmg: 120 } }),
+    g('cyan', ['green', 'blue'], { mult: '×8', rel: 'connect', ...hit(16, 30, 0.5, 60) }), // 破盾以后每发 ×1.5，一半暴击
   ],
   hand: [g('green', ['green'], { dim: true }), { fn: true, text: '挡下一次攻击', draw: 1 }],
   handAfter: [g('green', ['green']), { fn: true, text: '挡下一次攻击', draw: 1 }],
   ghost: [600],
   willShred: [{ red: 2, blue: 2 }],
   pv: { hits: 25, per: 15, total: 615, hint: '第 3 张破盾，后面 ×1.5' },
-  why: '4 张 · 25 发 · 第 3 张破盾，后面 ×1.5 · 补刀 +120',
+  why: '4 张 · 25 发 · 每发 15，破盾以后 30 · 补刀 +120',
 };
 
 const PACK = {
@@ -80,10 +85,10 @@ const PACK = {
   ],
   flyIn: 0,
   chain: [
-    g('yellow', ['red', 'green'], { mult: '×1', dmg: 30, label: '30' }),
-    g('green', ['green'], { mult: '×2', rel: 'connect', dmg: 30, label: '30' }),
-    g('purple', ['red', 'blue'], { mult: '×4', rel: 'complement', dmg: 120, label: '120', shred: { blue: 1 }, white: { dmgs: [120, 160, 160], label: ['120', '160', '160'] } }),
-    g('blue', ['blue'], { mult: '×8', rel: 'connect', dmg: 120, label: '120', shred: { blue: 1 }, ally: { idx: 0, say: '补刀', color: '#c9a8ff', dmg: 90 } }),
+    g('yellow', ['red', 'green'], { mult: '×1', ...hit(2, 15) }),
+    g('green', ['green'], { mult: '×2', rel: 'connect', ...hit(2, 15) }),
+    g('purple', ['red', 'blue'], { mult: '×4', rel: 'complement', ...hit(8, 15), shred: { blue: 1 }, white: { hits: 12, per: [15, 20, 20] } }), // 合白：红绿蓝三份，每份倍率那么多发
+    g('blue', ['blue'], { mult: '×8', rel: 'connect', ...hit(8, 15), shred: { blue: 1 }, ally: { idx: 0, say: '补刀', color: '#c9a8ff', dmg: 90 } }),
   ],
   hand: [g('red', ['red'], { dim: true }), g('green', ['green'], { dim: true })],
   handAfter: [g('red', ['red']), g('green', ['green'])],
@@ -91,10 +96,10 @@ const PACK = {
   willShred: [{ blue: 2 }],
   pv: { hits: 20, per: 15, total: 300, hint: '合白：3 只都吃一轮' },
   attack: { m: 2, hearts: 0.5, blocked: false, reset: 3 },
-  why: '4 张 · 20 发 · 合白一轮 3 只 · 补刀 +90',
+  why: '4 张 · 20 发 · 合白一轮 3 只各 12 发 · 补刀 +90',
 };
 
-// 看门的：每发 30，盾没破 ×0.75 = 22.5，破了 ×1.5 = 45
+// 看门的：盾没破每发 24，破了 48
 const hitsOf = [2, 8, 8, 32, 64, 128, 512, 1536, 1024, 4096, 4096, 16384];
 const GATE_CHAIN = [
   g('red', ['red'], { mult: '×2' }),
@@ -110,16 +115,12 @@ const GATE_CHAIN = [
   g('blue', ['blue'], { mult: '×4096', rel: 'connect' }),
   g('purple', ['red', 'blue'], { mult: '×8192', rel: 'connect' }),
 ];
-const gateChain = GATE_CHAIN.map((c, i) => {
-  const per = i < 3 ? 22.5 : 45;
-  const dmg = Math.round(hitsOf[i] * per);
-  return { ...c, dmg, label: String(dmg) };
-});
+const gateChain = GATE_CHAIN.map((c, i) => ({ ...c, ...hit(hitsOf[i], i < 3 ? 24 : 48, i === 11 ? 0.3 : 0, 120) }));
 gateChain[2].ally = { idx: 1, say: '补刀', color: '#c9a8ff', dmg: 2400 };
-gateChain[9].white = { dmgs: [gateChain[9].dmg], label: [String(gateChain[9].dmg)] };
-gateChain[11].kind = 'crit';
-const RAINBOW_PASS = 627322; // 换了一条新血，盾是满的，彩虹再打的两遍吃 ×0.75
-const gateSum = gateChain.reduce((a, c) => a + c.dmg + (c.white ? c.white.dmgs[0] : 0) + (c.ally ? c.ally.dmg : 0), 0) + RAINBOW_PASS * 2;
+gateChain[9].white = { hits: 2048 * 3, per: [48] };
+const CHAIN_HITS = hitsOf.reduce((a, b) => a + b, 0);
+const RAINBOW = { hits: CHAIN_HITS, per: 24 }; // 换了一条新血，盾是满的，彩虹再打的两遍每发 24
+const gateSum = gateChain.reduce((a, c) => a + c.dmg + (c.white ? c.white.hits * c.white.per[0] : 0) + (c.ally ? c.ally.dmg : 0), 0) + RAINBOW.hits * RAINBOW.per * 2;
 
 const GATE = {
   status: {
@@ -150,13 +151,15 @@ const GATE = {
   queued: GATE_CHAIN,
   flyIn: 4,
   chain: gateChain,
-  rainbow: [{ dmg: RAINBOW_PASS, label: String(RAINBOW_PASS) }, { dmg: RAINBOW_PASS, label: String(RAINBOW_PASS) }],
+  rainbow: [RAINBOW, RAINBOW],
+  packBudget: 4, // 长链：一张牌最多冒 4 个数，0.5 秒就淡掉，同屏二十来个
+  floatLife: 0.5,
   hand: [g('green', ['green'], { dim: true }), { fn: true, text: '挡下一次攻击', draw: 1 }, g('red', ['red'], { dim: true })],
   handAfter: [g('green', ['green']), { fn: true, text: '挡下一次攻击', draw: 1 }, g('red', ['red'])],
   ghost: [1200000],
   willShred: [{ green: 2 }],
-  pv: { hits: 27890, per: 45, total: gateSum - 2400, hint: '第 3 张破盾 · 彩虹再打两遍' },
-  why: '12 张 · 27890 发 · 破盾 · 合白一轮 · 彩虹再打两遍 · 补刀 +2400',
+  pv: { hits: CHAIN_HITS, per: 48, total: gateSum - 2400, hint: '第 3 张破盾 · 彩虹再打两遍' },
+  why: `12 张 · ${CHAIN_HITS} 发 · 每发 24，破盾以后 48 · 合白一轮 · 彩虹再打两遍 · 补刀 +2400`,
 };
 
 const HAND = {
