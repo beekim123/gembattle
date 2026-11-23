@@ -223,7 +223,7 @@ export function buildPlayback(events, prevSnap, nextSnap, opts = {}) {
           m.hp = Math.max(0, m.hp - op.damage);
           m.flashAt = op.t;
         }
-        if (op.show) state.floaters.push({ t: op.t, uid: op.uid, text: op.text, kind: op.fk, n: state.floaters.length });
+        if (op.show) state.floaters.push({ t: op.t, uid: op.uid, text: op.text, kind: op.fk, color: op.color, n: state.floaters.length });
         break;
       }
       case 'white': state.whites.push(op.t); break;

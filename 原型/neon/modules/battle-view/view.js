@@ -66,6 +66,26 @@ export function createBattleView(options = {}) {
 
   const busy = () => Boolean(playback && !playback.done);
 
+  // ── 牌的位置补间（照用户旧原型的交互：牌都是滑过去的，不跳）──
+  const anim = new Map(); // uid → { x, y, w, h, rot }（中心点）
+  let frameDt = 1 / 60;
+  let newThisFrame = 0;
+  let speed = 1; // 打的时候点一下画面 ×3，再点一下跳过
+  let rollTotal = 0; // 顶上总伤害一路往上滚
+  function tween(uid, target, from = null) {
+    let a = anim.get(uid);
+    if (!a) {
+      a = { ...(from || target), wait: from ? newThisFrame++ * 0.08 : 0 };
+      anim.set(uid, a);
+    }
+    a.seen = clock;
+    if (a.wait > 0) { a.wait -= frameDt; return a; }
+    const k = 1 - Math.exp(-frameDt * 14);
+    for (const key of ['x', 'y', 'w', 'h', 'rot']) a[key] += (target[key] - a[key]) * k;
+    return a;
+  }
+  const pileFrom = () => ({ x: R.pile.x + 28, y: R.pile.y + 32, w: 50, h: 70, rot: 0 });
+
   function setState({ snapshot: nextSnap, preview: nextPrev, result: nextRes = null, events = [], allowAutoArrange: allowAuto }) {
     if (allowAuto !== undefined) allowAutoArrange = Boolean(allowAuto);
     const prev = snapshot;
@@ -78,6 +98,8 @@ export function createBattleView(options = {}) {
       playback = buildPlayback(events, prev, nextSnap, { allyLabels: (prev.player?.allies || []).map((a) => a.label) });
       castPreview = prevPreview;
       playT = 0;
+      speed = 1;
+      rollTotal = 0;
       shown = prev;
     } else {
       shown = nextSnap;
@@ -91,10 +113,14 @@ export function createBattleView(options = {}) {
 
   function update(dt) {
     clock += dt;
+    frameDt = Math.min(0.1, Math.max(0.001, dt));
+    for (const [uid, a] of anim) if (clock - a.seen > 1.5) anim.delete(uid);
     if (playback) {
-      playT += dt;
+      playT += dt * speed;
       playback.advance(playT);
-      if (playback.done) { playback = null; shown = snapshot; }
+      const goal = playback.state.total;
+      if (rollTotal < goal) rollTotal = Math.min(goal, rollTotal + Math.max(1, Math.ceil((goal - rollTotal) * 0.18)));
+      if (playback.done) { playback = null; shown = snapshot; speed = 1; }
     }
   }
 
@@ -162,6 +188,11 @@ export function createBattleView(options = {}) {
     }
 
     const canAct = snapshot?.phase === 'player_input' && !busy();
+    if (type === 'down' && busy()) {
+      // 打的时候：点一下加速，再点一下跳过（照旧原型）
+      if (speed === 1) { speed = 3; notes.push({ t: clock, text: '加速' }); } else { playT = playback.duration; }
+      return { cursor: 'default' };
+    }
     if (type === 'down') {
       if (!canAct) return { cursor: 'default' };
       const hi = handAt(x, y);
@@ -175,6 +206,7 @@ export function createBattleView(options = {}) {
       if (drag) {
         const d = drag;
         drag = null;
+        if (d.moved) anim.set(d.uid, { x: pointer.x, y: pointer.y - 20, w: R.hand.cw * 1.05, h: R.hand.ch * 1.05, rot: 0, seen: clock, wait: 0 });
         if (!d.moved || !canAct) return { cursor: 'default' };
         const card = [...snapshot.hand, ...snapshot.chain].find((c) => c.uid === d.uid);
         const overMonster = bx.monsters.find((m) => inRect(m, x, y) && shownMonster(m.uid)?.alive);
@@ -374,7 +406,7 @@ export function createBattleView(options = {}) {
     r.circle({ x: C.cx, y: C.cy + press, r: C.r, fill: casting && !press ? '#2a3a5e' : (hoverButton === 'cast' ? '#4a84f0' : '#3a74e0'), stroke: '#a9c8ff', lineWidth: 2 });
     if (press) r.circle({ x: C.cx, y: C.cy, r: C.r + now * 120, stroke: '#a9c8ff', lineWidth: 2, alpha: 1 - now / 0.15 });
     txt(r, casting ? '…' : (snap.chain.length ? '打出' : '结束'), C.cx, C.cy - 6, { size: F.l, weight: 'bold', align: 'center' });
-    txt(r, '空格', C.cx, C.cy + 16, { size: F.xs, align: 'center', color: '#d6e4ff' });
+    txt(r, casting ? (speed > 1 ? '再点跳过' : '点画面加速') : '空格', C.cx, C.cy + 16, { size: F.xs, align: 'center', color: '#d6e4ff' });
     txt(r, `弃 ${snap.discardPileCount}`, C.cx + 30, C.cy + 54, { size: F.xs, color: T.text3 });
 
     // 不在播放里的小字（马上用的功能牌等）
@@ -528,22 +560,46 @@ export function createBattleView(options = {}) {
     });
   }
 
+  // 手牌头上：打下一张会怎样（照旧原型）
+  const HAND_HINT = {
+    connect: ['×2 接上', T.connect],
+    complement: ['×2 合白', T.complement],
+    break: ['断色', T.danger],
+    start: ['起手', '#c8d0e0'],
+    instant: ['马上用', '#8fe3ff'],
+  };
+
+  function handPos(b, lowered = 0) {
+    const sl = b.slot;
+    return tween(b.uid, { x: sl.x, y: sl.y + lowered, w: R.hand.cw * sl.scale, h: R.hand.ch * sl.scale, rot: sl.rot }, pileFrom());
+  }
+
   function drawHand(r, snap, bx, pb) {
+    newThisFrame = 0;
     if (pb) {
       // 打出去的时候手里剩下的牌压低一点，让出画面
-      bx.hand.forEach((b) => drawCard(r, b.card, { ...b.slot, y: b.slot.y + 30 }));
+      bx.hand.forEach((b) => { const a = handPos(b, 30); drawCard(r, b.card, { x: a.x, y: a.y, rot: a.rot, scale: a.w / R.hand.cw }); });
       return;
     }
     const order = bx.hand.map((_, i) => i).filter((i) => !bx.hand[i].slot.hovered);
     const hov = bx.hand.findIndex((b) => b.slot.hovered);
     if (hov >= 0) order.push(hov);
-    order.forEach((i) => drawCard(r, bx.hand[i].card, bx.hand[i].slot));
+    order.forEach((i) => {
+      const b = bx.hand[i];
+      const a = handPos(b);
+      drawCard(r, b.card, { x: a.x, y: a.y, rot: a.rot, scale: a.w / R.hand.cw, hovered: b.slot.hovered });
+      const hint = !b.card.hidden && !drag && snapshot.phase === 'player_input' ? HAND_HINT[b.card.usage === 'instant' ? 'instant' : b.card.relationToCurrent] : null;
+      if (hint && a.wait <= 0) {
+        const d = a.h / 2 + 10;
+        bold(r, hint[0], a.x + Math.sin(a.rot) * d, a.y - Math.cos(a.rot) * d, { size: 11, color: hint[1], align: 'center', alpha: b.card.relationToCurrent === 'break' ? 0.75 : 1 });
+      }
+    });
     if (hov >= 0 && !drag) {
       const c = bx.hand[hov].card;
-      if (!c.hidden && c.description) hoverTip(r, bx.hand[hov].slot.x - 120, 330, [c.label, c.description]);
+      if (!c.hidden && c.description) hoverTip(r, bx.hand[hov].slot.x - 120, 320, [c.label, c.description]);
     }
     if (!snap.hand.length && !snap.chain.length) txt(r, '手里没牌了，点「结束」', 480, 500, { size: F.s, align: 'center', color: T.text3 });
-    else if (!snap.chain.length && snapshot.phase === 'player_input') txt(r, '把牌拖到上面排成链', 480, 330, { size: F.s, align: 'center', color: T.text3, alpha: 0.8 });
+    else if (!snap.chain.length && snapshot.phase === 'player_input') txt(r, '把牌拖到上面排成链', 480, 284, { size: F.s, align: 'center', color: T.text3, alpha: 0.8 });
   }
 
   const REL_WORD = { start: ['起手', '#c8d0e0'], connect: ['接上 ×2', T.connect], complement: ['补色 · 合白', T.complement], break: ['断色', T.danger] };
@@ -555,8 +611,15 @@ export function createBattleView(options = {}) {
     lastBoxes.chain.forEach((sl, i) => {
       const step = preview?.steps?.find((s) => s.cardUid === sl.uid);
       const mult = step ? `×${step.multiplierAfter}` : null;
-      gemCard(r, { x: sl.x, y: sl.y, w: sl.w, h: sl.h, color: step?.resolvedColor || sl.card.color, gems: sl.card.gems || [sl.card.color], mult, multSize: sl.w + R.chain.gap < 50 ? 10 : F.xs });
+      const a = tween(sl.uid, { x: sl.cx, y: sl.cy, w: sl.w, h: sl.h, rot: 0 });
+      const settled = Math.abs(a.x - sl.cx) < 3 && Math.abs(a.y - sl.cy) < 3;
+      r.transform({ x: a.x, y: a.y, rotate: a.rot }, () => {
+        gemCard(r, { x: -a.w / 2, y: -a.h / 2, w: a.w, h: a.h, color: step?.resolvedColor || sl.card.color, gems: sl.card.gems || [sl.card.color], mult: settled ? mult : null, multSize: sl.w + R.chain.gap < 50 ? 10 : F.xs });
+      });
+      if (!settled) return;
       if (i > 0 && step) chainJoint(r, sl.x - R.chain.gap / 2, sl.cy, step.relation === 'break' ? 'break' : step.relation);
+      // 底下写这张打几发（照旧原型）
+      if (step?.hits) txt(r, `${step.hits} 发`, sl.cx, sl.y + sl.h + 9, { size: 11, align: 'center', color: T.text2 });
     });
   }
 
@@ -566,13 +629,16 @@ export function createBattleView(options = {}) {
     const n = chain.length;
     const from = chainSlots(n);
     const to = castListSlots(n);
+    // 最后一小段：顺序表上的牌一张张飞进弃牌堆（照旧原型）
+    const flyStart = playback.duration - 0.55;
     const endFade = clamp((playback.duration - now) / 0.3, 0, 1);
-    r.withAlpha(endFade, () => {
+    const dis = { x: R.cast.cx + 34, y: R.cast.cy + 54 };
+    r.withAlpha(1, () => {
       // 底：一条竖着的淡板，上面写「施法顺序」
       const last = to[n - 1];
       const k0 = easeOut(now / Math.max(0.01, pb.lead));
-      r.rect({ x: R.castList.x - 6, y: R.castList.top - 22, w: 132, h: last.y + last.h - R.castList.top + 30, radius: 10, fill: '#05070a', alpha: 0.55 * k0 });
-      txt(r, '施法顺序', R.castList.x, R.castList.top - 11, { size: F.xs, color: T.text3, alpha: k0 });
+      r.rect({ x: R.castList.x - 6, y: R.castList.top - 22, w: 132, h: last.y + last.h - R.castList.top + 30, radius: 10, fill: '#05070a', alpha: 0.55 * k0 * endFade });
+      txt(r, '施法顺序', R.castList.x, R.castList.top - 11, { size: F.xs, color: T.text3, alpha: k0 * endFade });
       chain.forEach((c, i) => {
         const step = castPreview?.steps?.find((s) => s.cardUid === c.uid);
         const fire = pb.fires.find((f) => f.step === i);
@@ -582,16 +648,18 @@ export function createBattleView(options = {}) {
         const cur = fire && pb.fired === i;
         const done = fire && pb.fired > i;
         const pulse = cur ? pop(clamp((now - fire.t) / 0.25, 0, 1)) : 1;
-        const x = lerp(A.x, B.x, k) + (cur ? 10 : 0);
-        const y = lerp(A.y, B.y, k);
-        const w = lerp(A.w, B.w, k);
-        const h = lerp(A.h, B.h, k);
-        const alpha = done ? 0.35 : 1;
+        const fk = easeOut((now - flyStart - i * 0.025) / 0.3);
+        const x = lerp(lerp(A.x, B.x, k) + (cur ? 10 : 0), dis.x, fk);
+        const y = lerp(lerp(A.y, B.y, k), dis.y, fk);
+        const w = lerp(A.w, B.w, k) * (1 - fk * 0.6);
+        const h = lerp(A.h, B.h, k) * (1 - fk * 0.6);
+        const alpha = (done ? 0.35 : 1) * (fk > 0 ? 1 - fk * 0.3 : 1);
+        if (fk >= 1) return;
         r.withAlpha(alpha, () => r.transform({ x: x + w / 2, y: y + h / 2, scale: cur ? 1.12 * pulse : 1 }, () => {
           gemCard(r, { x: -w / 2, y: -h / 2, w, h, color: step?.resolvedColor || c.color, gems: c.gems || [c.color], fired: Boolean(fire) });
           if (cur) r.rect({ x: -w / 2 - 3, y: -h / 2 - 3, w: w + 6, h: h + 6, radius: 7, stroke: T.gold, lineWidth: 2 });
         }));
-        if (k < 1) return;
+        if (k < 1 || fk > 0) return;
         // 右边：倍率；当前这张再写一句是怎么接的
         const mult = fire?.multiplier ?? step?.multiplierAfter;
         if (mult != null) txt(r, `×${mult}`, B.x + B.w + (cur ? 18 : 8), B.cy, { size: cur ? F.m : F.xs, weight: 'bold', color: cur ? T.gold : T.text2, alpha });
@@ -733,7 +801,7 @@ export function createBattleView(options = {}) {
         const y = (f.kind === 'ally' ? sl.y - sl.s * 0.75 : sl.y - sl.s * (0.15 + rnd(f.n, 2) * 0.7)) - k * 16;
         r.withAlpha(k < 0.7 ? 1 : (1 - k) / 0.3, () => r.transform({ x, y, scale: pop(k * 6) }, () => {
           if (f.kind === 'rainbow') rainbowText(r, f.text, 0, 0, SIZE.rainbow);
-          else bold(r, f.text, 0, 0, { size: SIZE[f.kind] || 17, align: 'center', color: COLOR[f.kind] || '#fff', outline: EDGE[f.kind] || '#07080c' });
+          else bold(r, f.text, 0, 0, { size: SIZE[f.kind] || 17, align: 'center', color: f.kind === 'normal' && f.color ? swatch(f.color) : (COLOR[f.kind] || '#fff'), outline: EDGE[f.kind] || '#07080c' });
         }));
       });
     }
@@ -745,6 +813,15 @@ export function createBattleView(options = {}) {
       if (buffLabels.has(tx.source)) return; // 加成的字在右上角它的图标下面冒
       bold(r, tx.text, R.hero.cx, R.hero.base - 84 - k * 16 - (i % 3) * 24, { size: F.s, color: '#c8fbff', align: 'center', alpha: k < 0.7 ? 1 : (1 - k) / 0.3 });
     });
+    // 顶上：这一下打了多少，一路往上滚（照旧原型）
+    if (now > pb.lead && pb.chainCount > 0 && !(pb.monAt > 0 && now >= pb.monAt)) {
+      const a = clamp((playback.duration - now) / 0.3, 0, 1);
+      r.withAlpha(a, () => {
+        r.rect({ x: 400, y: 34, w: 160, h: 40, radius: 10, fill: '#3a2608', alpha: 0.88, stroke: '#8a6420', lineWidth: 1 });
+        txt(r, '这一下', 480, 44, { size: 10, align: 'center', color: '#e8c27a' });
+        bold(r, String(Math.round(rollTotal)), 480, 61, { size: F.l, color: '#ffd98a', align: 'center' });
+      });
+    }
     // 总数
     {
       const k = life(now, pb.totalAt, 1.8);
