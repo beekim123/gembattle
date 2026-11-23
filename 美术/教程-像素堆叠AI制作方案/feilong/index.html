@@ -769,23 +769,24 @@ function buildYoungTailPart() {
   return m;
 }
 
-const Y_WING_PIVOT = { x: 5.8, y: 1.5 };
+const Y_WING_PIVOT = { x: 6.4, y: 2.6 };
 function buildYoungWingPart(side, pose) {
-  const m = new VoxelModel(16, 12, 16);
-  const s = side, rx = -s * Y_WING_PIVOT.x, ry = Y_WING_PIVOT.y, rz = 6.2;
-  const flap = pose === 'up' ? 0.95 : (pose === 'down' ? -0.85 : -0.75);
+  const m = new VoxelModel(18, 16, 18);
+  const s = side, rx = -s * Y_WING_PIVOT.x, ry = Y_WING_PIVOT.y, rz = 7.4;
+  const flap = pose === 'up' ? 0.90 : (pose === 'down' ? -0.82 : (pose === 'mid' ? 0.08 : -0.68));
   const spread = pose === 'tuck' ? 0.58 : 1.0;
   const pRoot = [rx, ry, rz];
-  const pElbow = [rx + s * 5.2 * spread, ry + 1.8, rz + 2.2 + flap * 3.0];
-  const pTip   = [rx + s * 11.0 * spread, ry - 0.2, rz + 1.2 + flap * 5.4];
-  const pTRoot = [rx, ry - 5.0, rz - 1.5];
-  const pTMid  = [rx + s * 5.2 * spread, ry - 5.4, pElbow[2] - 1.5];
-  const pTTip  = [rx + s * 10.4 * spread, ry - 1.8, pTip[2] - 0.6];
+  const pElbow = [rx + s * 5.4 * spread, ry + 1.8, rz + 2.0 + flap * 2.8];
+  const pTip   = [rx + s * 11.4 * spread, ry - 0.4, rz + 1.0 + flap * 5.0];
+  const pTRoot = [rx, ry - 5.2, rz - 1.4];
+  const pTMid  = [rx + s * 5.4 * spread, ry - 5.8, pElbow[2] - 1.6];
+  const pTTip  = [rx + s * 10.8 * spread, ry - 2.2, pTip[2] - 0.8];
   m.paintWingQuad(pRoot, pElbow, pTMid, pTRoot, 1.15, mat('wing'), PART_ID.wingMem, 0.8, false);
   m.paintWingQuad(pElbow, pTip, pTTip, pTMid,  1.12, mat('wing'), PART_ID.wingMem, 1.0, false);
+  m.paintEllipsoid(rx, ry - 0.4, rz, 1.7, 1.7, 1.5, mat('scale'), PART_ID.wingBone, true);
   m.paintCapsule(pRoot[0], pRoot[1], pRoot[2], pElbow[0], pElbow[1], pElbow[2], 1.45, 1.25, mat('scale'), PART_ID.wingBone, true);
   m.paintCapsule(pElbow[0], pElbow[1], pElbow[2], pTip[0], pTip[1], pTip[2], 1.25, 0.95, mat('scale'), PART_ID.wingBone, true);
-  m.paintCapsule(pElbow[0], pElbow[1], pElbow[2], pTMid[0], pTMid[1], pTMid[2], 1.1, 0.95, mat('horn'), PART_ID.wingBone, true);
+  m.paintCapsule(pElbow[0], pElbow[1], pElbow[2], pTMid[0], pTMid[1], pTMid[2], 1.02, 0.82, mat('scale'), PART_ID.wingBone, true);
   m.despeckle(); m.applyArtShading(true);
   return m;
 }
@@ -892,30 +893,31 @@ function buildAdultTailSegPart(r0, r1, isTip = false) {
   return m;
 }
 
-// 成年宽翼（单侧跨度 24 格，双翼合展 58 格 = 幼年 1.84×，翼根枢轴锁在 A_WING_PIVOT）
-const A_WING_PIVOT = { x: 11.4, y: 2.2 };
+// 成年宽翼（单侧跨度 24 格，双翼合展 56+ 格，30×28×26 包围盒零裁切，翼骨与鳞甲色系统一）
+const A_WING_PIVOT = { x: 11.8, y: 5.8 };
 function buildAdultWingPart(side, pose) {
-  const m = new VoxelModel(27, 22, 24);
-  const s = side, rx = -s * A_WING_PIVOT.x, ry = A_WING_PIVOT.y, rz = 10.0;
-  const flap = pose === 'up' ? 0.88 : (pose === 'down' ? -0.82 : 0.15);
+  const m = new VoxelModel(30, 28, 26);
+  const s = side, rx = -s * A_WING_PIVOT.x, ry = A_WING_PIVOT.y, rz = 10.6;
+  const flap = pose === 'up' ? 0.86 : (pose === 'down' ? -0.78 : (pose === 'mid' ? 0.05 : 0.20));
   const pRoot = [rx, ry, rz];
-  const pWrist = [rx + s * 10.6, ry + 3.8, rz + 4.4 + flap * 4.0];
-  const pTip   = [rx + s * 22.8, ry - 1.0, rz + 1.4 + flap * 7.6];
-  const pTRoot = [rx, ry - 11.0, rz - 3.0];
-  const pTRib3 = [rx + s * 7.6, ry - 14.5, pWrist[2] - 5.6];
-  const pTRib2 = [rx + s * 14.8, ry - 13.5, lerp(pWrist[2], pTip[2], 0.45) - 4.8];
-  const pTRib1 = [rx + s * 18.8, ry - 9.4, pTip[2] - 3.2];
+  const pWrist = [rx + s * 10.4, ry + 3.4, rz + 4.0 + flap * 3.6];
+  const pTip   = [rx + s * 22.8, ry - 1.2, rz + 1.4 + flap * 7.0];
+  const pTRoot = [rx, ry - 10.6, rz - 2.8];
+  const pTRib3 = [rx + s * 7.6, ry - 14.2, pWrist[2] - 5.2];
+  const pTRib2 = [rx + s * 14.8, ry - 13.2, lerp(pWrist[2], pTip[2], 0.45) - 4.4];
+  const pTRib1 = [rx + s * 18.8, ry - 9.2, pTip[2] - 2.8];
   const pTipBack = [rx + s * 22.4, ry - 3.0, pTip[2] - 0.8];
 
   m.paintWingQuad(pRoot,  pWrist, pTRib3, pTRoot, 1.22, mat('wing'), PART_ID.wingMem, 1.5, false);
   m.paintWingQuad(pWrist, pTRib1, pTRib2, pTRib3, 1.22, mat('wing'), PART_ID.wingMem, 1.6, false);
   m.paintWingQuad(pWrist, pTip,   pTipBack, pTRib1, 1.18, mat('wing'), PART_ID.wingMem, 1.8, false);
-  m.paintCapsule(pRoot[0], pRoot[1], pRoot[2], pWrist[0], pWrist[1], pWrist[2], 1.9, 1.65, mat('armor'), PART_ID.wingBone, true);
-  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pTip[0], pTip[1], pTip[2], 1.6, 1.1, mat('armor'), PART_ID.wingBone, true);
-  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pWrist[0] + s * 1.2, pWrist[1] + 2.6, pWrist[2] + 1.8, 1.2, 0.9, mat('horn'), PART_ID.horn, true);
-  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pTRib1[0], pTRib1[1], pTRib1[2], 1.25, 1.0, mat('horn'), PART_ID.wingBone, true);
-  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pTRib2[0], pTRib2[1], pTRib2[2], 1.25, 1.0, mat('horn'), PART_ID.wingBone, true);
-  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pTRib3[0], pTRib3[1], pTRib3[2], 1.25, 1.0, mat('horn'), PART_ID.wingBone, true);
+  m.paintEllipsoid(rx, ry - 0.6, rz, 2.1, 2.2, 1.9, mat('armor'), PART_ID.wingBone, true);
+  m.paintCapsule(pRoot[0], pRoot[1], pRoot[2], pWrist[0], pWrist[1], pWrist[2], 1.85, 1.55, mat('armor'), PART_ID.wingBone, true);
+  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pTip[0], pTip[1], pTip[2], 1.5, 1.05, mat('armor'), PART_ID.wingBone, true);
+  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pWrist[0] + s * 1.2, pWrist[1] + 2.4, pWrist[2] + 1.6, 1.15, 0.85, mat('horn'), PART_ID.horn, true);
+  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pTRib1[0], pTRib1[1], pTRib1[2], 1.08, 0.82, mat('scale'), PART_ID.wingBone, true);
+  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pTRib2[0], pTRib2[1], pTRib2[2], 1.08, 0.82, mat('scale'), PART_ID.wingBone, true);
+  m.paintCapsule(pWrist[0], pWrist[1], pWrist[2], pTRib3[0], pTRib3[1], pTRib3[2], 1.08, 0.82, mat('scale'), PART_ID.wingBone, true);
   m.despeckle(); m.applyArtShading(true);
   return m;
 }
@@ -1016,7 +1018,7 @@ function buildVolcanicPlatform(makeCanvas, size = 200) {
     if (canvasPool.length < 360) canvasPool.push(c);
   }
 
-  // 1. 极速构建双形态 19 个模块化部件
+  // 1. 极速构建双形态 25 个模块化部件（含 up/mid/down 平滑振翅中间帧）
   const tBuild0 = performance.now();
   const parts = {
     yTorso:      buildYoungTorsoPart().toStripAsset(mk,      { footRadius: 7.5 }),
@@ -1024,6 +1026,8 @@ function buildVolcanicPlatform(makeCanvas, size = 200) {
     yTail:       buildYoungTailPart().toStripAsset(mk,       { footRadius: 3.5 }),
     yWingL_up:   buildYoungWingPart(-1, 'up').toStripAsset(mk,   { footRadius: 6.0 }),
     yWingR_up:   buildYoungWingPart( 1, 'up').toStripAsset(mk,   { footRadius: 6.0 }),
+    yWingL_mid:  buildYoungWingPart(-1, 'mid').toStripAsset(mk,  { footRadius: 6.0 }),
+    yWingR_mid:  buildYoungWingPart( 1, 'mid').toStripAsset(mk,  { footRadius: 6.0 }),
     yWingL_dn:   buildYoungWingPart(-1, 'down').toStripAsset(mk, { footRadius: 6.0 }),
     yWingR_dn:   buildYoungWingPart( 1, 'down').toStripAsset(mk, { footRadius: 6.0 }),
     yWingL_tuck: buildYoungWingPart(-1, 'tuck').toStripAsset(mk, { footRadius: 4.5 }),
@@ -1037,6 +1041,8 @@ function buildVolcanicPlatform(makeCanvas, size = 200) {
     aTailTip:     buildAdultTailSegPart(1.6, 1.1, true).toStripAsset(mk,  { footRadius: 3.0 }),
     aWingL_up:    buildAdultWingPart(-1, 'up').toStripAsset(mk,    { footRadius: 11.0 }),
     aWingR_up:    buildAdultWingPart( 1, 'up').toStripAsset(mk,    { footRadius: 11.0 }),
+    aWingL_mid:   buildAdultWingPart(-1, 'mid').toStripAsset(mk,   { footRadius: 11.0 }),
+    aWingR_mid:   buildAdultWingPart( 1, 'mid').toStripAsset(mk,   { footRadius: 11.0 }),
     aWingL_dn:    buildAdultWingPart(-1, 'down').toStripAsset(mk,  { footRadius: 11.0 }),
     aWingR_dn:    buildAdultWingPart( 1, 'down').toStripAsset(mk,  { footRadius: 11.0 }),
     aWingL_glide: buildAdultWingPart(-1, 'glide').toStripAsset(mk, { footRadius: 11.0 }),
@@ -1381,14 +1387,22 @@ function buildVolcanicPlatform(makeCanvas, size = 200) {
           }
         }
       } else if (act.id === 'sneeze') {
+        const mp = getMouthWorldPos();
         if (t < 0.52) {
           const p = t / 0.52; forcePose = 'tuck'; tgtLift = 5.8 + p * 3.0; tgtY = -p * 3.0; tgtScale = 1.0 + p * 0.08;
-          if (Math.random() < 0.45) spawnParticle((Math.random() - 0.5) * 3, 12, rig.lift + 17, (Math.random() - 0.5) * 6, 4, 12, 0.42, 1.8, fx.smoke, false, -4);
+          if (Math.random() < 0.45) spawnParticle(mp.x + (Math.random() - 0.5) * 2, mp.y, mp.z + 1.0, (Math.random() - 0.5) * 6, 4, 12, 0.42, 1.8, fx.smoke, false, -4);
         } else if (t < 0.95) {
           if (!st.sneezed) {
-            st.sneezed = true; shakeMag = 4.2; addDecal('scorch', 0, 24, 12, 4.5); hitDummy(0.85, true);
-            for (let i = 0; i < 34; i++) { const sp = 34 + Math.random() * 44, a = (Math.random() - 0.5) * 1.15; spawnParticle(0, 12, rig.lift + 14, Math.sin(a) * sp, Math.cos(a) * sp, (Math.random() - 0.35) * 14, 0.42 + Math.random() * 0.32, 2.0 + Math.random() * 1.2, i % 3 === 0 ? fx.core : (i % 3 === 1 ? fx.hot : fx.mid), true, 16); }
-            for (let i = 0; i < 10; i++) spawnParticle((Math.random() - 0.5) * 6, 16, rig.lift + 14, (Math.random() - 0.5) * 18, 22 + Math.random() * 16, 10 + Math.random() * 10, 0.55, 2.4, fx.smoke, false, -5);
+            st.sneezed = true; shakeMag = 4.2;
+            addDecal('scorch', mp.x - Math.sin(mp.yaw) * 16, mp.y + Math.cos(mp.yaw) * 16, 12, 4.5); hitDummy(0.85, true);
+            for (let i = 0; i < 34; i++) {
+              const sp = 34 + Math.random() * 44, a = mp.yaw + (Math.random() - 0.5) * 1.15;
+              spawnParticle(mp.x, mp.y, mp.z, -Math.sin(a) * sp, Math.cos(a) * sp, (Math.random() - 0.35) * 14, 0.42 + Math.random() * 0.32, 2.0 + Math.random() * 1.2, i % 3 === 0 ? fx.core : (i % 3 === 1 ? fx.hot : fx.mid), true, 16);
+            }
+            for (let i = 0; i < 10; i++) {
+              const a = mp.yaw + (Math.random() - 0.5) * 0.6;
+              spawnParticle(mp.x + (Math.random() - 0.5) * 3, mp.y + 2, mp.z, -Math.sin(a) * 24, Math.cos(a) * 24, 10 + Math.random() * 10, 0.55, 2.4, fx.smoke, false, -5);
+            }
           }
           const p = (t - 0.52) / 0.43; flapFreq = 15.0; tgtY = -Math.sin(p * Math.PI) * 10.5; tgtLift = 6.5 - Math.sin(p * Math.PI) * 2.5;
         } else { tgtY = lerp(-2.0, 0, smoothstep(0, 1, (t - 0.95) / (act.dur - 0.95))); }
@@ -1410,30 +1424,36 @@ function buildVolcanicPlatform(makeCanvas, size = 200) {
           const p = (t - 0.72) / 0.33; tgtY = lerp(DUMMY_POS.y - 12, DUMMY_POS.y - 20, p); tgtLift = 1.5 + Math.sin(p * Math.PI) * 5.5;
         } else { const p = smoothstep(0, 1, (t - 1.05) / (act.dur - 1.05)); tgtY = lerp(DUMMY_POS.y - 20, 0, p); tgtLift = lerp(4.0, 5.8, p); }
       } else if (act.id === 'flameBreath') {
+        const mp = getMouthWorldPos();
         if (t < 0.60) {
           const p = t / 0.60; forcePose = 'up'; tgtLift = lerp(9.0, 11.5, p); tgtY = -p * 4.5; tgtHeadLift = 2.0; rig.glowBoost = 1.2 + p * 1.4;
-          if (Math.random() < 0.7) { const a = Math.random() * TAU; spawnParticle(Math.cos(a) * 14, 18 + Math.sin(a) * 10, rig.lift + 28, -Math.cos(a) * 24, -Math.sin(a) * 16, 4, 0.35, 2.0, fx.hot, true, 0); }
+          if (Math.random() < 0.75) {
+            const a = Math.random() * TAU, rad = 11 + Math.random() * 4;
+            const ox = Math.cos(a) * rad, oy = Math.sin(a) * rad * 0.7, oz = (Math.random() - 0.5) * 6;
+            spawnParticle(mp.x + ox, mp.y + oy, mp.z + oz, -ox * 2.6, -oy * 2.6, -oz * 2.6, 0.34, 2.0, Math.random() < 0.35 ? fx.core : fx.hot, true, 0);
+          }
         } else if (t < 2.40) {
           const p = (t - 0.60) / 1.80, yaw = Math.sin(p * Math.PI * 2) * (15 * Math.PI / 180);
-          tgtYaw = yaw; tgtHeadYaw = yaw * 0.4; tgtY = 3.0; tgtLift = 7.0; rig.glowBoost = 2.4;
-          rig.flameBeam = { yaw, len: 62, power: Math.min(1, p * 6) * Math.min(1, (1 - p) * 6) };
+          tgtYaw = yaw; tgtHeadYaw = yaw * 0.4; tgtY = 3.0; tgtLift = 7.0; tgtHeadLift = -0.6; rig.glowBoost = 2.4;
+          rig.flameBeam = { len: 56, power: Math.min(1, p * 6) * Math.min(1, (1 - p) * 6) };
           shakeMag = Math.max(shakeMag, 2.2);
           st.scorchCd = (st.scorchCd || 0) - dt;
           if (st.scorchCd <= 0) {
-            st.scorchCd = 0.08; const dist = 28 + Math.random() * 30, gx = -Math.sin(yaw) * dist, gy = Math.cos(yaw) * dist;
+            st.scorchCd = 0.08;
+            const dist = 16 + Math.random() * 34, gx = mp.x - Math.sin(mp.yaw) * dist, gy = mp.y + Math.cos(mp.yaw) * dist;
             addDecal('scorch', gx, gy, 7.5 + Math.random() * 3.5, 6.5);
             if (Math.hypot(gx - DUMMY_POS.x, gy - DUMMY_POS.y) < 16) hitDummy(0.65, false);
           }
           for (let k = 0; k < 2; k++) {
-            const d0 = 24 + Math.random() * 44;
-            spawnParticle(-Math.sin(yaw) * d0 + (Math.random() - 0.5) * 6, Math.cos(yaw) * d0 + (Math.random() - 0.5) * 6, Math.max(2, lerp(rig.lift + 28, 4, d0 / 64)), -Math.sin(yaw) * 28 + (Math.random() - 0.5) * 14, Math.cos(yaw) * 28, 6 + Math.random() * 14, 0.32, 2.4, k ? fx.mid : fx.hot, true, -6);
+            const u = 0.08 + Math.random() * 0.88, d0 = u * 54;
+            spawnParticle(mp.x - Math.sin(mp.yaw) * d0 + (Math.random() - 0.5) * (2 + u * 6), mp.y + Math.cos(mp.yaw) * d0 + (Math.random() - 0.5) * (2 + u * 6), Math.max(2, lerp(mp.z, 4.5, u)), -Math.sin(mp.yaw) * 28 + (Math.random() - 0.5) * 14, Math.cos(mp.yaw) * 28, 6 + Math.random() * 14, 0.32, 2.3, k ? fx.mid : fx.hot, true, -6);
           }
         } else { const p = smoothstep(0, 1, (t - 2.40) / (act.dur - 2.40)); tgtY = lerp(3.0, 0, p); tgtLift = lerp(7.0, 9.0, p); }
       } else if (act.id === 'wingGust') {
         if (t < 0.45) { forcePose = 'up'; tgtLift = lerp(9.0, 16.5, smoothstep(0, 1, t / 0.45)); }
         else if (t < 1.55) {
           const p = (t - 0.45) / 1.10, beat = Math.floor(p * 2), sub = (p * 2) % 1;
-          forcePose = sub < 0.35 ? 'up' : 'down'; tgtSweep = sub < 0.35 ? -0.35 : 0.42;
+          forcePose = sub < 0.28 ? 'up' : (sub < 0.46 ? 'mid' : 'down'); tgtSweep = sub < 0.35 ? -0.32 : 0.38;
           tgtLift = 16.5 - Math.sin(sub * Math.PI) * 3.0; tgtY = Math.sin(sub * Math.PI) * 3.5;
           if (!st['gust' + beat] && sub > 0.32) {
             st['gust' + beat] = true; shakeMag = 4.0;
@@ -1497,7 +1517,23 @@ function buildVolcanicPlatform(makeCanvas, size = 200) {
     rig.headYaw = lerp(rig.headYaw, tgtHeadYaw, kFast);
     rig.headLift = lerp(rig.headLift, tgtHeadLift, kFast);
     rig.wingSweep = lerp(rig.wingSweep, tgtSweep || Math.sin(rig.flapPhase) * 0.22, kFast);
-    rig.wingPose = forcePose || (Math.sin(rig.flapPhase) >= 0 ? 'up' : 'down');
+    const fs = Math.sin(rig.flapPhase);
+    rig.wingPose = forcePose || (fs > 0.35 ? 'up' : (fs < -0.35 ? 'down' : 'mid'));
+  }
+
+  // 精确计算当前形态龙口炽核的世界坐标与朝向（喷火/喷嚏严格从嘴部发出）
+  function getMouthWorldPos() {
+    const yw = rig.yaw, hYaw = yw + rig.headYaw, sm = rig.scaleMul;
+    if (form === 'young') {
+      const [hx, hy] = localToWorldXY(rig.x, rig.y, yw, 0, 7.6 * sm);
+      const [mx, my] = localToWorldXY(hx, hy, hYaw, 0, 5.8 * sm);
+      return { x: mx, y: my, z: rig.lift + (11.4 + rig.headLift + 4.5) * sm, yaw: hYaw };
+    }
+    const [nx, ny] = localToWorldXY(rig.x, rig.y, yw, 0, 10.2 * sm);
+    const nYaw = yw + rig.headYaw * 0.45;
+    const [hx, hy] = localToWorldXY(nx, ny, nYaw, 0, 5.4 * sm);
+    const [mx, my] = localToWorldXY(hx, hy, hYaw, 0, 9.5 * sm);
+    return { x: mx, y: my, z: rig.lift + (26.8 + rig.headLift + 6.5) * sm, yaw: hYaw };
   }
 
   function buildDragonPartList() {
@@ -1514,26 +1550,26 @@ function buildVolcanicPlatform(makeCanvas, size = 200) {
       const [tWx, tWy] = localToWorldXY(tRootX, tRootY, tYaw, 0, -Y_TAIL_PIVOT_Y);
       list.push({ id: 'yTail', m: parts.yTail, x: tWx, y: tWy, lift: 4.5, ro: tYaw, bias: -0.3 });
 
-      const wp = rig.wingPose === 'tuck' ? 'tuck' : (rig.wingPose === 'down' ? 'dn' : 'up');
+      const wp = rig.wingPose === 'tuck' ? 'tuck' : (rig.wingPose === 'down' ? 'dn' : (rig.wingPose === 'mid' ? 'mid' : 'up'));
       for (const s of [-1, 1]) {
-        const [shX, shY] = localToWorldXY(rig.x, rig.y, yw, s * 4.0, 0.6);
+        const [shX, shY] = localToWorldXY(rig.x, rig.y, yw, s * 3.6, 0.6);
         const wYaw = yw - s * rig.wingSweep;
         const [wx, wy] = localToWorldXY(shX, shY, wYaw, s * Y_WING_PIVOT.x, -Y_WING_PIVOT.y);
         const id = (s < 0 ? 'yWingL_' : 'yWingR_') + wp;
-        list.push({ id, m: parts[id], x: wx, y: wy, lift: 4.4, ro: wYaw, bias: -0.1 });
+        list.push({ id, m: parts[id], x: wx, y: wy, lift: 3.2, ro: wYaw, bias: -0.1 });
       }
     } else {
       list.push({ id: 'aTorso', m: parts.aTorso, x: rig.x, y: rig.y, lift: 0, ro: yw, bias: 0.1 });
       const [nx, ny] = localToWorldXY(rig.x, rig.y, yw, 0, 10.2);
       const nYaw = yw + rig.headYaw * 0.45;
-      list.push({ id: 'aNeck', m: parts.aNeck, x: nx, y: ny, lift: 16.0, ro: nYaw, bias: 0.25 });
+      list.push({ id: 'aNeck', m: parts.aNeck, x: nx, y: ny, lift: 16.0 + rig.headLift * 0.45, ro: nYaw, bias: 0.25 });
       const [hx, hy] = localToWorldXY(nx, ny, nYaw, 0, 5.4);
       list.push({ id: 'aHead', m: parts.aHead, x: hx, y: hy, lift: 26.8 + rig.headLift, ro: hYaw, bias: 0.48 });
 
       // 3 节实时鞭尾链（逐节锁枢轴，S 形行波摆动 0 脱节！）
       let [px, py] = localToWorldXY(rig.x, rig.y, yw, 0, -7.8);
       const segs = ['aTail1', 'aTail2', 'aTailTip'];
-      const segZ = [11.2, 10.4, 11.4];
+      const segZ = [11.2, 10.8, 10.4];
       for (let i = 0; i < 3; i++) {
         const sYaw = yw + Math.sin(rig.tailPhase - i * 0.85) * (0.22 + i * 0.12);
         const [cx, cy] = localToWorldXY(px, py, sYaw, 0, -3.6);
@@ -1541,13 +1577,13 @@ function buildVolcanicPlatform(makeCanvas, size = 200) {
         [px, py] = localToWorldXY(px, py, sYaw, 0, -A_TAIL_SEG_LEN);
       }
 
-      const wp = rig.wingPose === 'glide' ? 'glide' : (rig.wingPose === 'down' ? 'dn' : 'up');
+      const wp = rig.wingPose === 'glide' ? 'glide' : (rig.wingPose === 'down' ? 'dn' : (rig.wingPose === 'mid' ? 'mid' : 'up'));
       for (const s of [-1, 1]) {
-        const [shX, shY] = localToWorldXY(rig.x, rig.y, yw, s * 5.6, 4.6);
+        const [shX, shY] = localToWorldXY(rig.x, rig.y, yw, s * 4.8, 3.2);
         const wYaw = yw - s * rig.wingSweep;
         const [wx, wy] = localToWorldXY(shX, shY, wYaw, s * A_WING_PIVOT.x, -A_WING_PIVOT.y);
         const id = (s < 0 ? 'aWingL_' : 'aWingR_') + wp;
-        list.push({ id, m: parts[id], x: wx, y: wy, lift: 8.6, ro: wYaw, bias: -0.1 });
+        list.push({ id, m: parts[id], x: wx, y: wy, lift: 8.0, ro: wYaw, bias: -0.1 });
       }
     }
     return list;
@@ -1817,14 +1853,23 @@ function buildVolcanicPlatform(makeCanvas, size = 200) {
       }
     }
     if (rig.flameBeam && rig.flameBeam.power > 0.05) {
-      const fb = rig.flameBeam, sx0 = -Math.sin(fb.yaw) * 24, sy0 = Math.cos(fb.yaw) * 24, sz0 = rig.lift + 33;
-      for (let i = 0; i < 24; i++) {
-        const u = i / 23, dist = u * fb.len * fb.power, bx = sx0 - Math.sin(fb.yaw) * dist, by = sy0 + Math.cos(fb.yaw) * dist;
-        const bz = lerp(sz0, 5.0, u * 0.92) + Math.sin(animTime * 28 - i * 0.7) * (1.2 + u * 2.5), wSpan = 1.6 + u * 6.5;
-        const ox = Math.cos(fb.yaw) * wSpan, oy = Math.sin(fb.yaw) * wSpan;
-        drawVoxelBlock(bx + ox, by + oy, bz, 2.6 + u * 2.2, fx.outer, true); drawVoxelBlock(bx - ox, by - oy, bz, 2.6 + u * 2.2, fx.outer, true);
-        drawVoxelBlock(bx + ox * 0.45, by + oy * 0.45, bz + 0.6, 2.5 + u * 1.8, fx.mid, true); drawVoxelBlock(bx - ox * 0.45, by - oy * 0.45, bz + 0.6, 2.5 + u * 1.8, fx.hot, true);
-        if (u < 0.72) drawVoxelBlock(bx, by, bz + 0.8, 2.2 + u * 1.2, fx.core, true);
+      const fb = rig.flameBeam, mp = getMouthWorldPos();
+      const dirX = -Math.sin(mp.yaw), dirY = Math.cos(mp.yaw);
+      const perpX = Math.cos(mp.yaw), perpY = Math.sin(mp.yaw);
+      drawVoxelBlock(mp.x, mp.y, mp.z, 2.8, fx.core, true);
+      for (let i = 0; i < 26; i++) {
+        const u = i / 25, dist = u * fb.len * fb.power;
+        const bx = mp.x + dirX * dist, by = mp.y + dirY * dist;
+        const bz = lerp(mp.z, 4.5, Math.pow(u, 0.95)) + Math.sin(animTime * 28 - i * 0.7) * (0.4 + u * 2.4);
+        const wSpan = 0.65 + u * 6.2;
+        const ox = perpX * wSpan, oy = perpY * wSpan;
+        if (u > 0.06) {
+          drawVoxelBlock(bx + ox, by + oy, bz, 2.0 + u * 2.4, fx.outer, true);
+          drawVoxelBlock(bx - ox, by - oy, bz, 2.0 + u * 2.4, fx.outer, true);
+        }
+        drawVoxelBlock(bx + ox * 0.42, by + oy * 0.42, bz + 0.4, 2.1 + u * 1.9, fx.mid, true);
+        drawVoxelBlock(bx - ox * 0.42, by - oy * 0.42, bz + 0.4, 2.1 + u * 1.9, fx.hot, true);
+        if (u < 0.76) drawVoxelBlock(bx, by, bz + 0.6, 2.0 + u * 1.1, fx.core, true);
       }
     }
     if (rig.orbitOrbs) for (const ob of rig.orbitOrbs) { drawVoxelBlock(ob.x, ob.y, ob.z, 3.4, fx.mid, true); drawVoxelBlock(ob.x, ob.y, ob.z + 0.5, 2.0, fx.core, true); }
