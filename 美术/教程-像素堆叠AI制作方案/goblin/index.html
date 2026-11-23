@@ -1,0 +1,1848 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>营地哥布林 · 疾跑骨骼像素堆叠 360° 演示</title>
+<style>
+  :root {
+    --bg: #121510;
+    --panel: rgba(20, 23, 18, 0.88);
+    --border: rgba(154, 212, 89, 0.28);
+    --text: #f3f5ec;
+    --muted: #aeb8a2;
+    --accent: #7ec242;
+    --hot: #ff9e26;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font: 13px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    user-select: none;
+  }
+  canvas#view {
+    display: block; width: 100vw; height: 100vh;
+    cursor: grab; image-rendering: pixelated;
+  }
+  canvas#view:active { cursor: grabbing; }
+  .hud {
+    position: fixed; left: 16px; top: 16px; z-index: 10;
+    display: flex; flex-direction: column; gap: 8px;
+    pointer-events: none;
+  }
+  .card {
+    pointer-events: auto;
+    background: var(--panel);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 9px 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    max-width: 420px;
+  }
+  .title {
+    font-size: 16px; font-weight: 700; letter-spacing: 0.3px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .badge {
+    font-size: 11px; font-weight: 700; color: #161d0e;
+    background: linear-gradient(135deg, var(--hot), var(--accent));
+    border-radius: 99px; padding: 1px 8px;
+  }
+  .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .row-label {
+    font-size: 11px; color: var(--muted); margin-top: 8px; margin-bottom: 4px;
+    letter-spacing: 0.4px;
+  }
+  .controls { display: flex; flex-wrap: wrap; gap: 6px; }
+  button {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: var(--text); border-radius: 8px;
+    padding: 5px 10px; font: inherit; font-size: 12px;
+    cursor: pointer; transition: all 0.14s ease;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  button:hover { background: rgba(255, 255, 255, 0.14); }
+  button.on {
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
+    border-color: var(--accent);
+    color: #f8ffef;
+  }
+  button.skill-btn.active {
+    background: color-mix(in srgb, var(--hot) 34%, transparent);
+    border-color: var(--hot);
+    color: #fff9eb;
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 42%, transparent);
+  }
+  .swatch {
+    width: 8px; height: 8px; border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.38);
+    display: inline-block; flex-shrink: 0;
+  }
+  .stats {
+    margin-top: 9px; padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--muted); font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    display: flex; flex-wrap: wrap; gap: 10px;
+  }
+  .stats b { color: #eaf2de; font-weight: 600; }
+  .banner {
+    position: fixed; right: 18px; top: 18px; z-index: 10;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 8px 14px;
+    font-size: 13px; color: #fff0cc; font-weight: 600;
+    opacity: 0; transform: translateY(-6px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    pointer-events: none;
+  }
+  .banner.show { opacity: 1; transform: translateY(0); }
+  .hint {
+    position: fixed; left: 16px; bottom: 16px; z-index: 10;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 7px 12px;
+    color: var(--muted); font-size: 12px;
+  }
+  .hint b { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div class="hud">
+  <div class="card">
+    <div class="title">营地哥布林 <span class="badge" id="skinBadge">苔绿 · 普通</span></div>
+    <div class="sub">低重心前倾疾跑骨骼 · 锁枢轴木棒/双耳 · 急停张望巡逻 · 整体轮廓 120fps</div>
+
+    <div class="row-label">部落色系（快捷键 C 零重建模切换）</div>
+    <div class="controls" id="skinBar"></div>
+
+    <div class="row-label">技能演出（快捷键 1~4）</div>
+    <div class="controls" id="skillBar"></div>
+
+    <div class="row-label">常驻营地生态</div>
+    <div class="controls">
+      <button id="btnCrouch" class="on">营地蹲伏警戒</button>
+      <button id="btnScurry">营地鬼祟巡逻 (S)</button>
+    </div>
+
+    <div class="row-label">视角与渲染</div>
+    <div class="controls">
+      <button id="btnSpin">自动旋转</button>
+      <button id="btnOutline" class="on">整体描边</button>
+      <button id="btnMode" class="on">模式：游戏缓存</button>
+      <button id="btnExport">导出长条 PNG</button>
+      <button id="btnReset">重置视角</button>
+    </div>
+    <div class="stats" id="stats">初始化中...</div>
+  </div>
+</div>
+
+<div class="banner" id="banner"></div>
+
+<div class="hint">
+  <b>鼠标拖动</b> 360° 旋转 · <b>Q / E</b> 转 45° · <b>滚轮</b> 缩放 · <b>C</b> 换色 · <b>S</b> 巡逻 · <b>1~4</b> 技能
+</div>
+
+<script>
+// === GOBLIN_VOXEL_CORE_START ===
+'use strict';
+
+/*
+===============================================================================
+第 0 步：营地哥布林骨骼架构 & 模块化部件预算表（正面 +Y，z = 0 贴地）
+===============================================================================
+核心升级（v3 低重心碎步疾跑型 + actorBuf 整体外轮廓）：
+1. 【13 个轻量模块化部件（总建模 < 20ms）+ 严格锁枢轴】：
+   - legL / legR（独立微蹲双腿+皮靴，120fps 连续交替高频碎步）、legSlide（滑铲前踢双腿）、
+     torso / torsoRun（蹲伏躯干与前倾 28° 疾跑躯干，含粗布腰衣、斜跨皮带与金属扣）、
+     pack（鼓囊小皮包袱+骨色绳结+2 枚金色金币角，带滞后弹性颠簸）、
+     head（微尖长鼻 Z≤22.2、咧嘴白尖牙、贼亮 2×2 双眼 +Y 与 0.6 俯视 0 遮挡）、
+     earL / earR（斜后大尖耳，枢轴锁死头侧 ±4.5，独立警觉抖动与疾跑后掠）、
+     armL / armR（独立双臂）、club（粗实铁钉木棒，握柄枢轴严格锁在右手）、
+     bombProp（高举滋滋冒火圆炸弹）、flagProp（部落小布旗木杆）。
+2. 【真实哥布林鬼祟双生态】：
+   - 营地蹲伏警戒：低重心微蹲、左右警觉张望、大尖耳不规则抖动、木棒轻晃、包袱微沉；
+   - 营地鬼祟巡逻 (S)：前倾低重心高频小碎步沿营地环路奔袭，带「疾跑突进 → 急停蹲伏张望 → 再次窜出」
+     节奏与脚底像素扬尘，绝无僵硬浮空平移！
+3. 【actorBuf(240×240) 整体 1px 外轮廓】：内部零拼装黑线，完整保留 4 色系与 4 技能 + 热血加速。
+===============================================================================
+*/
+
+// ---------------------------------------------------------------------------
+// 1. 统一调色板（39 色，严格 ≤ 48 色，零重色，自亮 3 色物理隔离）
+// ---------------------------------------------------------------------------
+const PAL = {
+  skinDark:    '#2e6126',
+  skinMid:     '#5ca339',
+  skinHi:      '#9ad459',
+  clothDark:   '#5e462d',
+  clothMid:    '#8f6c47',
+  clothHi:     '#bd966a',
+  leatherDark: '#3d2417',
+  leatherMid:  '#6e4228',
+  leatherHi:   '#9e6540',
+  woodDark:    '#4a2e1b',
+  woodMid:     '#7d5030',
+  woodHi:      '#b0794d',
+  metalDark:   '#3a424d',
+  metalMid:    '#6c788a',
+  metalHi:     '#a6b5c7',
+  boneDark:    '#8c8270',
+  boneMid:     '#cfc5b2',
+  boneHi:      '#f5efe1',
+  goldDark:    '#9e6f14',
+  goldMid:     '#e3ad24',
+  goldHi:      '#ffe36e',
+  flagDark:    '#9e2c1c',
+  flagMid:     '#d9482b',
+  flagHi:      '#f78052',
+  eyeDark:     '#120f17',
+  eyeIris:     '#f5d033',
+  eyeGlint:    '#f7fcff',
+  emissiveMid: '#ff4d1a',
+  emissiveHot: '#ff9e26',
+  emissiveCore:'#fff2b8',
+  earthDeep:   '#261c15',
+  earthDark:   '#423225',
+  earthMid:    '#634c38',
+  earthHi:     '#85694e',
+  stoneDark:   '#383942',
+  stoneMid:    '#575966',
+  stoneHi:     '#7d8091',
+  targetRed:   '#cc2929',
+  targetCream: '#ede2cb',
+  bombShell:   '#1e2028'
+};
+
+const PAL_KEYS = Object.keys(PAL);
+const KEY_TO_ID = Object.create(null);
+const ID_TO_KEY = [null];
+const ID_TO_RGBA = [null];
+const GLOW_KEY_SET = new Set(['emissiveMid', 'emissiveHot', 'emissiveCore']);
+const GLOW_ID_SET = new Set();
+
+for (let i = 0; i < PAL_KEYS.length; i++) {
+  const k = PAL_KEYS[i];
+  const id = i + 1;
+  KEY_TO_ID[k] = id;
+  ID_TO_KEY[id] = k;
+  const n = parseInt(PAL[k].slice(1), 16);
+  ID_TO_RGBA[id] = [(n >> 16) & 255, (n >> 8) & 255, n & 255, 255];
+  if (GLOW_KEY_SET.has(k)) GLOW_ID_SET.add(id);
+}
+
+// ---------------------------------------------------------------------------
+// 1b. 4 套部落色系（完整保留原版 4 套色系 + 全技能特效联动）
+// ---------------------------------------------------------------------------
+const SKINS = [
+  {
+    id: 'moss', name: '苔绿', tag: '普通', dot: '#6ab83e', outline: '#12100e',
+    pal: {},
+    fx: {
+      slashCore: '#fff2b8', slashMid: '#ff9e26', slashOuter: '#d9482b',
+      bombCore: '#fff2b8', bombHot: '#ff9e26', bombMid: '#ff4d1a',
+      buffRing1: '#9ad459', buffRing2: '#ff9e26', buffRGB: '154, 212, 89',
+      hypeTint: '#ff5226', dust: '#a38768', smoke: '#6c7078',
+      scorchBase: '#171210', scorchGlow: '#ff5c1f',
+      skyTop: '#121814', skyMid: '#212b1f', skyBot: '#383022',
+      skyHalo: 'rgba(148, 206, 84, 0.16)'
+    },
+    ui: { accent: '#7ec242', hot: '#ff9e26', border: 'rgba(154, 212, 89, 0.28)' }
+  },
+  {
+    id: 'ochre', name: '赭红', tag: '狂躁精锐', dot: '#d9452b', outline: '#1a0c0c',
+    pal: {
+      skinDark:    '#6e1e18', skinMid:    '#b83c28', skinHi:    '#e86e48',
+      clothDark:   '#22242b', clothMid:   '#3b3f4a', clothHi:   '#616878',
+      leatherDark: '#2b1819', leatherMid: '#4f2a2c', leatherHi: '#7a4446',
+      woodDark:    '#361b1b', woodMid:    '#5e2c2a', woodHi:    '#8a443f',
+      metalDark:   '#7d161b', metalMid:   '#c7282b', metalHi:   '#f56258',
+      flagDark:    '#821218', flagMid:    '#cc2229', flagHi:    '#ff5e57',
+      eyeIris:     '#ffb829',
+      emissiveMid: '#ff2a1f', emissiveHot:'#ff7a29', emissiveCore:'#ffe8a3'
+    },
+    fx: {
+      slashCore: '#ffe8a3', slashMid: '#ff5e57', slashOuter: '#a6141a',
+      bombCore: '#ffe8a3', bombHot: '#ff7a29', bombMid: '#ff2a1f',
+      buffRing1: '#ff4236', buffRing2: '#ff9c38', buffRGB: '255, 76, 54',
+      hypeTint: '#ff241c', dust: '#917464', smoke: '#635b5c',
+      scorchBase: '#1a0e0e', scorchGlow: '#ff2a1f',
+      skyTop: '#170f12', skyMid: '#2b1819', skyBot: '#47221d',
+      skyHalo: 'rgba(242, 86, 52, 0.20)'
+    },
+    ui: { accent: '#e04832', hot: '#ff9438', border: 'rgba(235, 102, 74, 0.30)' }
+  },
+  {
+    id: 'slate', name: '岩灰', tag: '洞窟矿工', dot: '#6e8c94', outline: '#101418',
+    pal: {
+      skinDark:    '#394a4f', skinMid:    '#627c82', skinHi:    '#96b4ba',
+      clothDark:   '#6e4b16', clothMid:   '#b07d27', clothHi:   '#e3b14d',
+      leatherDark: '#453322', leatherMid: '#73563a', leatherHi: '#a37e58',
+      woodDark:    '#47321e', woodMid:    '#785636', woodHi:    '#ab7f55',
+      metalDark:   '#576778', metalMid:   '#9ab0c4', metalHi:   '#dceaf5',
+      flagDark:    '#8f5614', flagMid:    '#d68b24', flagHi:    '#f7c154',
+      eyeIris:     '#ffd83b',
+      emissiveMid: '#f27c18', emissiveHot:'#ffc233', emissiveCore:'#fff7c4'
+    },
+    fx: {
+      slashCore: '#eef7ff', slashMid: '#9ab0c4', slashOuter: '#576778',
+      bombCore: '#fff7c4', bombHot: '#ffc233', bombMid: '#f27c18',
+      buffRing1: '#f7c154', buffRing2: '#9ab0c4', buffRGB: '247, 193, 84',
+      hypeTint: '#ff9f24', dust: '#b09a7a', smoke: '#7b848c',
+      scorchBase: '#181614', scorchGlow: '#f28b24',
+      skyTop: '#11161c', skyMid: '#1e2730', skyBot: '#333436',
+      skyHalo: 'rgba(240, 184, 76, 0.16)'
+    },
+    ui: { accent: '#7da1ab', hot: '#f2b83a', border: 'rgba(146, 182, 194, 0.30)' }
+  },
+  {
+    id: 'indigo', name: '靛紫', tag: '部落巫医', dot: '#7d6bc4', outline: '#120e1c',
+    pal: {
+      skinDark:    '#3d3561', skinMid:    '#695e99', skinHi:    '#9f94cf',
+      clothDark:   '#1d2452', clothMid:   '#32418a', clothHi:   '#576dc2',
+      leatherDark: '#2c203d', leatherMid: '#4e3a6b', leatherHi: '#785d9e',
+      woodDark:    '#6b6558', woodMid:    '#a8a08e', woodHi:    '#ded7c5',
+      metalDark:   '#1a6b5e', metalMid:   '#2eb398', metalHi:   '#75ebd0',
+      flagDark:    '#42257a', flagMid:    '#7445c4', flagHi:    '#b084f5',
+      eyeIris:     '#4cf2d0',
+      emissiveMid: '#7b42ff', emissiveHot:'#3be8c8', emissiveCore:'#e3fff9'
+    },
+    fx: {
+      slashCore: '#e3fff9', slashMid: '#3be8c8', slashOuter: '#7b42ff',
+      bombCore: '#e3fff9', bombHot: '#3be8c8', bombMid: '#7b42ff',
+      buffRing1: '#3be8c8', buffRing2: '#9b6bff', buffRGB: '96, 224, 200',
+      hypeTint: '#9b5eff', dust: '#8e84a8', smoke: '#625d78',
+      scorchBase: '#161124', scorchGlow: '#7b42ff',
+      skyTop: '#100e1c', skyMid: '#1d1933', skyBot: '#292242',
+      skyHalo: 'rgba(116, 86, 232, 0.20)'
+    },
+    ui: { accent: '#8e74e8', hot: '#42e3c6', border: 'rgba(154, 134, 232, 0.32)' }
+  }
+];
+
+function buildRgbaTable(skin) {
+  const tbl = ID_TO_RGBA.slice();
+  if (skin && skin.pal) {
+    for (const k in skin.pal) {
+      const id = KEY_TO_ID[k];
+      if (!id) continue;
+      const n = parseInt(skin.pal[k].slice(1), 16);
+      tbl[id] = [(n >> 16) & 255, (n >> 8) & 255, n & 255, 255];
+    }
+  }
+  return tbl;
+}
+
+function recolorAsset(asset, rgbaTable) {
+  const { w, d, h, grid, activeLayers, glowLayers, glowSlot, strip, glowStrip, sim, eim } = asset;
+  const stripW = w * h, glowW = w * glowLayers.length;
+  const sData = sim.data, eData = eim ? eim.data : null;
+  for (let li = 0; li < activeLayers.length; li++) {
+    const z = activeLayers[li], gxOff = z * w, gSlot = glowSlot[z], zBase = z * d * w;
+    for (let y = 0; y < d; y++) {
+      const row = zBase + y * w, sRow = y * stripW + gxOff;
+      const eRow = gSlot >= 0 ? (y * glowW + gSlot * w) : -1;
+      for (let x = 0; x < w; x++) {
+        const id = grid[row + x];
+        if (!id) continue;
+        const rgba = rgbaTable[id];
+        const si = (sRow + x) * 4;
+        sData[si] = rgba[0]; sData[si + 1] = rgba[1]; sData[si + 2] = rgba[2]; sData[si + 3] = 255;
+        if (eData && eRow >= 0 && GLOW_ID_SET.has(id)) {
+          const ei = (eRow + x) * 4;
+          eData[ei] = rgba[0]; eData[ei + 1] = rgba[1]; eData[ei + 2] = rgba[2]; eData[ei + 3] = 255;
+        }
+      }
+    }
+  }
+  strip.getContext('2d').putImageData(sim, 0, 0);
+  if (glowStrip && eim) glowStrip.getContext('2d').putImageData(eim, 0, 0);
+}
+
+const PART_NAMES = [
+  'none',
+  'foot', 'leg', 'cloth', 'body', 'strap', 'pack', 'packTrim', 'packGold',
+  'head', 'nose', 'mouth', 'eye', 'ear', 'arm',
+  'weapon', 'stud', 'bomb', 'bombSpark', 'flagPole', 'flagCloth',
+  'dummyBase', 'dummyPost', 'dummyIron', 'dummyBoard'
+];
+const PART_ID = Object.create(null);
+for (let i = 0; i < PART_NAMES.length; i++) PART_ID[PART_NAMES[i]] = i;
+
+const NUM_PARTS = PART_NAMES.length;
+const NO_CREASE_LUT = new Uint8Array(NUM_PARTS * NUM_PARTS);
+for (const [a, b] of [
+  ['eye', 'head'], ['nose', 'head'], ['mouth', 'head'], ['ear', 'head'],
+  ['weapon', 'stud'], ['pack', 'packTrim'], ['pack', 'packGold'],
+  ['bomb', 'bombSpark'], ['flagPole', 'flagCloth'],
+  ['leg', 'foot'], ['dummyPost', 'dummyIron']
+]) {
+  const ia = PART_ID[a], ib = PART_ID[b];
+  NO_CREASE_LUT[ia * NUM_PARTS + ib] = 1;
+  NO_CREASE_LUT[ib * NUM_PARTS + ia] = 1;
+}
+
+const MATERIAL_KEYS = [null, 'skin', 'cloth', 'leather', 'wood', 'metal', 'bone', 'gold', 'flag', 'stone'];
+const MAT_ID = Object.create(null);
+for (let i = 1; i < MATERIAL_KEYS.length; i++) MAT_ID[MATERIAL_KEYS[i]] = i;
+const MAT_BASE = 128;
+const mat = name => MAT_BASE + MAT_ID[name];
+
+const RAMPS_BY_MAT = {
+  [MAT_ID.skin]:    [KEY_TO_ID.skinDark,    KEY_TO_ID.skinMid,    KEY_TO_ID.skinHi],
+  [MAT_ID.cloth]:   [KEY_TO_ID.clothDark,   KEY_TO_ID.clothMid,   KEY_TO_ID.clothHi],
+  [MAT_ID.leather]: [KEY_TO_ID.leatherDark, KEY_TO_ID.leatherMid, KEY_TO_ID.leatherHi],
+  [MAT_ID.wood]:    [KEY_TO_ID.woodDark,    KEY_TO_ID.woodMid,    KEY_TO_ID.woodHi],
+  [MAT_ID.metal]:   [KEY_TO_ID.metalDark,   KEY_TO_ID.metalMid,   KEY_TO_ID.metalHi],
+  [MAT_ID.bone]:    [KEY_TO_ID.boneDark,    KEY_TO_ID.boneMid,    KEY_TO_ID.boneHi],
+  [MAT_ID.gold]:    [KEY_TO_ID.goldDark,    KEY_TO_ID.goldMid,    KEY_TO_ID.goldHi],
+  [MAT_ID.flag]:    [KEY_TO_ID.flagDark,    KEY_TO_ID.flagMid,    KEY_TO_ID.flagHi],
+  [MAT_ID.stone]:   [KEY_TO_ID.stoneDark,   KEY_TO_ID.stoneMid,   KEY_TO_ID.stoneHi]
+};
+
+// ---------------------------------------------------------------------------
+// 2. 数学原语与周期噪声
+// ---------------------------------------------------------------------------
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smoothstep = (e0, e1, x) => {
+  const t = clamp((x - e0) / (e1 - e0), 0, 1);
+  return t * t * (3 - 2 * t);
+};
+const smin = (a, b, k) => {
+  const h = clamp(0.5 + 0.5 * (b - a) / k, 0, 1);
+  return lerp(b, a, h) - k * h * (1 - h);
+};
+function localToWorldXY(rx, ry, yaw, lx, ly) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  return [rx + cy * lx - sy * ly, ry + sy * lx + cy * ly];
+}
+function hash2i(ix, iy, seed) {
+  let h = (ix * 374761393 + iy * 668265263 + seed * 1442695041) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+function periodicNoise2(x, y, periodX, periodY, cell, seed) {
+  const gx = x / cell, gy = y / cell;
+  const px = Math.max(1, Math.round(periodX / cell));
+  const py = Math.max(1, Math.round(periodY / cell));
+  const ix = Math.floor(gx), iy = Math.floor(gy);
+  const fx = gx - ix, fy = gy - iy;
+  const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+  const wMod = (v, m) => ((v % m) + m) % m;
+  const x0 = wMod(ix, px), x1 = wMod(ix + 1, px);
+  const y0 = wMod(iy, py), y1 = wMod(iy + 1, py);
+  return lerp(
+    lerp(hash2i(x0, y0, seed), hash2i(x1, y0, seed), ux),
+    lerp(hash2i(x0, y1, seed), hash2i(x1, y1, seed), ux),
+    uy
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 3. 高性能体素网格
+// ---------------------------------------------------------------------------
+class VoxelModel {
+  constructor(w, d, h) {
+    this.w = w; this.d = d; this.h = h;
+    const len = w * d * h;
+    this.grid = new Uint8Array(len);
+    this.parts = new Uint8Array(len);
+  }
+  idx(x, y, z) { return (z * this.d + y) * this.w + x; }
+  inB(x, y, z) { return x >= 0 && y >= 0 && z >= 0 && x < this.w && y < this.d && z < this.h; }
+  getId(x, y, z) { return this.inB(x, y, z) ? this.grid[this.idx(x, y, z)] : 0; }
+  getPartId(x, y, z) { return this.inB(x, y, z) ? this.parts[this.idx(x, y, z)] : 0; }
+  setRaw(x, y, z, val, partId) {
+    if (!this.inB(x, y, z)) return;
+    const i = this.idx(x, y, z);
+    this.grid[i] = val; this.parts[i] = partId;
+  }
+  fillAABB(X0, X1, Y0, Y1, Z0, Z1, fn) {
+    const hw = this.w * 0.5 - 0.5, hd = this.d * 0.5 - 0.5;
+    const x0 = clamp(Math.floor(X0 + hw), 0, this.w - 1);
+    const x1 = clamp(Math.ceil(X1 + hw),  0, this.w - 1);
+    const y0 = clamp(Math.floor(Y0 + hd), 0, this.d - 1);
+    const y1 = clamp(Math.ceil(Y1 + hd),  0, this.d - 1);
+    const z0 = clamp(Math.floor(Z0),      0, this.h - 1);
+    const z1 = clamp(Math.ceil(Z1),       0, this.h - 1);
+    for (let z = z0; z <= z1; z++) {
+      for (let y = y0; y <= y1; y++) {
+        const Y = y - hd;
+        for (let x = x0; x <= x1; x++) fn(x, y, z, x - hw, Y);
+      }
+    }
+  }
+  paintCapsule(ax, ay, az, bx, by, bz, r0, r1, val, partId, overwrite = true) {
+    const pad = Math.max(r0, r1) + 0.6;
+    const hw = this.w * 0.5 - 0.5, hd = this.d * 0.5 - 0.5;
+    const x0 = clamp(Math.floor(Math.min(ax, bx) - pad + hw), 0, this.w - 1);
+    const x1 = clamp(Math.ceil(Math.max(ax, bx) + pad + hw),  0, this.w - 1);
+    const y0 = clamp(Math.floor(Math.min(ay, by) - pad + hd), 0, this.d - 1);
+    const y1 = clamp(Math.ceil(Math.max(ay, by) + pad + hd),  0, this.d - 1);
+    const z0 = clamp(Math.floor(Math.min(az, bz) - pad),      0, this.h - 1);
+    const z1 = clamp(Math.ceil(Math.max(az, bz) + pad),       0, this.h - 1);
+    const abx = bx - ax, aby = by - ay, abz = bz - az;
+    const invDen = 1 / (abx * abx + aby * aby + abz * abz || 1);
+    const dr = r1 - r0;
+    const { w, d, grid, parts } = this;
+    for (let z = z0; z <= z1; z++) {
+      const apz = z - az, zOff = z * d * w;
+      for (let y = y0; y <= y1; y++) {
+        const apy = (y - hd) - ay, row = zOff + y * w, dotYZ = apy * aby + apz * abz;
+        for (let x = x0; x <= x1; x++) {
+          const i = row + x;
+          if (!overwrite && grid[i]) continue;
+          const apx = (x - hw) - ax;
+          let t = (apx * abx + dotYZ) * invDen;
+          if (t < 0) t = 0; else if (t > 1) t = 1;
+          const dx = apx - abx * t, dy = apy - aby * t, dz = apz - abz * t;
+          const r = r0 + dr * t;
+          if (dx * dx + dy * dy + dz * dz <= r * r) { grid[i] = val; parts[i] = partId; }
+        }
+      }
+    }
+  }
+  paintEllipsoid(cx, cy, cz, rx, ry, rz, val, partId, overwrite = true) {
+    this.fillAABB(cx - rx - 0.5, cx + rx + 0.5, cy - ry - 0.5, cy + ry + 0.5, cz - rz - 0.5, cz + rz + 0.5, (x, y, z, X, Y) => {
+      const i = this.idx(x, y, z);
+      if (!overwrite && this.grid[i]) return;
+      const dx = (X - cx) / rx, dy = (Y - cy) / ry, dz = (z - cz) / rz;
+      if (dx * dx + dy * dy + dz * dz <= 1.0) { this.grid[i] = val; this.parts[i] = partId; }
+    });
+  }
+  despeckle() {
+    const src = this.grid.slice(), prt = this.parts;
+    const { w, d, h } = this, wd = w * d;
+    const pEye = PART_ID.eye, pSpark = PART_ID.bombSpark;
+    for (let z = 0; z < h; z++) {
+      const zOff = z * wd;
+      for (let y = 0; y < d; y++) {
+        const row = zOff + y * w;
+        for (let x = 0; x < w; x++) {
+          const i = row + x;
+          if (!src[i]) continue;
+          const p = prt[i];
+          if (p === pEye || p === pSpark) continue;
+          if ((x + 1 < w && src[i + 1]) || (x > 0 && src[i - 1]) ||
+              (y + 1 < d && src[i + w]) || (y > 0 && src[i - w]) ||
+              (z + 1 < h && src[i + wd]) || (z > 0 && src[i - wd])) continue;
+          this.grid[i] = 0; this.parts[i] = 0;
+        }
+      }
+    }
+  }
+  applyArtShading(keepSoftBottom = false) {
+    const { w, d, h } = this, wd = w * d;
+    const src = this.grid.slice(), prt = this.parts;
+    const pMinZ = new Int16Array(NUM_PARTS).fill(999);
+    const pMaxZ = new Int16Array(NUM_PARTS).fill(-1);
+    for (let z = 0; z < h; z++) {
+      const zOff = z * wd;
+      for (let i = zOff, end = zOff + wd; i < end; i++) {
+        const p = prt[i];
+        if (p) { if (z < pMinZ[p]) pMinZ[p] = z; if (z > pMaxZ[p]) pMaxZ[p] = z; }
+      }
+    }
+    const headId = PART_ID.head;
+    for (let z = 0; z < h; z++) {
+      const zOff = z * wd, hasUp = z + 1 < h, hasDn = z > 0;
+      for (let y = 0; y < d; y++) {
+        const row = zOff + y * w;
+        for (let x = 0; x < w; x++) {
+          const i = row + x, v = src[i];
+          if (v < MAT_BASE) continue;
+          const ramp = RAMPS_BY_MAT[v - MAT_BASE];
+          if (!ramp) continue;
+          const myP = prt[i], lutOff = myP * NUM_PARTS;
+          const topEmpty = !hasUp || !src[i + wd];
+          const botEmpty = hasDn && !src[i - wd];
+          let crease = false, np;
+          if (x + 1 < w && (np = prt[i + 1]) && np !== myP && !NO_CREASE_LUT[lutOff + np]) crease = true;
+          else if (x > 0 && (np = prt[i - 1]) && np !== myP && !NO_CREASE_LUT[lutOff + np]) crease = true;
+          else if (y + 1 < d && (np = prt[i + w]) && np !== myP && !NO_CREASE_LUT[lutOff + np]) crease = true;
+          else if (y > 0 && (np = prt[i - w]) && np !== myP && !NO_CREASE_LUT[lutOff + np]) crease = true;
+          else if (hasDn && (np = prt[i - wd]) && np !== myP && !NO_CREASE_LUT[lutOff + np]) crease = true;
+
+          let upperOcc = 0;
+          if (hasUp && !topEmpty) {
+            const up = i + wd;
+            for (let oy = -1; oy <= 1; oy++) {
+              const yy = y + oy;
+              if (yy < 0 || yy >= d) continue;
+              const uRow = up + oy * w;
+              for (let ox = -1; ox <= 1; ox++) {
+                const xx = x + ox;
+                if (xx >= 0 && xx < w && src[uRow + ox]) upperOcc++;
+              }
+            }
+          }
+          const span = Math.max(1, pMaxZ[myP] - pMinZ[myP]);
+          const localZ = (z - pMinZ[myP]) / span;
+          let idx = 1;
+          if (botEmpty || (!keepSoftBottom && z <= 1)) idx = 0;
+          else if (crease && !topEmpty) idx = 0;
+          else if (upperOcc >= 8 && localZ < 0.45) idx = 0;
+          else if (topEmpty) idx = (crease || upperOcc >= 8) ? 1 : 2;
+          else if (span >= 14 && localZ < 0.14) idx = 0;
+          else idx = 1;
+          if (myP === headId && idx === 2 && z < pMaxZ[myP] - 1) {
+            const edge2d = (x + 1 >= w || !src[i + 1]) || (x === 0 || !src[i - 1]) ||
+                           (y + 1 >= d || !src[i + w]) || (y === 0 || !src[i - w]);
+            if (!edge2d) idx = 1;
+          }
+          this.grid[i] = ramp[clamp(idx, 0, ramp.length - 1)];
+        }
+      }
+    }
+  }
+  toStripAsset(makeCanvas, meta = {}) {
+    const { w, d, h } = this;
+    const activeLayers = [], glowLayers = [];
+    for (let z = 0; z < h; z++) {
+      let hasPx = false, hasGlow = false;
+      const zBase = z * d * w;
+      for (let i = 0; i < d * w; i++) {
+        const id = this.grid[zBase + i];
+        if (!id) continue;
+        hasPx = true;
+        if (GLOW_ID_SET.has(id)) hasGlow = true;
+      }
+      if (hasPx) activeLayers.push(z);
+      if (hasGlow) glowLayers.push(z);
+    }
+    const strip = makeCanvas(w * h, d);
+    const sim = strip.getContext('2d').createImageData(w * h, d);
+    const hasGlow = glowLayers.length > 0;
+    const glowStrip = hasGlow ? makeCanvas(w * glowLayers.length, d) : null;
+    const eim = glowStrip ? glowStrip.getContext('2d').createImageData(w * glowLayers.length, d) : null;
+    const glowSlot = new Int16Array(h).fill(-1);
+    for (let i = 0; i < glowLayers.length; i++) glowSlot[glowLayers[i]] = i;
+
+    const foot = makeCanvas(w, d);
+    const fg = foot.getContext('2d');
+    const fim = fg.createImageData(w, d);
+    for (let y = 0; y < d; y++) for (let x = 0; x < w; x++) {
+      for (let z = 0; z < h; z++) {
+        if (this.grid[(z * d + y) * w + x]) {
+          const fi = (y * w + x) * 4;
+          fim.data[fi] = 14; fim.data[fi + 1] = 12; fim.data[fi + 2] = 10; fim.data[fi + 3] = 255;
+          break;
+        }
+      }
+    }
+    fg.putImageData(fim, 0, 0);
+
+    const asset = {
+      w, d, h, grid: this.grid,
+      strip, glowStrip, sim, eim,
+      glowSlot, activeLayers, glowLayers,
+      footShadow: foot,
+      meta: {
+        footRadius: meta.footRadius || 7.2,
+        headZ: meta.headZ || (activeLayers.length ? activeLayers[activeLayers.length - 1] + 2 : h),
+        centerZ: meta.centerZ || Math.round(h * 0.5)
+      }
+    };
+    recolorAsset(asset, ID_TO_RGBA);
+    return asset;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 4. 哥布林 13 个模块化体素部件（极速建模 + 锁枢轴）
+// ---------------------------------------------------------------------------
+function buildGoblinLegPart(side) {
+  const m = new VoxelModel(8, 10, 11);
+  m.paintCapsule(0, -0.4, 9.0, side * 0.3, 1.0, 5.0, 1.55, 1.4, mat('skin'), PART_ID.leg, true);
+  m.paintCapsule(side * 0.3, 1.0, 5.0, 0, 0.2, 1.4, 1.4, 1.35, mat('skin'), PART_ID.leg, true);
+  m.paintEllipsoid(0, 1.3, 1.2, 1.75, 2.45, 1.35, mat('leather'), PART_ID.foot, true);
+  m.despeckle();
+  m.applyArtShading(false);
+  return m;
+}
+
+function buildGoblinSlideLegsPart() {
+  const m = new VoxelModel(14, 24, 9);
+  m.paintCapsule(-2.6, 0.5, 4.4, -2.2, 9.6, 2.2, 1.55, 1.4, mat('skin'), PART_ID.leg, true);
+  m.paintEllipsoid(-2.2, 10.4, 2.0, 1.7, 2.2, 1.5, mat('leather'), PART_ID.foot, true);
+  m.paintCapsule(2.8, -1.6, 4.5, 4.2, -6.2, 1.4, 1.55, 1.4, mat('skin'), PART_ID.leg, true);
+  m.paintEllipsoid(4.4, -6.8, 1.2, 1.7, 2.1, 1.3, mat('leather'), PART_ID.foot, true);
+  m.despeckle();
+  m.applyArtShading(false);
+  return m;
+}
+
+function buildGoblinTorsoPart(runMode = false) {
+  const m = new VoxelModel(13, runMode ? 15 : 13, 14);
+  const pitch = runMode ? 0.44 : 0.08;
+  const cp = Math.cos(-pitch), sp = Math.sin(-pitch);
+  m.fillAABB(-5.5, 5.5, -5.5, runMode ? 6.8 : 5.5, 0, 13, (x, y, z, X, Y) => {
+    const dy = Y, dz = z - 4.2;
+    const ly = dy * cp + dz * sp;
+    const lz = 4.2 - dy * sp + dz * cp;
+    const dTorso = (Math.hypot(X / 4.5, ly / 4.1, (lz - 7.4) / 4.5) - 1) * 4.2;
+    const dNeck  = (Math.hypot(X / 2.7, (ly - 0.6) / 2.6, (lz - 11.4) / 2.2) - 1) * 2.2;
+    if (smin(dTorso, dNeck, 1.3) <= 0) m.setRaw(x, y, z, mat('skin'), PART_ID.body);
+    // 粗布腰衣与前后摆
+    const r = Math.hypot(X / 4.9, ly / 4.4);
+    const inSkirt = r <= 1.0 && r >= 0.58 && lz >= 1.6 && lz <= 5.4;
+    const frontFlap = Math.abs(X) <= 2.3 && ly >= 2.2 && ly <= 4.7 && lz >= 0.8 && lz <= 4.8;
+    const backFlap  = Math.abs(X) <= 2.4 && ly <= -2.2 && ly >= -4.5 && lz >= 1.2 && lz <= 4.6;
+    if (inSkirt || frontFlap || backFlap) m.setRaw(x, y, z, mat('cloth'), PART_ID.cloth);
+  });
+  const lyOff = runMode ? 1.4 : 0.3;
+  m.paintCapsule(-3.9, lyOff + 2.6, 10.6, 3.7, lyOff + 2.8, 5.2, 1.05, 1.05, mat('leather'), PART_ID.strap, true);
+  m.paintCapsule(-3.7, lyOff - 2.4, 10.2, 3.3, lyOff - 2.8, 5.2, 1.05, 1.05, mat('leather'), PART_ID.strap, true);
+  m.paintEllipsoid(0.2, lyOff + 3.8, 8.0, 1.15, 0.9, 1.15, mat('metal'), PART_ID.stud, true);
+  m.despeckle();
+  m.applyArtShading(true);
+  return m;
+}
+
+function buildGoblinPackPart() {
+  const m = new VoxelModel(11, 10, 12);
+  m.paintEllipsoid(0, 0, 5.2, 4.3, 3.4, 4.2, mat('leather'), PART_ID.pack, true);
+  m.paintCapsule(-3.2, -1.4, 7.4, 3.2, -1.4, 7.4, 1.05, 1.05, mat('bone'), PART_ID.packTrim, true);
+  m.paintEllipsoid(0, -2.8, 7.5, 1.3, 1.1, 1.1, mat('bone'), PART_ID.packTrim, true);
+  m.paintEllipsoid(-1.5, -0.6, 9.2, 1.35, 1.25, 1.2, mat('gold'), PART_ID.packGold, true);
+  m.paintEllipsoid( 1.6, -0.2, 9.0, 1.25, 1.15, 1.15, mat('gold'), PART_ID.packGold, true);
+  m.despeckle();
+  m.applyArtShading(true);
+  return m;
+}
+
+function buildGoblinHeadPart() {
+  const W = 13, D = 17, H = 13;
+  const m = new VoxelModel(W, D, H);
+  const hz = 5.6, hy = 0.0;
+  m.paintEllipsoid(0, hy, hz, 5.1, 4.9, 4.8, mat('skin'), PART_ID.head, true);
+  // 微尖微勾长鼻子（严格位于眼层下方 Z≤hz+0.8，绝不挡眼）
+  m.paintCapsule(0, hy + 3.8, hz + 0.0, 0, hy + 6.9, hz - 1.0, 1.55, 1.05, mat('skin'), PART_ID.nose, true);
+  // 狡黠咧嘴与两颗露出的小白尖牙
+  m.fillAABB(-2.8, 2.8, hy + 3.8, hy + 5.6, hz - 3.5, hz - 2.0, (x, y, z, X, Y) => {
+    if (Math.abs(X) <= 2.3 && Y >= hy + 4.1 && Y <= hy + 5.0 && z >= Math.round(hz - 3.1) && z <= Math.round(hz - 2.4)) {
+      m.setRaw(x, y, z, KEY_TO_ID.eyeDark, PART_ID.mouth);
+    }
+  });
+  const hw = W * 0.5 - 0.5, hd = D * 0.5 - 0.5;
+  for (const s of [-1, 1]) {
+    const tx = Math.round(hw + s * 1.8), ty = Math.round(hd + hy + 4.8), tz = Math.round(hz - 2.4);
+    m.setRaw(tx, ty, tz, KEY_TO_ID.boneHi, PART_ID.mouth);
+    m.setRaw(tx, ty, tz - 1, KEY_TO_ID.boneMid, PART_ID.mouth);
+  }
+  m.despeckle();
+  m.applyArtShading(true);
+
+  // 后置贼亮双眼（+Y 与 0.6 俯视严格 0 遮挡）
+  const eyeZ = Math.round(hz + 1.8);
+  for (const s of [-1, 1]) {
+    const ex = Math.round(hw + s * 2.6);
+    let sy = -1;
+    for (let y = D - 2; y >= 1; y--) {
+      if (m.getPartId(ex, y, eyeZ) === PART_ID.head) { sy = y; break; }
+    }
+    if (sy < 0) sy = Math.round(hd + hy + 4.4);
+    for (const dx of [0, s]) {
+      for (const dz of [0, 1]) {
+        const kId = (dz === 1 && dx === 0) ? KEY_TO_ID.eyeGlint : (dx === 0 ? KEY_TO_ID.eyeDark : KEY_TO_ID.eyeIris);
+        m.setRaw(ex + dx, sy, eyeZ + dz, kId, PART_ID.eye);
+      }
+    }
+  }
+  return m;
+}
+
+// 大尖耳（耳根锁在局部 (-s*EAR_PIVOT.x, EAR_PIVOT.y)，摆放时 localToWorldXY 锁死头侧！）
+const GOBLIN_EAR_PIVOT = { x: 4.5, y: 1.8 };
+function buildGoblinEarPart(side) {
+  const m = new VoxelModel(12, 8, 8);
+  const s = side;
+  const rx = -s * GOBLIN_EAR_PIVOT.x, ry = GOBLIN_EAR_PIVOT.y, rz = 2.4;
+  m.paintCapsule(rx, ry, rz, rx + s * 4.4, ry - 1.6, rz + 1.1, 2.0, 1.55, mat('skin'), PART_ID.ear, true);
+  m.paintCapsule(rx + s * 4.4, ry - 1.6, rz + 1.1, rx + s * 8.8, ry - 4.0, rz + 2.6, 1.55, 1.22, mat('skin'), PART_ID.ear, true);
+  m.despeckle();
+  m.applyArtShading(true);
+  return m;
+}
+
+function buildGoblinArmPart(side) {
+  const m = new VoxelModel(10, 10, 8);
+  const s = side;
+  m.paintCapsule(0, 0, 5.0, s * 2.6, 2.4, 3.6, 1.45, 1.35, mat('skin'), PART_ID.arm, true);
+  m.paintCapsule(s * 2.6, 2.4, 3.6, s * 3.4, 5.0, 4.4, 1.35, 1.25, mat('skin'), PART_ID.arm, true);
+  m.despeckle();
+  m.applyArtShading(true);
+  return m;
+}
+
+// 粗实铁钉木棒（握柄锁在局部 (0, -CLUB_PIVOT_Y, 2.0)，劈斩/待机严格锁在右手！）
+const GOBLIN_CLUB_PIVOT_Y = 2.0;
+function buildGoblinClubPart(swingFlat = false) {
+  const W = 10, D = swingFlat ? 20 : 12, H = swingFlat ? 10 : 18;
+  const m = new VoxelModel(W, D, H);
+  const c0 = swingFlat ? [0, -GOBLIN_CLUB_PIVOT_Y, 4.2] : [0, -GOBLIN_CLUB_PIVOT_Y, 2.0];
+  const c1 = swingFlat ? [0, 12.2 - GOBLIN_CLUB_PIVOT_Y, 5.4] : [1.8, 3.4 - GOBLIN_CLUB_PIVOT_Y, 14.4];
+  m.paintCapsule(c0[0], c0[1], c0[2], c1[0], c1[1], c1[2], 1.25, 2.08, mat('wood'), PART_ID.weapon, true);
+  const mx = lerp(c0[0], c1[0], 0.72), my = lerp(c0[1], c1[1], 0.72), mz = lerp(c0[2], c1[2], 0.72);
+  m.paintEllipsoid(mx, my, mz, 2.1, 2.1, 1.35, mat('metal'), PART_ID.stud, true);
+  const tx = lerp(c0[0], c1[0], 0.88), ty = lerp(c0[1], c1[1], 0.88), tz = lerp(c0[2], c1[2], 0.88);
+  for (const st of [[2.1,0,0.4],[-2.1,0,0.4],[0,2.1,0.4],[0,-2.1,0.4]]) {
+    m.paintCapsule(tx, ty, tz, tx + st[0], ty + st[1], tz + st[2], 1.05, 0.85, mat('metal'), PART_ID.stud, true);
+  }
+  m.paintEllipsoid(c1[0], c1[1], c1[2] + 1.0, 1.05, 1.05, 1.05, KEY_TO_ID.emissiveHot, PART_ID.bombSpark, true);
+  m.despeckle();
+  m.applyArtShading(true);
+  return m;
+}
+
+function buildGoblinBombProp() {
+  const m = new VoxelModel(10, 10, 11);
+  m.paintEllipsoid(0, 0, 3.6, 3.1, 3.1, 3.0, KEY_TO_ID.bombShell, PART_ID.bomb, true);
+  m.paintEllipsoid(0, 0, 6.4, 1.3, 1.3, 1.0, mat('metal'), PART_ID.stud, true);
+  m.paintCapsule(0, 0, 6.8, 1.5, -0.6, 8.4, 0.9, 0.85, mat('bone'), PART_ID.packTrim, true);
+  m.paintEllipsoid(1.6, -0.6, 8.8, 1.25, 1.25, 1.25, KEY_TO_ID.emissiveHot, PART_ID.bombSpark, true);
+  m.setRaw(Math.round(4.5 + 1.6), Math.round(4.5 - 0.6), 9, KEY_TO_ID.emissiveCore, PART_ID.bombSpark);
+  m.despeckle();
+  m.applyArtShading(true);
+  return m;
+}
+
+function buildGoblinFlagProp() {
+  const m = new VoxelModel(10, 14, 24);
+  m.paintCapsule(0, 3.0, 1.0, 0.5, 2.4, 21.6, 1.15, 1.12, mat('wood'), PART_ID.flagPole, true);
+  m.paintEllipsoid(0.5, 2.4, 22.4, 1.25, 1.25, 1.15, KEY_TO_ID.emissiveHot, PART_ID.bombSpark, true);
+  m.fillAABB(-2.4, 4.4, -6.5, 3.2, 13.8, 21.4, (x, y, z, X, Y) => {
+    const u = 2.4 - Y;
+    if (u < 0 || u > 8.6) return;
+    const driftX = (u / 8.6) * 2.4 + Math.sin(u * 0.85) * 0.9;
+    const zLo = 14.2 + (u / 8.6) * 2.4, zHi = 21.0 - (u / 8.6) * 1.0;
+    if (z >= zLo && z <= zHi && Math.abs(X - (0.5 + driftX)) <= 1.2) {
+      m.setRaw(x, y, z, mat('flag'), PART_ID.flagCloth);
+    }
+  });
+  m.despeckle();
+  m.applyArtShading(true);
+  return m;
+}
+
+function buildTrainingDummy() {
+  const m = new VoxelModel(16, 16, 30);
+  const hw = 7.5, hd = 7.5;
+  for (let z = 0; z < 30; z++) for (let y = 0; y < 16; y++) {
+    const Y = y - hd;
+    for (let x = 0; x < 16; x++) {
+      const X = x - hw, r = Math.hypot(X, Y);
+      if (z < 5 && r <= (z < 2 ? 5.2 : 3.8)) { m.setRaw(x, y, z, mat('stone'), PART_ID.dummyBase); continue; }
+      if ((z === 8 || z === 22) && r <= 2.45) { m.setRaw(x, y, z, mat('metal'), PART_ID.dummyIron); continue; }
+      if (z >= 5 && z <= 27 && r <= 2.05) { m.setRaw(x, y, z, mat('wood'), PART_ID.dummyPost); continue; }
+      if (z === 28 && r <= 1.6) { m.setRaw(x, y, z, mat('metal'), PART_ID.dummyIron); continue; }
+    }
+  }
+  m.fillAABB(-5.6, 5.6, -4.4, -1.6, 13, 25, (x, y, z, X, Y) => {
+    const rd = Math.hypot(X, z - 19);
+    if (rd <= 5.2 && Y >= -4.0 && Y <= -1.8) {
+      if (Y <= -3.0) {
+        const col = rd <= 1.6 ? KEY_TO_ID.targetRed : (rd <= 3.3 ? KEY_TO_ID.targetCream : KEY_TO_ID.targetRed);
+        m.setRaw(x, y, z, col, PART_ID.dummyBoard);
+      } else m.setRaw(x, y, z, mat('wood'), PART_ID.dummyBoard);
+    }
+  });
+  m.despeckle();
+  m.applyArtShading(false);
+  return m;
+}
+
+function buildCampPlatform(makeCanvas, size = 180) {
+  const base = makeCanvas(size, size);
+  const bg = base.getContext('2d');
+  const bim = bg.createImageData(size, size);
+  const half = size * 0.5, rOuter = size * 0.478, rInner = size * 0.422;
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const dx = x - half, dy = y - half, dist = Math.hypot(dx, dy);
+    if (dist > rOuter) continue;
+    const i = (y * size + x) * 4;
+    let key;
+    if (dist > rInner) {
+      const ang = Math.atan2(dy, dx), segF = ((ang + Math.PI) / (Math.PI * 2)) * 24;
+      const seam = Math.abs(segF - Math.round(segF)) < 0.085;
+      key = (seam || dist > rOuter - 2.0 || dist < rInner + 1.8) ? 'earthDeep' : ((Math.floor(segF) & 1) ? 'stoneMid' : 'stoneDark');
+    } else {
+      const v = periodicNoise2(x, y, 64, 64, 16, 23) * 0.65 + periodicNoise2(x + 11, y + 7, 32, 32, 8, 71) * 0.35;
+      const onPath = Math.abs(dx) < 16 && dy > -10 && dy < 54;
+      const brick = !onPath && ((x % 18 === 0 && (y & 8)) || (y % 18 === 0 && (x & 8)));
+      const pebble = hash2i(x >> 1, y >> 1, 131) > 0.965;
+      key = brick ? 'earthDeep' : (pebble ? 'stoneMid' : (onPath ? (v > 0.56 ? 'earthHi' : 'earthMid') : (v > 0.65 ? 'earthHi' : (v < 0.35 ? 'earthDark' : 'earthMid'))));
+    }
+    const rgba = ID_TO_RGBA[KEY_TO_ID[key]];
+    bim.data[i] = rgba[0]; bim.data[i + 1] = rgba[1]; bim.data[i + 2] = rgba[2]; bim.data[i + 3] = 255;
+  }
+  bg.putImageData(bim, 0, 0);
+  return { size, base, rInner, rOuter };
+}
+// === GOBLIN_VOXEL_CORE_END ===
+
+// ---------------------------------------------------------------------------
+// 5. 满帧像素堆叠渲染器 + actorBuf 整体轮廓 + 鬼祟巡逻 + 4 技能演出
+// ---------------------------------------------------------------------------
+(function initApp() {
+  const TILT = 0.6, HS = 0.8, TAU = Math.PI * 2;
+  const BAKE_SCALE = 2.5, BAKE_STEP = 2, BAKE_HALF = 1;
+  const ANGLE_QUANT_DEG = 3, GROUND_SUPERSAMPLE = 2;
+  const DUMMY_POS = { x: 0, y: 42 };
+
+  const ACTOR_W = 240, ACTOR_H = 240;
+  const ACTOR_AX = 120, ACTOR_AY = 172;
+
+  const cv = document.getElementById('view'), dctx = cv.getContext('2d');
+  const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, w); c.height = Math.max(1, h); return c; };
+
+  const bgc = mk(1, 1), bgctx = bgc.getContext('2d');
+  const mc = mk(1, 1), mctx = mc.getContext('2d');
+  const oc = mk(1, 1), octx = oc.getContext('2d');
+  const ec = mk(1, 1), ectx = ec.getContext('2d');
+  const eb = mk(1, 1), ebctx = eb.getContext('2d');
+  const gbuf = mk(180 * GROUND_SUPERSAMPLE, 180 * GROUND_SUPERSAMPLE), gbctx = gbuf.getContext('2d');
+
+  const actorRaw = mk(ACTOR_W, ACTOR_H), arCtx = actorRaw.getContext('2d');
+  const actorSil = mk(ACTOR_W, ACTOR_H), asCtx = actorSil.getContext('2d');
+  const actorOut = mk(ACTOR_W, ACTOR_H), aoCtx = actorOut.getContext('2d');
+  const actorGlow = mk(ACTOR_W, ACTOR_H), agCtx = actorGlow.getContext('2d');
+
+  const scratchRaw = mk(160, 180), srCtx = scratchRaw.getContext('2d');
+  const scratchSil = mk(160, 180), ssCtx = scratchSil.getContext('2d');
+
+  const canvasPool = [];
+  function acquireCanvas(w, h) {
+    const c = canvasPool.pop() || document.createElement('canvas');
+    if (c.width !== w) c.width = w;
+    if (c.height !== h) c.height = h;
+    return c;
+  }
+  function releaseCanvas(c) {
+    if (!c) return;
+    if (canvasPool.length < 320) canvasPool.push(c);
+  }
+
+  // 1. 极速构建 13 个模块化部件
+  const tBuild0 = performance.now();
+  const parts = {
+    legL:     buildGoblinLegPart(-1).toStripAsset(mk,    { footRadius: 3.0 }),
+    legR:     buildGoblinLegPart( 1).toStripAsset(mk,    { footRadius: 3.0 }),
+    legSlide: buildGoblinSlideLegsPart().toStripAsset(mk,{ footRadius: 6.0 }),
+    torso:    buildGoblinTorsoPart(false).toStripAsset(mk,{ footRadius: 5.0 }),
+    torsoRun: buildGoblinTorsoPart(true).toStripAsset(mk, { footRadius: 5.5 }),
+    pack:     buildGoblinPackPart().toStripAsset(mk,     { footRadius: 4.5 }),
+    head:     buildGoblinHeadPart().toStripAsset(mk,     { footRadius: 5.2 }),
+    earL:     buildGoblinEarPart(-1).toStripAsset(mk,    { footRadius: 3.5 }),
+    earR:     buildGoblinEarPart( 1).toStripAsset(mk,    { footRadius: 3.5 }),
+    armL:     buildGoblinArmPart(-1).toStripAsset(mk,    { footRadius: 2.5 }),
+    armR:     buildGoblinArmPart( 1).toStripAsset(mk,    { footRadius: 2.5 }),
+    club:     buildGoblinClubPart(false).toStripAsset(mk,{ footRadius: 3.0 }),
+    clubFlat: buildGoblinClubPart(true).toStripAsset(mk, { footRadius: 4.0 }),
+    bombProp: buildGoblinBombProp().toStripAsset(mk,     { footRadius: 3.2 }),
+    flagProp: buildGoblinFlagProp().toStripAsset(mk,     { footRadius: 3.5 })
+  };
+  const goblinAssets = Object.values(parts);
+  const dummyAsset = buildTrainingDummy().toStripAsset(mk, { footRadius: 5.5, headZ: 29, centerZ: 15 });
+  const platform = buildCampPlatform(mk, 180);
+  const buildMs = (performance.now() - tBuild0).toFixed(1);
+
+  let skinIdx = 0, curSkin = SKINS[0], skinMs = 0;
+  let baseMode = 'crouch'; // 'crouch' | 'scurry'
+
+  const spriteCache = new Map();
+  const MAX_CACHE = 960;
+  let cacheHits = 0, cacheMisses = 0;
+
+  function flushGoblinCache() {
+    for (const [k, entry] of spriteCache.entries()) {
+      if (k.startsWith('dummy|')) continue;
+      releaseCanvas(entry.main); releaseCanvas(entry.glow);
+      spriteCache.delete(k);
+    }
+  }
+
+  function getBakedSprite(asset, assetId, angle, outlineHex, wantOutline, symDeg = 360) {
+    const rawDeg = (((angle * 180 / Math.PI) % symDeg) + symDeg) % symDeg;
+    const slots = Math.max(1, Math.round(symDeg / ANGLE_QUANT_DEG));
+    const degSlot = Math.round(rawDeg / ANGLE_QUANT_DEG) % slots;
+    const qAng = (degSlot * ANGLE_QUANT_DEG) * Math.PI / 180;
+    const key = `${assetId}|${degSlot}|${wantOutline ? outlineHex : 'raw'}`;
+    const hit = spriteCache.get(key);
+    if (hit) { cacheHits++; spriteCache.delete(key); spriteCache.set(key, hit); return hit; }
+    cacheMisses++;
+
+    const { w, d, activeLayers, glowLayers, glowSlot, glowStrip, strip } = asset;
+    const c = Math.cos(qAng), s = Math.sin(qAng), sc = BAKE_SCALE;
+    const maxZ = activeLayers.length ? activeLayers[activeLayers.length - 1] : 0;
+    const op = wantOutline ? 1 : 0, pad = op + 2;
+    const rxSpan = Math.ceil((Math.abs(c) * w * 0.5 + Math.abs(s) * d * 0.5) * sc);
+    const rySpan = Math.ceil((Math.abs(s) * w * 0.5 + Math.abs(c) * d * 0.5) * TILT * sc);
+    const bw = rxSpan * 2 + pad * 2, bh = rySpan * 2 + maxZ * BAKE_STEP + pad * 2 + BAKE_STEP;
+    const anchorX = Math.floor(bw / 2), anchorY = bh - rySpan - pad;
+
+    if (scratchRaw.width < bw) scratchRaw.width = bw;
+    if (scratchRaw.height < bh) scratchRaw.height = bh;
+    srCtx.setTransform(1, 0, 0, 1, 0, 0); srCtx.globalCompositeOperation = 'source-over';
+    srCtx.imageSmoothingEnabled = false; srCtx.clearRect(0, 0, bw, bh);
+
+    const hasGlow = !!glowStrip && glowLayers.length > 0;
+    const minGlowZ = hasGlow ? glowLayers[0] : 9999;
+    const glowC = hasGlow ? acquireCanvas(bw, bh) : null;
+    const glctx = hasGlow ? glowC.getContext('2d') : null;
+    if (glctx) {
+      glctx.setTransform(1, 0, 0, 1, 0, 0); glctx.globalCompositeOperation = 'source-over';
+      glctx.imageSmoothingEnabled = false; glctx.clearRect(0, 0, bw, bh);
+    }
+    const cs = c * sc, ss = s * sc, tss = TILT * ss, tcs = TILT * cs, hw = -w * 0.5, hd = -d * 0.5;
+    for (let li = 0; li < activeLayers.length; li++) {
+      const z = activeLayers[li], yy = anchorY - z * BAKE_STEP, sx = z * w;
+      srCtx.setTransform(cs, tss, -ss, tcs, anchorX, yy + BAKE_HALF); srCtx.drawImage(strip, sx, 0, w, d, hw, hd, w, d);
+      srCtx.setTransform(cs, tss, -ss, tcs, anchorX, yy); srCtx.drawImage(strip, sx, 0, w, d, hw, hd, w, d);
+      if (hasGlow && z >= minGlowZ) {
+        if (z > minGlowZ) {
+          glctx.globalCompositeOperation = 'destination-out';
+          glctx.setTransform(cs, tss, -ss, tcs, anchorX, yy + BAKE_HALF); glctx.drawImage(strip, sx, 0, w, d, hw, hd, w, d);
+          glctx.setTransform(cs, tss, -ss, tcs, anchorX, yy); glctx.drawImage(strip, sx, 0, w, d, hw, hd, w, d);
+        }
+        const gSlot = glowSlot[z];
+        if (gSlot >= 0) {
+          glctx.globalCompositeOperation = 'source-over';
+          glctx.setTransform(cs, tss, -ss, tcs, anchorX, yy);
+          glctx.drawImage(glowStrip, gSlot * w, 0, w, d, hw, hd, w, d);
+        }
+      }
+    }
+    const finalC = acquireCanvas(bw, bh), fctx = finalC.getContext('2d');
+    fctx.setTransform(1, 0, 0, 1, 0, 0); fctx.globalCompositeOperation = 'source-over';
+    fctx.imageSmoothingEnabled = false; fctx.clearRect(0, 0, bw, bh);
+    if (wantOutline) {
+      if (scratchSil.width < bw) scratchSil.width = bw;
+      if (scratchSil.height < bh) scratchSil.height = bh;
+      ssCtx.setTransform(1, 0, 0, 1, 0, 0); ssCtx.globalCompositeOperation = 'source-over'; ssCtx.clearRect(0, 0, bw, bh);
+      ssCtx.drawImage(scratchRaw, 0, 0, bw, bh, 0, 0, bw, bh);
+      ssCtx.globalCompositeOperation = 'source-in'; ssCtx.fillStyle = outlineHex; ssCtx.fillRect(0, 0, bw, bh);
+      fctx.drawImage(scratchSil, 0, 0, bw, bh, -op, 0, bw, bh); fctx.drawImage(scratchSil, 0, 0, bw, bh, op, 0, bw, bh);
+      fctx.drawImage(scratchSil, 0, 0, bw, bh, 0, -op, bw, bh); fctx.drawImage(scratchSil, 0, 0, bw, bh, 0, op, bw, bh);
+    }
+    fctx.drawImage(scratchRaw, 0, 0, bw, bh, 0, 0, bw, bh);
+    const entry = { main: finalC, glow: glowC, anchorX, anchorY, bw, bh };
+    spriteCache.set(key, entry);
+    if (spriteCache.size > MAX_CACHE) {
+      const ok = spriteCache.keys().next().value, old = spriteCache.get(ok);
+      spriteCache.delete(ok); releaseCanvas(old.main); releaseCanvas(old.glow);
+    }
+    return entry;
+  }
+
+  // 2. 哥布林 120fps 实时骨骼状态
+  const rig = {
+    x: 0, y: 0, lift: 0, yaw: 0,
+    runPose: false, slidePose: false,
+    stepPhase: 0, stepAmp: 0, bodyBob: 0, packBob: 0,
+    headYaw: 0, earTwitchL: 0, earTwitchR: 0,
+    armLYaw: 0, armLZ: 0, armRYaw: 0, armRZ: 0,
+    propMode: 'club', // 'club' | 'clubFlat' | 'bomb' | 'flag' | 'none'
+    clubYaw: 0, flagSway: 0,
+    pulseColor: null, pulseAlpha: 0, glowBoost: 1.0
+  };
+
+  const MODES = ['cached', 'crisp', 'retro'];
+  const MODE_LABEL = { cached: '游戏缓存', crisp: '高清逐层', retro: '复古低分' };
+  let modeIdx = 0;
+  let CW = 0, CH = 0, EW = 0, EH = 0, DPR = 1, SCALE = 4, zoom = 0;
+  let th = 0.58, thTarget = 0.58;
+  let drag = null, autoSpin = false, useOutline = true;
+
+  let animTime = 0, scurryPhase = 0, dustCd = 0;
+  let shakeMag = 0, dummyHit = 0, dummySmoke = 0, hypeTimer = 0;
+
+  const SKILLS = [
+    { id: 'flurrySlash', name: '小碎步乱劈', dur: 2.05 },
+    { id: 'throwBomb',   name: '丢圆炸弹',   dur: 2.15 },
+    { id: 'rallyFlag',   name: '摇旗鼓舞',   dur: 2.25 },
+    { id: 'slideSteal',  name: '滑铲偷袭',   dur: 2.30 }
+  ];
+  let activeAction = null;
+
+  const particles = [], groundDecals = [], shockRings = [], slashArcs = [], bombs = [], coins = [];
+
+  function spawnParticle(x, y, z, vx, vy, vz, life, sz, color, glow = false, gravity = 0) {
+    if (particles.length > 340) particles.shift();
+    particles.push({ x, y, z, vx, vy, vz, t: 0, life, sz, color, glow, gravity });
+  }
+  function addDecal(type, x, y, r, life) {
+    if (groundDecals.length > 48) groundDecals.shift();
+    groundDecals.push({ type, x, y, r, t: 0, life });
+  }
+  function addRing(x, y, z, r0, r1, life, color, glow = true) {
+    shockRings.push({ x, y, z, r0, r1, t: 0, life, color, glow });
+  }
+  function addSlashArc(x, y, z, dir, life) {
+    slashArcs.push({ x, y, z, dir, t: 0, life });
+  }
+  function hitDummy(power = 1.0, scorch = false) {
+    const fx = curSkin.fx;
+    dummyHit = Math.max(dummyHit, power);
+    if (scorch) {
+      dummySmoke = Math.max(dummySmoke, 1.5);
+      addDecal('scorch', DUMMY_POS.x + (Math.random() - 0.5) * 3, DUMMY_POS.y - 2 + (Math.random() - 0.5) * 3, 9 + power * 3.5, 5.2);
+    }
+    for (let i = 0; i < Math.round(8 * power); i++) {
+      const a = Math.random() * TAU, sp = 14 + Math.random() * 24;
+      spawnParticle(DUMMY_POS.x, DUMMY_POS.y - 2, 12 + Math.random() * 10,
+        Math.cos(a) * sp, Math.sin(a) * sp, 10 + Math.random() * 16,
+        0.38 + Math.random() * 0.25, 1.8, i & 1 ? fx.slashMid : fx.slashCore, true, 46);
+    }
+  }
+
+  let bannerTimer = 0;
+  function showBanner(msg, dur = 1.5) {
+    const b = document.getElementById('banner');
+    b.textContent = msg; b.classList.add('show'); bannerTimer = dur;
+  }
+
+  function applySkin(idx, showTip = true) {
+    const t0 = performance.now();
+    skinIdx = ((idx % SKINS.length) + SKINS.length) % SKINS.length;
+    curSkin = SKINS[skinIdx];
+    const rgbaTable = buildRgbaTable(curSkin);
+    for (let i = 0; i < goblinAssets.length; i++) recolorAsset(goblinAssets[i], rgbaTable);
+    flushGoblinCache();
+    document.documentElement.style.setProperty('--accent', curSkin.ui.accent);
+    document.documentElement.style.setProperty('--hot', curSkin.ui.hot);
+    document.documentElement.style.setProperty('--border', curSkin.ui.border);
+    renderSkyCache();
+    skinMs = Number((performance.now() - t0).toFixed(2));
+    syncUI();
+    if (showTip) showBanner(`部落色系 · ${curSkin.name}（${curSkin.tag}） ${skinMs}ms`, 1.4);
+  }
+
+  function startSkill(idx) {
+    const sk = SKILLS[idx];
+    if (!sk) return;
+    activeAction = { id: sk.id, t: 0, dur: sk.dur, state: {} };
+    showBanner(`技能演出 · ${sk.name}`, sk.dur);
+    syncUI();
+  }
+
+  function renderSkyCache() {
+    const fx = curSkin.fx;
+    bgc.width = Math.max(1, cv.width); bgc.height = Math.max(1, cv.height);
+    bgctx.setTransform(1, 0, 0, 1, 0, 0);
+    const sky = bgctx.createLinearGradient(0, 0, 0, bgc.height);
+    sky.addColorStop(0, fx.skyTop); sky.addColorStop(0.62, fx.skyMid); sky.addColorStop(1, fx.skyBot);
+    bgctx.fillStyle = sky; bgctx.fillRect(0, 0, bgc.width, bgc.height);
+    const halo = bgctx.createRadialGradient(bgc.width * 0.5, bgc.height * 0.44, 12, bgc.width * 0.5, bgc.height * 0.44, bgc.height * 0.52);
+    halo.addColorStop(0, fx.skyHalo); halo.addColorStop(1, 'rgba(0,0,0,0)');
+    bgctx.fillStyle = halo; bgctx.fillRect(0, 0, bgc.width, bgc.height);
+  }
+
+  function fit() {
+    DPR = Math.min(2, window.devicePixelRatio || 1);
+    const cssW = window.innerWidth, cssH = window.innerHeight;
+    cv.width = Math.floor(cssW * DPR); cv.height = Math.floor(cssH * DPR);
+    const logicalScale = Math.max(2, Math.round(cssH / 128) + zoom);
+    SCALE = Math.max(2, Math.round(logicalScale * DPR));
+
+    const mode = MODES[modeIdx];
+    if (mode === 'retro') { CW = Math.ceil(cv.width / SCALE); CH = Math.ceil(cv.height / SCALE); }
+    else { CW = cv.width; CH = cv.height; }
+    if (mode === 'cached') { mc.width = oc.width = 1; mc.height = oc.height = 1; }
+    else { mc.width = oc.width = CW; mc.height = oc.height = CH; }
+    EW = Math.max(1, Math.ceil(cv.width / 4)); EH = Math.max(1, Math.ceil(cv.height / 4));
+    ec.width = eb.width = EW; ec.height = eb.height = EH;
+    renderSkyCache();
+  }
+
+  let shakeX = 0, shakeY = 0;
+  function proj(x, y, z, sc) {
+    const c = Math.cos(th), s = Math.sin(th);
+    const rx = c * x - s * y, ry = s * x + c * y;
+    const mode = MODES[modeIdx];
+    const step = mode === 'retro' ? HS : (mode === 'cached' ? HS * sc : Math.max(1, Math.round(HS * sc)));
+    const sx = mode === 'retro' ? shakeX / SCALE : shakeX;
+    const sy = mode === 'retro' ? shakeY / SCALE : shakeY;
+    return [CW / 2 + rx * sc + sx, CH / 2 + 16 * sc + ry * TILT * sc - z * step + sy, ry];
+  }
+
+  // 3. 120fps 哥布林骨骼运动学与鬼祟巡逻 + 4 技能状态机
+  function updateGoblinRig(dt) {
+    const fx = curSkin.fx;
+    const hyped = hypeTimer > 0;
+    const speedMul = hyped ? 1.55 : 1.0;
+    const kSlow = 1 - Math.exp(-dt * 10);
+    const kFast = 1 - Math.exp(-dt * 18);
+
+    let tgtX = 0, tgtY = 0, tgtLift = hyped ? Math.abs(Math.sin(animTime * 15)) * 1.4 : 0;
+    let tgtYaw = 0, tgtRun = false, tgtSlide = false;
+    let stepSpeed = 8.5 * speedMul, tgtStepAmp = 0.85;
+    let tgtHeadYaw = Math.sin(animTime * 1.9) * 0.28 + Math.sin(animTime * 4.7) * 0.08;
+    let tgtEarL = Math.sin(animTime * 5.2) * 0.14 + (Math.sin(animTime * 1.3) > 0.85 ? 0.22 : 0);
+    let tgtEarR = -Math.sin(animTime * 4.6) * 0.14 - (Math.cos(animTime * 1.7) > 0.85 ? 0.22 : 0);
+    let tgtArmLYaw = Math.sin(animTime * 4.2 * speedMul) * 0.15, tgtArmLZ = 0;
+    let tgtArmRYaw = -Math.sin(animTime * 4.2 * speedMul) * 0.15, tgtArmRZ = Math.sin(animTime * 5.0 * speedMul) * 0.6;
+    let propMode = 'club', tgtClubYaw = Math.sin(animTime * 4.5 * speedMul) * 0.14, tgtFlagSway = 0;
+    let pulseColor = hyped ? fx.hypeTint : null;
+    let pulseAlpha = hyped ? (0.18 + Math.sin(animTime * 18) * 0.08) * Math.min(1, hypeTimer) : 0;
+    let glowBoost = hyped ? 1.35 : 1.0;
+
+    if (hyped && Math.random() < 0.25) {
+      spawnParticle(rig.x + (Math.random() - 0.5) * 10, rig.y + (Math.random() - 0.5) * 8, 22 + Math.random() * 6,
+        (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10, 14 + Math.random() * 10,
+        0.38, 1.5, fx.buffRing1, true, -4);
+    }
+
+    if (!activeAction) {
+      if (baseMode === 'scurry') {
+        // =========================================================================
+        // 鬼祟巡逻：疾跑突进 → 急停蹲伏左右张望 → 再次窜出（绝非僵硬平移！）
+        // =========================================================================
+        const cycle = (animTime * 0.62 * speedMul) % 1.0;
+        const moving = cycle < 0.68;
+        const runBlend = moving ? smoothstep(0.0, 0.10, cycle) * (1 - smoothstep(0.58, 0.68, cycle)) : 0;
+        scurryPhase += dt * (0.04 + runBlend * 1.15) * speedMul;
+
+        const rx = 29.0, ry = 20.0;
+        tgtX = Math.sin(scurryPhase) * rx;
+        tgtY = -Math.cos(scurryPhase) * ry - 6.0;
+        const vx = Math.cos(scurryPhase) * rx;
+        const vy = Math.sin(scurryPhase) * ry;
+        tgtYaw = Math.atan2(-vx, vy);
+        tgtRun = runBlend > 0.25;
+        stepSpeed = (8.5 + runBlend * 16.0) * speedMul;
+        tgtStepAmp = 0.35 + runBlend * 1.95;
+        tgtLift = runBlend * Math.abs(Math.sin(rig.stepPhase)) * 1.35;
+        tgtHeadYaw = moving ? Math.sin(animTime * 6.0) * 0.12 : Math.sin((cycle - 0.68) * 24.0) * 0.58;
+        tgtEarL = -runBlend * 0.28 + Math.sin(animTime * 10) * 0.12;
+        tgtEarR =  runBlend * 0.28 - Math.sin(animTime * 10) * 0.12;
+        tgtArmLYaw = Math.sin(rig.stepPhase) * 0.32 * runBlend;
+        tgtArmRYaw = -Math.sin(rig.stepPhase) * 0.24 * runBlend;
+
+        if (runBlend > 0.35) {
+          dustCd -= dt;
+          if (dustCd <= 0) {
+            dustCd = 0.085;
+            spawnParticle(rig.x + (Math.random() - 0.5) * 4, rig.y + (Math.random() - 0.5) * 4, 1.2,
+              -vx * 0.25 + (Math.random() - 0.5) * 8, -vy * 0.25 + (Math.random() - 0.5) * 8, 5 + Math.random() * 6,
+              0.32, 1.6, fx.dust, false, 24);
+          }
+        }
+      }
+    } else {
+      const act = activeAction;
+      act.t += dt;
+      const t = act.t, st = act.state;
+
+      if (act.id === 'flurrySlash') {
+        tgtYaw = 0; tgtHeadYaw = 0;
+        if (t < 0.44) {
+          const p = t / 0.44;
+          tgtRun = true; stepSpeed = 24; tgtStepAmp = 2.1;
+          tgtY = lerp(0, 28, smoothstep(0, 1, p));
+          tgtX = Math.sin(t * 30) * 1.4;
+          tgtLift = Math.abs(Math.sin(t * 24)) * 1.4;
+          if (Math.random() < 0.55) spawnParticle(rig.x + (Math.random() - 0.5) * 4, rig.y - 4, 1.5, (Math.random() - 0.5) * 10, -14, 6 + Math.random() * 8, 0.30, 1.6, fx.dust, false, 24);
+        } else if (t < 0.86) {
+          const p = (t - 0.44) / 0.42;
+          tgtY = 28 + Math.sin(p * Math.PI) * 3.0;
+          tgtYaw = lerp(-0.38, 0.45, smoothstep(0.18, 0.65, p));
+          tgtLift = Math.sin(p * Math.PI) * 2.2;
+          propMode = 'clubFlat';
+          tgtArmRYaw = lerp(-0.55, 0.85, smoothstep(0.15, 0.65, p));
+          tgtClubYaw = lerp(-0.6, 0.95, smoothstep(0.15, 0.65, p));
+          if (!st.hit1 && p > 0.36) {
+            st.hit1 = true; addSlashArc(0, 35, 16, 1, 0.32); hitDummy(1.1, false); shakeMag = Math.max(shakeMag, 3.0);
+          }
+        } else if (t < 1.32) {
+          const p = (t - 0.86) / 0.46;
+          tgtY = 28 + Math.sin(p * Math.PI) * 3.8;
+          tgtYaw = lerp(0.45, -0.48, smoothstep(0.18, 0.65, p));
+          tgtLift = Math.sin(p * Math.PI) * 2.8;
+          propMode = 'clubFlat';
+          tgtArmRYaw = lerp(0.85, -0.65, smoothstep(0.15, 0.65, p));
+          tgtClubYaw = lerp(0.95, -0.75, smoothstep(0.15, 0.65, p));
+          if (!st.hit2 && p > 0.36) {
+            st.hit2 = true; addSlashArc(0, 36, 17, -1, 0.36); hitDummy(1.45, false); shakeMag = Math.max(shakeMag, 4.4);
+          }
+        } else {
+          const p = (t - 1.32) / (act.dur - 1.32);
+          tgtRun = true; stepSpeed = 22; tgtStepAmp = 1.8;
+          tgtY = lerp(28, 0, smoothstep(0, 1, p));
+          tgtLift = Math.abs(Math.sin(p * Math.PI * 4)) * 2.2;
+        }
+      } else if (act.id === 'throwBomb') {
+        tgtYaw = 0; tgtHeadYaw = 0;
+        if (t < 0.56) {
+          const p = t / 0.56;
+          tgtY = -p * 3.5; propMode = 'bomb';
+          tgtArmLZ = 5.2; tgtArmRZ = 5.2; glowBoost = 1.45;
+          if (Math.random() < 0.75) {
+            spawnParticle(1.8, rig.y + 4.5, 30.5, (Math.random() - 0.5) * 14, (Math.random() - 0.5) * 14, 10 + Math.random() * 14,
+              0.28, 1.5, Math.random() < 0.5 ? fx.bombCore : fx.bombHot, true, 16);
+          }
+        } else if (t < 1.05) {
+          const p = (t - 0.56) / 0.49;
+          if (!st.thrown) {
+            st.thrown = true;
+            bombs.push({ sx: 0, sy: 4, sz: 28, tx: DUMMY_POS.x, ty: DUMMY_POS.y - 3, tz: 3, x: 0, y: 4, z: 28, t: 0, dur: 0.56 });
+          }
+          propMode = p < 0.45 ? 'none' : 'club';
+          tgtY = lerp(-3.5, 2.5, Math.sin(p * Math.PI));
+          tgtLift = Math.sin(p * Math.PI) * 3.0;
+          tgtArmRYaw = lerp(-0.4, 0.6, p);
+        } else {
+          const p = (t - 1.05) / (act.dur - 1.05);
+          tgtY = lerp(2.5, 0, smoothstep(0, 0.4, p));
+          if (t > 1.15 && t < 1.85) tgtLift = Math.abs(Math.sin((t - 1.15) * 14)) * 3.8;
+        }
+      } else if (act.id === 'rallyFlag') {
+        tgtHeadYaw = 0;
+        if (t < 1.55) {
+          const p = t / 1.55;
+          propMode = 'flag';
+          tgtLift = Math.abs(Math.sin(t * 14.5)) * 4.6;
+          tgtYaw = Math.sin(t * 11) * 0.24;
+          tgtArmLZ = 3.8; tgtArmRZ = 3.2;
+          tgtFlagSway = Math.sin(t * 16) * 0.42;
+          glowBoost = 1.65;
+          if (!st.ring1 && p > 0.22) {
+            st.ring1 = true; addRing(0, 0, 2.5, 6, 44, 0.58, fx.buffRing1, true); addDecal('buffRing', 0, 0, 28, 1.4); shakeMag = Math.max(shakeMag, 1.8);
+          }
+          if (!st.ring2 && p > 0.56) {
+            st.ring2 = true; addRing(0, 0, 3.5, 6, 52, 0.64, fx.buffRing2, true); addDecal('buffRing', 0, 0, 34, 1.6); hypeTimer = 4.2; shakeMag = Math.max(shakeMag, 2.4);
+          }
+          if (Math.random() < 0.6) {
+            const a = Math.random() * TAU, r = 6 + Math.random() * 14;
+            spawnParticle(Math.cos(a) * r, Math.sin(a) * r, 3 + Math.random() * 8, Math.cos(a) * 6, Math.sin(a) * 6, 18 + Math.random() * 14,
+              0.46, 1.8, Math.random() < 0.5 ? fx.buffRing1 : fx.buffRing2, true, -4);
+          }
+        } else {
+          const p = (t - 1.55) / (act.dur - 1.55);
+          tgtLift = Math.abs(Math.sin(p * Math.PI * 3)) * 2.4;
+        }
+      } else if (act.id === 'slideSteal') {
+        tgtYaw = 0; tgtHeadYaw = 0;
+        if (t < 0.26) {
+          tgtY = -(t / 0.26) * 5.0; tgtRun = true;
+        } else if (t < 0.78) {
+          const p = (t - 0.26) / 0.52;
+          tgtSlide = true; tgtY = lerp(-5.0, 31.0, smoothstep(0, 1, p));
+          tgtEarL = -0.35; tgtEarR = 0.35;
+          if (Math.random() < 0.9) {
+            spawnParticle((Math.random() - 0.5) * 6, rig.y - 6, 1.5, (Math.random() - 0.5) * 14, -18 - Math.random() * 12, 8 + Math.random() * 12,
+              0.42, 2.0 + Math.random() * 0.8, fx.dust, false, 26);
+          }
+        } else if (t < 1.48) {
+          if (!st.kicked) {
+            st.kicked = true; hitDummy(1.6, false); shakeMag = 5.2;
+            for (let i = 0; i < 5; i++) {
+              const a = -Math.PI * 0.85 + (i / 4) * Math.PI * 0.7 + (Math.random() - 0.5) * 0.18;
+              const sp = 14 + Math.random() * 12;
+              coins.push({
+                x: DUMMY_POS.x + (Math.random() - 0.5) * 4, y: DUMMY_POS.y - 3, z: 16 + Math.random() * 6,
+                vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 6, vz: 22 + Math.random() * 12,
+                t: 0, scoopAt: 0.72 + i * 0.06
+              });
+            }
+          }
+          const p = (t - 0.78) / 0.70;
+          tgtSlide = p < 0.25; tgtRun = p >= 0.25; stepSpeed = 20; tgtStepAmp = 1.6;
+          tgtY = lerp(31.0, 22.0, smoothstep(0, 0.5, p));
+          tgtLift = p < 0.25 ? 0 : Math.abs(Math.sin(p * Math.PI * 3)) * 3.0;
+        } else {
+          const p = (t - 1.48) / (act.dur - 1.48);
+          tgtRun = true; stepSpeed = 18; tgtStepAmp = 1.5;
+          tgtY = lerp(22.0, 0, smoothstep(0, 1, p));
+          tgtLift = Math.abs(Math.sin(p * Math.PI * 4)) * 4.5;
+          tgtYaw = Math.sin(p * Math.PI * 4) * 0.18;
+        }
+      }
+      if (act.t >= act.dur) { activeAction = null; syncUI(); }
+    }
+
+    rig.stepPhase += dt * stepSpeed;
+    rig.stepAmp = lerp(rig.stepAmp, tgtStepAmp, kFast);
+    rig.x = lerp(rig.x, tgtX, activeAction || baseMode === 'scurry' ? kFast : kSlow);
+    rig.y = lerp(rig.y, tgtY, activeAction || baseMode === 'scurry' ? kFast : kSlow);
+    rig.lift = lerp(rig.lift, tgtLift, kFast);
+    const dYaw = (((tgtYaw - rig.yaw + Math.PI) % TAU) + TAU) % TAU - Math.PI;
+    rig.yaw += dYaw * kFast;
+    rig.runPose = tgtRun;
+    rig.slidePose = tgtSlide;
+    rig.bodyBob = Math.abs(Math.sin(rig.stepPhase)) * (0.65 + rig.stepAmp * 0.35);
+    rig.packBob = Math.abs(Math.sin(rig.stepPhase - 0.65)) * (0.85 + rig.stepAmp * 0.45);
+    rig.headYaw = lerp(rig.headYaw, tgtHeadYaw, kFast);
+    rig.earTwitchL = lerp(rig.earTwitchL, tgtEarL, kFast);
+    rig.earTwitchR = lerp(rig.earTwitchR, tgtEarR, kFast);
+    rig.armLYaw = lerp(rig.armLYaw, tgtArmLYaw, kFast);
+    rig.armLZ = lerp(rig.armLZ, tgtArmLZ, kFast);
+    rig.armRYaw = lerp(rig.armRYaw, tgtArmRYaw, kFast);
+    rig.armRZ = lerp(rig.armRZ, tgtArmRZ, kFast);
+    rig.propMode = propMode;
+    rig.clubYaw = lerp(rig.clubYaw, tgtClubYaw, kFast);
+    rig.flagSway = lerp(rig.flagSway, tgtFlagSway, kFast);
+    rig.pulseColor = pulseColor;
+    rig.pulseAlpha = pulseAlpha;
+    rig.glowBoost = glowBoost;
+  }
+
+  function buildGoblinPartList() {
+    const list = [];
+    const yw = rig.yaw, hYaw = yw + rig.headYaw;
+    const isSlide = rig.slidePose, isRun = rig.runPose && !isSlide;
+    const bob = isSlide ? -3.4 : rig.bodyBob;
+
+    // 1. 双腿与皮靴
+    if (isSlide) {
+      list.push({ id: 'legSlide', m: parts.legSlide, x: rig.x, y: rig.y, lift: 0, ro: yw, bias: -0.3 });
+    } else {
+      const sSin = Math.sin(rig.stepPhase);
+      const lY = sSin * rig.stepAmp, rY = -sSin * rig.stepAmp;
+      const lZ = Math.max(0, sSin) * (0.8 + rig.stepAmp * 0.55);
+      const rZ = Math.max(0, -sSin) * (0.8 + rig.stepAmp * 0.55);
+      const [lx, ly] = localToWorldXY(rig.x, rig.y, yw, -3.2, lY);
+      const [rx, ry] = localToWorldXY(rig.x, rig.y, yw,  3.2, rY);
+      list.push({ id: 'legL', m: parts.legL, x: lx, y: ly, lift: lZ, ro: yw, bias: -0.2 });
+      list.push({ id: 'legR', m: parts.legR, x: rx, y: ry, lift: rZ, ro: yw, bias: -0.2 });
+    }
+
+    // 2. 躯干 + 粗布腰衣 + 斜跨皮带
+    const tId = isRun ? 'torsoRun' : 'torso';
+    const [tx, ty] = localToWorldXY(rig.x, rig.y, yw, 0, isSlide ? -2.2 : 0.6);
+    list.push({ id: tId, m: parts[tId], x: tx, y: ty, lift: 5.8 + bob, ro: yw, bias: 0.1 });
+
+    // 3. 背后鼓囊皮包袱（带滞后颠簸）
+    const [pkX, pkY] = localToWorldXY(tx, ty, yw, 0, isRun ? -6.2 : -6.6);
+    list.push({ id: 'pack', m: parts.pack, x: pkX, y: pkY, lift: 7.4 + bob + rig.packBob, ro: yw, bias: -0.25 });
+
+    // 4. 头部 + 两侧大尖耳（耳根锁在头侧 ±4.5！）
+    const [hx, hy] = localToWorldXY(tx, ty, yw, 0, isRun ? 3.2 : (isSlide ? 0.2 : 1.4));
+    const headZ = (isSlide ? 12.6 : (isRun ? 15.2 : 16.0)) + bob;
+    list.push({ id: 'head', m: parts.head, x: hx, y: hy, lift: headZ, ro: hYaw, bias: 0.4 });
+    for (const s of [-1, 1]) {
+      const [eShX, eShY] = localToWorldXY(hx, hy, hYaw, s * 4.5, 0.2);
+      const eYaw = hYaw + (s < 0 ? rig.earTwitchL : rig.earTwitchR);
+      const [eWx, eWy] = localToWorldXY(eShX, eShY, eYaw, s * GOBLIN_EAR_PIVOT.x, -GOBLIN_EAR_PIVOT.y);
+      list.push({ id: s < 0 ? 'earL' : 'earR', m: parts[s < 0 ? 'earL' : 'earR'], x: eWx, y: eWy, lift: headZ + 3.2, ro: eYaw, bias: 0.25 });
+    }
+
+    // 5. 左右臂 + 锁枢轴道具（木棒 / 炸弹 / 部落小旗）
+    const shY = isRun ? 1.8 : 0.2, shZ = 10.6 + bob;
+    const [lShX, lShY] = localToWorldXY(tx, ty, yw, -4.4, shY);
+    const [rShX, rShY] = localToWorldXY(tx, ty, yw,  4.4, shY);
+    const lArmY = yw + rig.armLYaw, rArmY = yw + rig.armRYaw;
+    list.push({ id: 'armL', m: parts.armL, x: lShX, y: lShY, lift: shZ + rig.armLZ, ro: lArmY, bias: 0.2 });
+    list.push({ id: 'armR', m: parts.armR, x: rShX, y: rShY, lift: shZ + rig.armRZ, ro: rArmY, bias: 0.2 });
+
+    const [rHdX, rHdY] = localToWorldXY(rShX, rShY, rArmY, 3.4, 5.0);
+    if (rig.propMode === 'club' || rig.propMode === 'clubFlat') {
+      const cId = rig.propMode === 'clubFlat' ? 'clubFlat' : 'club';
+      const cYaw = rArmY + rig.clubYaw;
+      const [cWx, cWy] = localToWorldXY(rHdX, rHdY, cYaw, 0, GOBLIN_CLUB_PIVOT_Y);
+      list.push({ id: cId, m: parts[cId], x: cWx, y: cWy, lift: shZ + 1.8 + rig.armRZ, ro: cYaw, bias: 0.35 });
+    } else if (rig.propMode === 'bomb') {
+      const [bx, by] = localToWorldXY(tx, ty, yw, 0, -0.6);
+      list.push({ id: 'bombProp', m: parts.bombProp, x: bx, y: by, lift: headZ + 9.2, ro: yw, bias: 0.5 });
+    } else if (rig.propMode === 'flag') {
+      const fYaw = rArmY + rig.flagSway;
+      const [fxP, fyP] = localToWorldXY(rHdX, rHdY, fYaw, 0.8, -1.6);
+      list.push({ id: 'flagProp', m: parts.flagProp, x: fxP, y: fyP, lift: shZ - 1.5 + rig.armRZ, ro: fYaw, bias: 0.35 });
+    }
+    return list;
+  }
+
+  function composeGoblinActor(partList, c, s, outlineHex) {
+    arCtx.setTransform(1, 0, 0, 1, 0, 0); arCtx.globalCompositeOperation = 'source-over';
+    arCtx.globalAlpha = 1; arCtx.imageSmoothingEnabled = false; arCtx.clearRect(0, 0, ACTOR_W, ACTOR_H);
+    agCtx.setTransform(1, 0, 0, 1, 0, 0); agCtx.globalCompositeOperation = 'source-over';
+    agCtx.globalAlpha = 1; agCtx.imageSmoothingEnabled = false; agCtx.clearRect(0, 0, ACTOR_W, ACTOR_H);
+
+    let calls = 0, hasAnyGlow = false;
+    for (let i = 0; i < partList.length; i++) {
+      const p = partList[i], dxW = p.x - rig.x, dyW = p.y - rig.y;
+      const rx = c * dxW - s * dyW, ry = s * dxW + c * dyW;
+      p._lx = ACTOR_AX + rx * BAKE_SCALE;
+      p._ly = ACTOR_AY + ry * TILT * BAKE_SCALE - p.lift * BAKE_STEP;
+      p._depth = ry + p.lift * 0.08 + (p.bias || 0);
+    }
+    partList.sort((a, b) => a._depth - b._depth);
+
+    for (let i = 0; i < partList.length; i++) {
+      const p = partList[i];
+      const sp = getBakedSprite(p.m, p.id, p.ro + th, outlineHex, false, 360);
+      const dx = Math.round(p._lx - sp.anchorX), dy = Math.round(p._ly - sp.anchorY);
+      arCtx.drawImage(sp.main, dx, dy); calls++;
+      if (hasAnyGlow) { agCtx.globalCompositeOperation = 'destination-out'; agCtx.drawImage(sp.main, dx, dy); }
+      if (sp.glow) { hasAnyGlow = true; agCtx.globalCompositeOperation = 'source-over'; agCtx.drawImage(sp.glow, dx, dy); calls++; }
+    }
+    agCtx.globalCompositeOperation = 'source-over';
+    if (!useOutline) return { main: actorRaw, glow: hasAnyGlow ? actorGlow : null, calls };
+
+    asCtx.setTransform(1, 0, 0, 1, 0, 0); asCtx.globalCompositeOperation = 'source-over'; asCtx.clearRect(0, 0, ACTOR_W, ACTOR_H);
+    asCtx.drawImage(actorRaw, 0, 0);
+    asCtx.globalCompositeOperation = 'source-in'; asCtx.fillStyle = outlineHex; asCtx.fillRect(0, 0, ACTOR_W, ACTOR_H);
+
+    aoCtx.setTransform(1, 0, 0, 1, 0, 0); aoCtx.globalCompositeOperation = 'source-over'; aoCtx.imageSmoothingEnabled = false;
+    aoCtx.clearRect(0, 0, ACTOR_W, ACTOR_H);
+    aoCtx.drawImage(actorSil, -1, 0); aoCtx.drawImage(actorSil, 1, 0); aoCtx.drawImage(actorSil, 0, -1); aoCtx.drawImage(actorSil, 0, 1);
+    aoCtx.drawImage(actorRaw, 0, 0);
+    return { main: actorOut, glow: hasAnyGlow ? actorGlow : null, calls: calls + 5 };
+  }
+
+  function updateVFX(dt) {
+    const fx = curSkin.fx;
+    if (bannerTimer > 0) { bannerTimer -= dt; if (bannerTimer <= 0) document.getElementById('banner').classList.remove('show'); }
+    if (hypeTimer > 0) hypeTimer = Math.max(0, hypeTimer - dt);
+    shakeMag = Math.max(0, shakeMag - dt * 16);
+    shakeX = shakeMag ? (Math.random() - 0.5) * shakeMag * SCALE * 0.6 : 0;
+    shakeY = shakeMag ? (Math.random() - 0.5) * shakeMag * SCALE * 0.6 : 0;
+    dummyHit = Math.max(0, dummyHit - dt * 2.8);
+    if (dummySmoke > 0) {
+      dummySmoke -= dt;
+      if (Math.random() < 0.38) {
+        spawnParticle(DUMMY_POS.x + (Math.random() - 0.5) * 4, DUMMY_POS.y, 18 + Math.random() * 8,
+          (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, 14 + Math.random() * 10, 0.65, 2.2, fx.smoke, false, -5);
+      }
+    }
+    for (let i = bombs.length - 1; i >= 0; i--) {
+      const b = bombs[i]; b.t += dt;
+      const u = clamp(b.t / b.dur, 0, 1);
+      b.x = lerp(b.sx, b.tx, u); b.y = lerp(b.sy, b.ty, u); b.z = lerp(b.sz, b.tz, u) + Math.sin(u * Math.PI) * 24;
+      if (Math.random() < 0.9) spawnParticle(b.x, b.y, b.z + 3.2, (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 10, 8, 0.26, 1.6, Math.random() < 0.5 ? fx.bombCore : fx.bombHot, true, 12);
+      if (u >= 1) {
+        bombs.splice(i, 1); shakeMag = Math.max(shakeMag, 6.8); hitDummy(1.75, true);
+        addRing(b.tx, b.ty, 3.0, 4, 34, 0.44, fx.bombHot, true);
+        addRing(b.tx, b.ty, 5.0, 3, 26, 0.38, fx.bombCore, true);
+        for (let k = 0; k < 22; k++) {
+          const a = Math.random() * TAU, sp = 8 + Math.random() * 24;
+          spawnParticle(b.tx + (Math.random() - 0.5) * 6, b.ty + (Math.random() - 0.5) * 6, 4 + Math.random() * 8,
+            Math.cos(a) * sp, Math.sin(a) * sp, 14 + Math.random() * 20, 0.65 + Math.random() * 0.4, 2.8 + Math.random() * 1.4, fx.smoke, false, -4);
+        }
+        for (let k = 0; k < 26; k++) {
+          const a = Math.random() * TAU, sp = 18 + Math.random() * 38;
+          spawnParticle(b.tx, b.ty, 4 + Math.random() * 6, Math.cos(a) * sp, Math.sin(a) * sp, 16 + Math.random() * 28,
+            0.42 + Math.random() * 0.35, 2.0 + Math.random() * 1.0, k % 3 === 0 ? fx.bombCore : (k % 3 === 1 ? fx.bombHot : fx.bombMid), true, 54);
+        }
+      }
+    }
+    for (let i = coins.length - 1; i >= 0; i--) {
+      const cn = coins[i]; cn.t += dt;
+      if (cn.t < cn.scoopAt) {
+        cn.vz -= 78 * dt; cn.x += cn.vx * dt; cn.y += cn.vy * dt; cn.z += cn.vz * dt;
+        if (cn.z < 1.2) { cn.z = 1.2; cn.vz = Math.abs(cn.vz) * 0.54; cn.vx *= 0.72; cn.vy *= 0.72; }
+      } else {
+        const tx = rig.x, ty = rig.y - 4, tz = 15 + rig.lift;
+        cn.x = lerp(cn.x, tx, Math.min(1, dt * 13)); cn.y = lerp(cn.y, ty, Math.min(1, dt * 13)); cn.z = lerp(cn.z, tz, Math.min(1, dt * 13));
+        if (Math.hypot(cn.x - tx, cn.y - ty, cn.z - tz) < 3.5 || cn.t > cn.scoopAt + 0.55) {
+          for (let s = 0; s < 3; s++) spawnParticle(tx, ty, tz, (Math.random() - 0.5) * 16, (Math.random() - 0.5) * 16, 12 + Math.random() * 8, 0.28, 1.5, '#ffe36e', true, 16);
+          coins.splice(i, 1);
+        }
+      }
+    }
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i]; p.t += dt;
+      if (p.t >= p.life) { particles.splice(i, 1); continue; }
+      p.vz -= p.gravity * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      if (p.z < 0.5) { p.z = 0.5; p.vz = Math.abs(p.vz) * 0.4; p.vx *= 0.72; p.vy *= 0.72; }
+    }
+    for (let i = groundDecals.length - 1; i >= 0; i--) { groundDecals[i].t += dt; if (groundDecals[i].t >= groundDecals[i].life) groundDecals.splice(i, 1); }
+    for (let i = shockRings.length - 1; i >= 0; i--) { shockRings[i].t += dt; if (shockRings[i].t >= shockRings[i].life) shockRings.splice(i, 1); }
+    for (let i = slashArcs.length - 1; i >= 0; i--) { slashArcs[i].t += dt; if (slashArcs[i].t >= slashArcs[i].life) slashArcs.splice(i, 1); }
+  }
+
+  function drawStackRealtime(asset, x, y, zLift, ro, sc) {
+    const [X, Y] = proj(x, y, zLift, sc);
+    const a = ro + th, c = Math.cos(a), s = Math.sin(a), X0 = Math.round(X), Y0 = Math.round(Y);
+    const isRetro = MODES[modeIdx] === 'retro', step = isRetro ? HS : Math.max(1, Math.round(HS * sc));
+    const halfStep = (!isRetro && step > Math.floor(TILT * sc)) ? Math.max(1, Math.round(step * 0.5)) : 0;
+    const { w, d, activeLayers, glowLayers, glowSlot, glowStrip, strip } = asset;
+    const hasGlow = !!glowStrip && glowLayers.length > 0, minGlowZ = hasGlow ? glowLayers[0] : 9999;
+    const eScaleX = EW / CW, eScaleY = EH / CH;
+    let calls = 0;
+    for (let li = 0; li < activeLayers.length; li++) {
+      const z = activeLayers[li], yy = isRetro ? (Y0 - z * HS) : (Y0 - z * step), sx = z * w;
+      if (halfStep) { mctx.setTransform(c * sc, TILT * s * sc, -s * sc, TILT * c * sc, X0, yy + halfStep); mctx.drawImage(strip, sx, 0, w, d, -w / 2, -d / 2, w, d); calls++; }
+      mctx.setTransform(c * sc, TILT * s * sc, -s * sc, TILT * c * sc, X0, yy); mctx.drawImage(strip, sx, 0, w, d, -w / 2, -d / 2, w, d); calls++;
+      if (!hasGlow || z >= minGlowZ) {
+        ectx.globalCompositeOperation = 'destination-out';
+        ectx.setTransform(c * sc * eScaleX, TILT * s * sc * eScaleY, -s * sc * eScaleX, TILT * c * sc * eScaleY, X0 * eScaleX, yy * eScaleY);
+        ectx.drawImage(strip, sx, 0, w, d, -w / 2, -d / 2, w, d);
+      }
+      if (hasGlow && glowSlot[z] >= 0) { ectx.globalCompositeOperation = 'source-over'; ectx.drawImage(glowStrip, glowSlot[z] * w, 0, w, d, -w / 2, -d / 2, w, d); calls++; }
+    }
+    ectx.globalCompositeOperation = 'source-over';
+    return calls;
+  }
+
+  let last = 0, fpsAcc = 0, fpsFrames = 0, fpsVal = 60, statTimer = 0, cpuMsSmooth = 1.0;
+
+  function tick(ms) {
+    const tCpu0 = performance.now();
+    const t = ms / 1000, dt = Math.min(0.05, t - (last || t)); last = t;
+    animTime += dt; fpsAcc += dt; fpsFrames++;
+    if (fpsAcc >= 0.4) { fpsVal = Math.round(fpsFrames / fpsAcc); fpsAcc = 0; fpsFrames = 0; }
+    if (autoSpin && !drag) thTarget += dt * 0.55;
+    if (!drag) th += (thTarget - th) * Math.min(1, dt * 8);
+
+    updateGoblinRig(dt);
+    updateVFX(dt);
+
+    const mode = MODES[modeIdx], sc = mode === 'retro' ? 1 : SCALE;
+    const c = Math.cos(th), s = Math.sin(th), eScale = EW / cv.width, fx = curSkin.fx;
+    let drawCalls = 0;
+
+    const goblinParts = buildGoblinPartList();
+    const dummyShakeX = dummyHit > 0 ? Math.sin(animTime * 58) * dummyHit * 2.1 : 0;
+    const dummyShakeY = dummyHit > 0 ? Math.cos(animTime * 50) * dummyHit * 1.4 : 0;
+    const dummyObj = { id: 'dummy', m: dummyAsset, x: DUMMY_POS.x + dummyShakeX, y: DUMMY_POS.y + dummyShakeY, lift: 0, ro: 0 };
+
+    const bSize = platform.size, halfB = bSize * 0.5;
+    gbctx.setTransform(GROUND_SUPERSAMPLE, 0, 0, GROUND_SUPERSAMPLE, 0, 0);
+    gbctx.globalCompositeOperation = 'source-over'; gbctx.imageSmoothingEnabled = false;
+    gbctx.clearRect(0, 0, bSize, bSize); gbctx.drawImage(platform.base, 0, 0);
+
+    gbctx.save(); gbctx.translate(halfB, halfB);
+    gbctx.beginPath(); gbctx.arc(0, 0, platform.rInner, 0, TAU); gbctx.clip();
+
+    for (const dc of groundDecals) {
+      const fade = clamp(1 - dc.t / dc.life, 0, 1);
+      gbctx.save(); gbctx.translate(dc.x, dc.y);
+      if (dc.type === 'scorch') {
+        gbctx.globalAlpha = fade * 0.72; gbctx.fillStyle = fx.scorchBase;
+        gbctx.fillRect(-dc.r, -dc.r * 0.78, dc.r * 2, dc.r * 1.56);
+        gbctx.globalAlpha = fade * 0.42; gbctx.fillStyle = fx.scorchGlow;
+        gbctx.fillRect(-dc.r * 0.45, -dc.r * 0.35, dc.r * 0.9, dc.r * 0.7);
+      } else if (dc.type === 'buffRing') {
+        const rr = lerp(6, dc.r, smoothstep(0, 1, dc.t / dc.life));
+        gbctx.strokeStyle = `rgba(${fx.buffRGB}, ${fade * 0.85})`; gbctx.lineWidth = 2.6;
+        gbctx.beginPath(); gbctx.arc(0, 0, rr, 0, TAU); gbctx.stroke();
+      }
+      gbctx.restore();
+    }
+
+    const lf = clamp(1 - rig.lift / 42, 0.35, 1.0);
+    gbctx.fillStyle = `rgba(10, 8, 6, ${0.50 * lf})`;
+    gbctx.beginPath(); gbctx.arc(rig.x + rig.lift * 0.12, rig.y - rig.lift * 0.12, 7.6 * (0.72 + 0.28 * lf), 0, TAU); gbctx.fill();
+
+    gbctx.save(); gbctx.translate(dummyObj.x, dummyObj.y);
+    gbctx.save(); gbctx.globalAlpha = 0.34; gbctx.translate(2.0, -2.0);
+    gbctx.drawImage(dummyAsset.footShadow, -dummyAsset.w / 2, -dummyAsset.d / 2); gbctx.restore();
+    gbctx.fillStyle = 'rgba(10, 8, 6, 0.50)';
+    gbctx.beginPath(); gbctx.arc(0, 0, dummyAsset.meta.footRadius, 0, TAU); gbctx.fill();
+    gbctx.restore(); gbctx.restore();
+
+    ectx.setTransform(1, 0, 0, 1, 0, 0); ectx.globalCompositeOperation = 'source-over';
+    ectx.imageSmoothingEnabled = false; ectx.clearRect(0, 0, EW, EH);
+    dctx.setTransform(1, 0, 0, 1, 0, 0); dctx.globalCompositeOperation = 'source-over';
+    dctx.imageSmoothingEnabled = false; dctx.drawImage(bgc, 0, 0); drawCalls++;
+
+    dctx.setTransform(c * SCALE, TILT * s * SCALE, -s * SCALE, TILT * c * SCALE, cv.width / 2 + shakeX, cv.height / 2 + 16 * SCALE + shakeY);
+    dctx.drawImage(gbuf, -halfB, -halfB, bSize, bSize);
+    dctx.setTransform(1, 0, 0, 1, 0, 0); drawCalls++;
+
+    if (mode === 'cached') {
+      const dispRatio = SCALE / BAKE_SCALE;
+      const composed = composeGoblinActor(goblinParts, c, s, curSkin.outline);
+      drawCalls += composed.calls;
+      const [sx, sy, sry] = proj(rig.x, rig.y, rig.lift, SCALE);
+      const [dxP, dyP, dry] = proj(dummyObj.x, dummyObj.y, 0, SCALE);
+      const dummySp = getBakedSprite(dummyAsset, 'dummy', th, curSkin.outline, useOutline, 360);
+      ectx.setTransform(1, 0, 0, 1, 0, 0);
+
+      for (const who of (sry < dry ? ['goblin', 'dummy'] : ['dummy', 'goblin'])) {
+        if (who === 'goblin') {
+          const dw = Math.round(ACTOR_W * dispRatio), dh = Math.round(ACTOR_H * dispRatio);
+          const dx = Math.round(sx - ACTOR_AX * dispRatio), dy = Math.round(sy - ACTOR_AY * dispRatio);
+          dctx.drawImage(composed.main, dx, dy, dw, dh); drawCalls++;
+          if (rig.pulseAlpha > 0.01 && rig.pulseColor) {
+            asCtx.setTransform(1, 0, 0, 1, 0, 0); asCtx.globalCompositeOperation = 'source-over'; asCtx.clearRect(0, 0, ACTOR_W, ACTOR_H);
+            asCtx.drawImage(composed.main, 0, 0);
+            asCtx.globalCompositeOperation = 'source-in'; asCtx.fillStyle = rig.pulseColor; asCtx.fillRect(0, 0, ACTOR_W, ACTOR_H);
+            dctx.save(); dctx.globalAlpha = rig.pulseAlpha; dctx.drawImage(actorSil, dx, dy, dw, dh); dctx.restore(); drawCalls++;
+          }
+          ectx.globalCompositeOperation = 'destination-out';
+          ectx.drawImage(composed.main, dx * eScale, dy * eScale, dw * eScale, dh * eScale);
+          if (composed.glow) { ectx.globalCompositeOperation = 'source-over'; ectx.drawImage(composed.glow, dx * eScale, dy * eScale, dw * eScale, dh * eScale); drawCalls++; }
+        } else {
+          const dw = Math.round(dummySp.bw * dispRatio), dh = Math.round(dummySp.bh * dispRatio);
+          const dx = Math.round(dxP - dummySp.anchorX * dispRatio), dy = Math.round(dyP - dummySp.anchorY * dispRatio);
+          dctx.drawImage(dummySp.main, dx, dy, dw, dh); drawCalls++;
+          ectx.globalCompositeOperation = 'destination-out';
+          ectx.drawImage(dummySp.main, dx * eScale, dy * eScale, dw * eScale, dh * eScale);
+        }
+      }
+      ectx.globalCompositeOperation = 'source-over';
+    } else {
+      mctx.setTransform(1, 0, 0, 1, 0, 0); mctx.globalCompositeOperation = 'source-over';
+      mctx.imageSmoothingEnabled = false; mctx.clearRect(0, 0, CW, CH);
+      const allObjs = [...goblinParts.map(p => ({ ...p, lift: rig.lift + p.lift })), dummyObj];
+      for (const o of allObjs) o._depth = proj(o.x, o.y, o.lift, sc)[2] + o.lift * 0.08 + (o.bias || 0);
+      allObjs.sort((a, b) => a._depth - b._depth);
+      for (const o of allObjs) drawCalls += drawStackRealtime(o.m, o.x, o.y, o.lift, o.ro, sc);
+      const drawW = mode === 'retro' ? CW * SCALE : CW, drawH = mode === 'retro' ? CH * SCALE : CH;
+      if (useOutline) {
+        octx.setTransform(1, 0, 0, 1, 0, 0); octx.globalCompositeOperation = 'source-over'; octx.clearRect(0, 0, CW, CH);
+        octx.drawImage(mc, 0, 0); octx.globalCompositeOperation = 'source-in'; octx.fillStyle = curSkin.outline; octx.fillRect(0, 0, CW, CH);
+        octx.globalCompositeOperation = 'source-over';
+        const op = mode === 'retro' ? SCALE : Math.max(1, Math.round(SCALE * 0.30));
+        for (const [ox, oy] of [[-op, 0], [op, 0], [0, -op], [0, op]]) dctx.drawImage(oc, ox, oy, drawW, drawH);
+      }
+      dctx.drawImage(mc, 0, 0, drawW, drawH);
+    }
+
+    const pSc = mode === 'retro' ? 1 : SCALE, toMain = mode === 'retro' ? SCALE : 1, toE = toMain * eScale;
+    function drawVoxelBlock(wx, wy, wz, szVox, color, isGlow) {
+      const [px, py] = proj(wx, wy, wz, pSc);
+      const sx = Math.round(px * toMain), sy = Math.round(py * toMain), sPx = Math.max(2, Math.round(szVox * SCALE));
+      dctx.fillStyle = color; dctx.fillRect(sx - (sPx >> 1), sy - (sPx >> 1), sPx, sPx);
+      if (isGlow) {
+        const es = Math.max(1, Math.round(sPx * eScale));
+        ectx.fillStyle = color; ectx.fillRect(Math.round(px * toE) - (es >> 1), Math.round(py * toE) - (es >> 1), es, es);
+      }
+    }
+
+    for (const sa of slashArcs) {
+      const u = clamp(sa.t / sa.life, 0, 1);
+      for (let i = 0; i <= 16; i++) {
+        const f = i / 16;
+        if (f > Math.min(1, u * 1.9) || f < Math.max(0, u * 1.5 - 0.85)) continue;
+        const ang = sa.dir > 0 ? lerp(-0.9, 1.05, f) : lerp(1.05, -0.9, f), rad = 11.5 + Math.sin(f * Math.PI) * 3.5;
+        const wx = sa.x + Math.sin(ang) * rad, wy = sa.y - 4 + Math.cos(ang) * (rad * 0.72), wz = sa.z + (f - 0.5) * 4.0 * sa.dir;
+        drawVoxelBlock(wx, wy, wz, 2.8 * (1 - u * 0.4), fx.slashOuter, true);
+        drawVoxelBlock(wx, wy, wz + 0.6, 2.0 * (1 - u * 0.4), fx.slashMid, true);
+        if (f > 0.25 && f < 0.85) drawVoxelBlock(wx, wy, wz + 1.1, 1.3, fx.slashCore, true);
+      }
+    }
+    for (const b of bombs) {
+      drawVoxelBlock(b.x, b.y, b.z, 5.2, '#1e2028', false);
+      drawVoxelBlock(b.x - 0.6, b.y + 0.6, b.z + 1.0, 2.4, '#4c5263', false);
+      drawVoxelBlock(b.x, b.y, b.z + 2.8, 2.0, '#cfc5b2', false);
+      const j = Math.sin(animTime * 48) * 0.9;
+      drawVoxelBlock(b.x + 1.2 + j, b.y, b.z + 4.4, 2.6, fx.bombHot, true);
+      drawVoxelBlock(b.x + 1.2 + j, b.y, b.z + 4.8, 1.6, fx.bombCore, true);
+    }
+    for (const cn of coins) {
+      const spinW = 1.6 + Math.abs(Math.sin(animTime * 16 + cn.x)) * 1.3;
+      drawVoxelBlock(cn.x, cn.y, cn.z, spinW + 0.6, '#9e6f14', false);
+      drawVoxelBlock(cn.x, cn.y, cn.z + 0.3, spinW, '#e3ad24', false);
+      drawVoxelBlock(cn.x, cn.y, cn.z + 0.7, spinW * 0.55, '#ffe36e', true);
+    }
+    for (const rg of shockRings) {
+      const u = clamp(rg.t / rg.life, 0, 1), rad = lerp(rg.r0, rg.r1, smoothstep(0, 1, u)), bSz = Math.max(1.2, (1 - u * 0.5) * 2.4);
+      for (let i = 0; i < 24; i++) { const a = (i / 24) * TAU; drawVoxelBlock(rg.x + Math.cos(a) * rad, rg.y + Math.sin(a) * rad, rg.z, bSz, rg.color, rg.glow); }
+    }
+    for (const p of particles) drawVoxelBlock(p.x, p.y, p.z, p.sz * (1 - (p.t / p.life) * 0.6), p.color, p.glow);
+
+    ebctx.setTransform(1, 0, 0, 1, 0, 0); ebctx.clearRect(0, 0, EW, EH);
+    ebctx.filter = `blur(${Math.max(1, Math.round(SCALE * 0.16))}px)`; ebctx.drawImage(ec, 0, 0); ebctx.filter = 'none';
+    dctx.globalCompositeOperation = 'screen';
+    dctx.imageSmoothingEnabled = true; dctx.globalAlpha = clamp(0.74 * rig.glowBoost, 0, 1); dctx.drawImage(eb, 0, 0, cv.width, cv.height);
+    dctx.globalAlpha = clamp(0.55 * rig.glowBoost, 0, 1); dctx.imageSmoothingEnabled = false; dctx.drawImage(ec, 0, 0, cv.width, cv.height);
+    dctx.globalAlpha = 1; dctx.globalCompositeOperation = 'source-over'; drawCalls += 2;
+
+    const cpuMs = performance.now() - tCpu0;
+    cpuMsSmooth = cpuMsSmooth * 0.88 + cpuMs * 0.12;
+    statTimer += dt;
+    if (statTimer >= 0.25) {
+      statTimer = 0;
+      const hitRate = (cacheHits + cacheMisses) ? Math.round(cacheHits * 100 / (cacheHits + cacheMisses)) : 100;
+      $('stats').innerHTML =
+        `<span>建模 <b>${buildMs}ms</b></span>` +
+        (skinMs > 0 ? `<span>换色 <b>${skinMs}ms</b></span>` : '') +
+        `<span>帧率 <b>${fpsVal}fps</b></span>` +
+        `<span>单帧 <b>${cpuMsSmooth.toFixed(1)}ms</b></span>` +
+        `<span>绘制 <b>${drawCalls}次</b></span>` +
+        `<span>色表 <b>${PAL_KEYS.length}色</b></span>` +
+        (mode === 'cached' ? `<span>缓存 <b>${spriteCache.size}</b> (${hitRate}%)</span>` : '');
+    }
+    requestAnimationFrame(tick);
+  }
+
+  const $ = id => document.getElementById(id);
+  function buildBars() {
+    const sb = $('skinBar'); sb.innerHTML = '';
+    SKINS.forEach((sk, idx) => {
+      const btn = document.createElement('button');
+      btn.innerHTML = `<span class="swatch" style="background:${sk.dot}"></span>${sk.name}（${sk.tag}）`;
+      btn.onclick = () => applySkin(idx, true); sb.appendChild(btn);
+    });
+    const kb = $('skillBar'); kb.innerHTML = '';
+    SKILLS.forEach((sk, idx) => {
+      const btn = document.createElement('button'); btn.className = 'skill-btn';
+      btn.textContent = `${idx + 1}. ${sk.name}`; btn.onclick = () => startSkill(idx); kb.appendChild(btn);
+    });
+  }
+  function syncUI() {
+    $('skinBadge').textContent = `${curSkin.name} · ${curSkin.tag}`;
+    $('skinBar').querySelectorAll('button').forEach((b, i) => b.classList.toggle('on', i === skinIdx));
+    $('skillBar').querySelectorAll('button').forEach((b, i) => b.classList.toggle('active', !!(activeAction && activeAction.id === SKILLS[i].id)));
+    $('btnCrouch').classList.toggle('on', !activeAction && baseMode === 'crouch');
+    $('btnScurry').classList.toggle('on', !activeAction && baseMode === 'scurry');
+    $('btnSpin').classList.toggle('on', autoSpin);
+    $('btnOutline').classList.toggle('on', useOutline);
+    $('btnMode').textContent = '模式：' + MODE_LABEL[MODES[modeIdx]];
+    $('btnMode').classList.toggle('on', MODES[modeIdx] === 'cached');
+  }
+
+  $('btnCrouch').onclick = () => { activeAction = null; baseMode = 'crouch'; syncUI(); showBanner('营地生态 · 蹲伏警戒', 1.1); };
+  $('btnScurry').onclick = () => { activeAction = null; baseMode = 'scurry'; syncUI(); showBanner('营地生态 · 鬼祟巡逻', 1.2); };
+  $('btnSpin').onclick = () => { autoSpin = !autoSpin; syncUI(); };
+  $('btnOutline').onclick = () => { useOutline = !useOutline; syncUI(); };
+  $('btnMode').onclick = () => { modeIdx = (modeIdx + 1) % MODES.length; fit(); syncUI(); };
+  $('btnReset').onclick = () => {
+    thTarget = 0.58;
+    th = thTarget + (((th - thTarget + Math.PI) % TAU + TAU) % TAU - Math.PI);
+    zoom = 0; autoSpin = false; baseMode = 'crouch'; activeAction = null; fit(); syncUI();
+  };
+  $('btnExport').onclick = () => {
+    const asset = parts.head;
+    const a = document.createElement('a');
+    a.download = `goblin_${curSkin.id}_head_${asset.w}x${asset.d}x${asset.h}.png`;
+    a.href = asset.strip.toDataURL('image/png'); a.click();
+  };
+
+  cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, th }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', e => { if (drag) { th = thTarget = drag.th + (e.clientX - drag.x) * 0.01; } });
+  cv.addEventListener('pointerup', () => { drag = null; });
+  cv.addEventListener('wheel', e => { zoom = clamp(zoom + (e.deltaY > 0 ? -1 : 1), -2, 5); fit(); e.preventDefault(); }, { passive: false });
+  window.addEventListener('keydown', e => {
+    if (e.key === 'q' || e.key === 'Q') thTarget -= Math.PI / 4;
+    if (e.key === 'e' || e.key === 'E') thTarget += Math.PI / 4;
+    if (e.key === 'c' || e.key === 'C') applySkin(skinIdx + 1, true);
+    if (e.key === 's' || e.key === 'S') {
+      activeAction = null; baseMode = baseMode === 'scurry' ? 'crouch' : 'scurry'; syncUI();
+      showBanner(baseMode === 'scurry' ? '营地生态 · 鬼祟巡逻' : '营地生态 · 蹲伏警戒', 1.2);
+    }
+    if (e.key >= '1' && e.key <= '4') startSkill(Number(e.key) - 1);
+  });
+  window.addEventListener('resize', fit);
+
+  window.__GOBLIN_DEBUG__ = {
+    getStats: () => ({
+      buildMs: Number(buildMs), skinMs, skin: curSkin.id, baseMode,
+      fps: fpsVal, cpuMs: Number(cpuMsSmooth.toFixed(2)),
+      cacheSize: spriteCache.size, cacheHits, cacheMisses,
+      th, zoom, mode: MODES[modeIdx], paletteCount: PAL_KEYS.length,
+      activeAction: activeAction ? activeAction.id : null,
+      hypeTimer: Number(hypeTimer.toFixed(2))
+    }),
+    setAngle: a => { th = thTarget = a; },
+    setSkin: idOrIdx => { const idx = typeof idOrIdx === 'number' ? idOrIdx : SKINS.findIndex(s => s.id === idOrIdx); if (idx >= 0) applySkin(idx, false); },
+    setBaseMode: m => { activeAction = null; baseMode = m; syncUI(); },
+    cycleSkin: () => applySkin(skinIdx + 1, true),
+    triggerSkill: i => startSkill(i),
+    setAutoSpin: v => { autoSpin = v; syncUI(); },
+    setZoom: z => { zoom = clamp(z, -2, 5); fit(); }
+  };
+
+  buildBars(); fit(); syncUI(); requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
