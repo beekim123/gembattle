@@ -259,4 +259,118 @@ export const LAYOUT_3 = {
   },
 };
 
-export const LAYOUTS = { 1: LAYOUT_1, 2: LAYOUT_2, 3: LAYOUT_3 };
+// ─────────────────────────────────────────────
+// 布局四：斜看圆台（照用户的像素堆叠样片改的）。
+// 样片里每只怪都站在一块圆台中间，斜着往下看（压扁 0.6），左下角立着一个木桩当靶子。
+// 这里就照这个摆：一块椭圆的地面，主角和队友站左下（近处），怪站右上（远处），斜对角对着打；
+// 血、盾、倒计时挂在头顶（美术方案里的 headZ 挂点），飘字在身子中间（centerZ）。
+// 中间那栏、链、手牌、左下、右下，跟布局一一样。
+// ─────────────────────────────────────────────
+function ellipsePts(cx, cy, rx, ry, n = 64) {
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    pts.push({ x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * ry });
+  }
+  return pts;
+}
+
+function stageGround(r, st) {
+  r.polygon({ points: ellipsePts(st.cx, st.cy + 10, st.rx + 6, st.ry + 6), fill: '#000000', alpha: 0.35 });
+  r.polygon({ points: ellipsePts(st.cx, st.cy, st.rx, st.ry), fill: st.fill, stroke: st.rim, lineWidth: 10 });
+  // 地面上几块深浅的斑，代替以后每种地方各自的地面花纹
+  const spots = [[-300, -60, 90, 30], [-120, 40, 120, 38], [80, -90, 100, 30], [260, 10, 110, 36], [-20, 120, 140, 34], [200, 130, 90, 26], [-260, 90, 80, 24], [330, -60, 70, 22]];
+  spots.forEach(([dx, dy, rx, ry], i) => r.polygon({ points: ellipsePts(st.cx + dx, st.cy + dy, rx, ry, 24), fill: i % 2 ? st.dark : st.light, alpha: 0.55 }));
+  r.polygon({ points: ellipsePts(st.cx, st.cy, st.rx - 8, st.ry - 6), stroke: st.rimHi, lineWidth: 2, alpha: 0.6 });
+}
+
+/** 头顶一块：倒计时和下一手 / 血 / 盾 / 特性，跟着怪的头顶走 */
+function headPlate(r, slot) {
+  const { m, cx, base, size } = slot;
+  const pw = Math.max(92, Math.min(170, size * 1.05));
+  const x0 = cx - pw / 2;
+  const rows = 3 + (m.traits.length ? 1 : 0);
+  let y = base - size - 4 - rows * 19;
+  r.rect({ x: x0 - 6, y: y - 14, w: pw + 12, h: rows * 19 + 12, radius: 8, fill: '#07080c', alpha: 0.62 });
+  countdown(r, x0 + 12, y, m.countdown, m.intent, { size: 12 });
+  if (m.tier !== 'normal') tierTag(r, x0 + pw, y, m.tier, 'right');
+  y += 16;
+  hpBar(r, x0, y, pw, m, 12);
+  y += 22;
+  shieldRow(r, x0, y - 4, m, { cell: 10, align: 'center', w: pw });
+  y += 20;
+  m.traits.forEach((t) => traitChip(r, cx, y, t, 'center'));
+}
+
+const STAGE_SPOTS = {
+  1: [{ x: 660, y: 262, s: 150 }],
+  2: [{ x: 600, y: 258, s: 140 }, { x: 800, y: 236, s: 104 }],
+  3: [{ x: 570, y: 262, s: 136 }, { x: 730, y: 222, s: 92 }, { x: 860, y: 258, s: 92 }],
+  4: [{ x: 540, y: 266, s: 130 }, { x: 676, y: 222, s: 86 }, { x: 784, y: 252, s: 86 }, { x: 892, y: 222, s: 86 }],
+};
+
+export const LAYOUT_4 = {
+  id: 4,
+  name: '斜看圆台',
+  regions: {
+    bar: { x: 0, y: 0, w: 960, h: 32 },
+    stage: { cx: 470, cy: 214, rx: 470, ry: 176, fill: '#283326', light: '#34432f', dark: '#1f281d', rim: '#3a404c', rimHi: '#6a7384' },
+    buffs: { x: 14, y: 42, size: 26 },
+    hero: { cx: 250, base: 338, size: 92 },
+    allies: [{ cx: 132, base: 300, size: 62 }, { cx: 360, base: 344, size: 58 }, { cx: 116, base: 352, size: 58 }],
+    middle: { x: 226, y: 92, w: 190, cx: 322 },
+    monsters: STAGE_SPOTS,
+    tray: { x: 0, y: 352, w: 960, h: 188 },
+    chain: { x: 200, y: 356, w: 560, h: 48, maxCard: 40 },
+    hand: { cx: 480, y: 422, cw: 78, ch: 108 },
+    left: { x: 12, y: 418 },
+    right: { x: 806, y: 418, w: 142 },
+  },
+  draw(r, s) {
+    const L = this.regions;
+    r.clear('#0d0f14');
+    stageGround(r, L.stage);
+    statusBar(r, s.status);
+    s.status.buffs.forEach((b, i) => buffIcon(r, L.buffs.x + i * (L.buffs.size + 6), L.buffs.y, b, L.buffs.size));
+
+    const spots = L.monsters[s.monsters.length];
+    const slots = s.monsters.map((m, i) => ({ m, cx: spots[i].x, base: spots[i].y, size: spots[i].s, w: spots[i].s * 1.2 }));
+    // 远的先画、近的后画
+    s.allies.forEach((a, i) => allyUnit(r, L.allies[i].cx, L.allies[i].base, L.allies[i].size, a));
+    heroUnit(r, L.hero.cx, L.hero.base, L.hero.size);
+    [...slots].sort((a, b) => a.base - b.base).forEach((sl) => {
+      const look = MONSTER_LOOK[sl.m.tier];
+      if (sl.m.selected && !sl.m.dead) targetRing(r, sl.cx, sl.base, sl.size * 0.9);
+      stackSprite(r, sl.cx, sl.base, sl.size, { ...look, alpha: sl.m.dead ? 0.25 : 1 });
+      if (sl.m.flash && !sl.m.dead) r.rect({ x: sl.cx - sl.size * 0.38, y: sl.base - sl.size * 0.85, w: sl.size * 0.76, h: sl.size * 0.78, radius: 10, fill: '#ffffff', alpha: 0.12 });
+      if (sl.m.dead) txt(r, '打倒了', sl.cx, sl.base - sl.size * 0.45, { size: F.s, align: 'center', color: T.text3 });
+    });
+    slots.forEach((sl) => { if (!sl.m.dead) headPlate(r, sl); });
+    if (s.breakStamp) breakStamp(r, slots[0].cx - slots[0].size * 1.3, slots[0].base - slots[0].size * 0.15);
+
+    if (s.banner) speech(r, L.middle.cx, 58, s.banner, '#ffffff');
+    if (s.summary) {
+      bigTotal(r, L.middle.cx, L.middle.y + 30, { ...s.summary, why: '' });
+      s.summary.why.split(' · ').forEach((ln, i) => txt(r, ln, L.middle.cx, L.middle.y + 66 + i * 17, { size: F.xs, align: 'center', color: ln.startsWith('队友') ? '#ffd9a8' : T.text2 }));
+    } else {
+      r.rect({ x: L.middle.x - 10, y: L.middle.y - 12, w: L.middle.w + 20, h: 124, radius: 10, fill: '#07080c', alpha: 0.6 });
+      formula(r, L.middle.x, L.middle.y, L.middle.w, s.preview, { compact: true });
+    }
+    drawFloaters(r, slots, s);
+
+    r.rect({ ...L.tray, fill: '#07080c', alpha: 0.86 });
+    r.line({ x1: 0, y1: L.tray.y, x2: 960, y2: L.tray.y, color: T.line, lineWidth: 1 });
+    if (s.chain.length) chainRow(r, { ...L.chain, chain: s.chain, fired: s.fired ?? -1 });
+    else if (!s.summary) txt(r, s.hint || '点手牌排进链', 480, L.chain.y + 24, { size: F.s, align: 'center', color: T.text3 });
+    drawHand(r, s.hand, L.hand, L.hand.cw, L.hand.ch);
+    colorRing(r, L.left.x + 38, L.left.y + 36, 20, s.recorded, s.current, 7);
+    deckCounts(r, L.left.x + 84, L.left.y + 12, s.deck, 2, 46);
+    txt(r, `牌堆 ${s.drawCount} · 弃 ${s.discardCount}`, L.left.x + 2, L.left.y + 92, { size: F.xs, color: T.text2 });
+    gemLevels(r, L.left.x + 2, L.left.y + 110, s.gemLevels, 56);
+    smallButton(r, L.right.x, L.right.y, 66, 24, '自动排');
+    smallButton(r, L.right.x + 76, L.right.y, 66, 24, '撤回');
+    castButton(r, L.right.x, L.right.y + 36, L.right.w, 70, s.chain.length ? '打出' : '结束回合', s.chain.length ? '空格' : '');
+  },
+};
+
+export const LAYOUTS = { 1: LAYOUT_1, 2: LAYOUT_2, 3: LAYOUT_3, 4: LAYOUT_4 };

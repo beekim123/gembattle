@@ -281,7 +281,7 @@ export function tierTag(r, x, y, tier, align = 'center') {
   const label = tier === 'elite' ? '精英' : '看门的';
   const col = tier === 'elite' ? '#c43c4c' : '#7a52d1';
   const lw = r.measureText(label, { size: F.xs, weight: 'bold', font: FONT }).width + 12;
-  const bx = align === 'center' ? x - lw / 2 : x;
+  const bx = align === 'center' ? x - lw / 2 : align === 'right' ? x - lw : x;
   r.rect({ x: bx, y: y - 9, w: lw, h: 18, radius: 4, fill: col });
   txt(r, label, bx + lw / 2, y, { size: F.xs, weight: 'bold', align: 'center' });
 }
