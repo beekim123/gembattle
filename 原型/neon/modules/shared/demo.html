@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>code00 · shared 模块演示</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 20px 24px 32px;
+    background: #17191f;
+    color: #e4e8f0;
+    font: 14px/1.55 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  h1 { margin: 0 0 4px; font-size: 20px; }
+  .sub { color: #9aa4b6; margin: 0 0 18px; font-size: 13px; }
+  .grid { display: grid; grid-template-columns: 360px 1fr; gap: 16px; margin-bottom: 16px; }
+  .card {
+    background: #20242e;
+    border: 1px solid #323848;
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .card h2 { margin: 0 0 10px; font-size: 15px; color: #f2f5fb; }
+  .ring-wrap { display: flex; justify-content: center; }
+  canvas { display: block; border-radius: 6px; background: #14171d; }
+  .pill-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: #2a303d;
+    border: 1px solid #3c4456;
+    font-size: 12px;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td {
+    text-align: left;
+    padding: 6px 8px;
+    border-bottom: 1px solid #2e3444;
+    vertical-align: top;
+  }
+  th { color: #9fb0cc; font-weight: 600; background: #1a1e27; }
+  .badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .ok { background: #21442c; color: #7ee39b; }
+  .fail { background: #4a2328; color: #ff8e99; }
+  .rng-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+  input {
+    background: #14171d;
+    border: 1px solid #3c4456;
+    color: #e4e8f0;
+    border-radius: 4px;
+    padding: 4px 8px;
+    width: 150px;
+  }
+  button {
+    background: #3a6bc9;
+    border: 0;
+    color: #fff;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  button:hover { background: #4d7ee0; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #b7c6e0; }
+  .checks { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .check-item { background: #191d26; border: 1px solid #2d3342; border-radius: 6px; padding: 10px 12px; }
+  .check-item .title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .check-item .detail { color: #9aa4b6; font-size: 12px; }
+</style>
+</head>
+<body>
+  <h1>modules/shared 演示页</h1>
+  <p class="sub">只从 ./index.js 导入：展示色环七色、时机与动作表、可复现种子随机数，以及战斗四样约定的实时校验。</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>色环与七种颜色（固定 29 张宝石牌）</h2>
+      <div class="ring-wrap">
+        <canvas id="ringCanvas" width="320" height="240"></canvas>
+      </div>
+      <div id="colorSummary" class="pill-list" style="margin-top: 10px;"></div>
+    </div>
+
+    <div class="card">
+      <h2>战斗四样约定 · 实时校验结果</h2>
+      <div id="contractChecks" class="checks"></div>
+
+      <h2 style="margin-top: 14px;">可指定种子的随机数</h2>
+      <div class="rng-row">
+        <label for="seedInput">种子：</label>
+        <input id="seedInput" value="code00-demo">
+        <button id="rollBtn" type="button">按种子生成 6 个数</button>
+      </div>
+      <div id="rngOut" class="mono"></div>
+
+      <h2 style="margin-top: 14px;">全部时机（共 <span id="timingCount">0</span> 个）</h2>
+      <div id="timingList" class="pill-list"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>标准动作表（含持续多久、会不会再触发别的）</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>动作名</th>
+          <th>中文名</th>
+          <th>谁能用</th>
+          <th>持续多久</th>
+          <th>再触发规则</th>
+        </tr>
+      </thead>
+      <tbody id="actionRows"></tbody>
+    </table>
+  </div>
+
+<script type="module">
+  import {
+    ACTIONS,
+    ACTION_DURATIONS,
+    ACTION_DURATION_LABELS,
+    BATTLE_EVENT_TYPES,
+    CHAIN_RELATIONS,
+    COLOR_META,
+    COLOR_RING,
+    DEFAULT_ACTION_TABLE,
+    EFFECT_SOURCE_LABELS,
+    RETRIGGER_POLICY_LABELS,
+    SCHEMA_VERSION,
+    SEVEN_COLORS,
+    TIMINGS,
+    TIMING_LABELS,
+    TIMING_LIST,
+    createEmptyDrawPileByColor,
+    createRng,
+    validateActionTable,
+    validateBattleEvents,
+    validateBattlePreview,
+    validateBattleResult,
+    validateBattleSnapshot,
+    validateBattleStartPacket,
+  } from './index.js';
+
+  // 1. 画色环示意图
+  const canvas = document.getElementById('ringCanvas');
+  const ctx = canvas.getContext('2d');
+  const cx = 160;
+  const cy = 120;
+  const radius = 82;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#333b4d';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 画补色连线（虚线）
+  ctx.save();
+  ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = '#3d465c';
+  for (let i = 0; i < 3; i++) {
+    const a1 = -Math.PI / 2 + (i * Math.PI) / 3;
+    const a2 = a1 + Math.PI;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a1) * radius, cy + Math.sin(a1) * radius);
+    ctx.lineTo(cx + Math.cos(a2) * radius, cy + Math.sin(a2) * radius);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  function drawColorNode(x, y, meta) {
+    ctx.fillStyle = meta.swatch;
+    ctx.beginPath();
+    ctx.arc(x, y, 24, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#14171d';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = meta.id === 'white' || meta.id === 'yellow' || meta.id === 'cyan' ? '#14171d' : '#ffffff';
+    ctx.font = 'bold 13px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(meta.label, x, y - 5);
+
+    // 牌面直接画出红绿蓝小点
+    const gems = meta.gems;
+    const gap = 9;
+    const startX = x - ((gems.length - 1) * gap) / 2;
+    gems.forEach((g, idx) => {
+      ctx.fillStyle = COLOR_META[g].swatch;
+      ctx.beginPath();
+      ctx.arc(startX + idx * gap, y + 10, 3.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#14171d';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    });
+  }
+
+  COLOR_RING.forEach((color, idx) => {
+    const angle = -Math.PI / 2 + (idx * Math.PI) / 3;
+    drawColorNode(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius, COLOR_META[color]);
+  });
+  drawColorNode(cx, cy, COLOR_META.white);
+
+  // 2. 七色清单
+  const summaryEl = document.getElementById('colorSummary');
+  SEVEN_COLORS.forEach((id) => {
+    const m = COLOR_META[id];
+    const span = document.createElement('span');
+    span.className = 'pill';
+    span.innerHTML = `<span class="dot" style="background:${m.swatch}"></span>${m.label}（${m.baseDeckCount} 张 / ${m.gemCount} 颗）`;
+    summaryEl.appendChild(span);
+  });
+
+  // 3. 时机清单
+  document.getElementById('timingCount').textContent = String(TIMING_LIST.length);
+  const timingEl = document.getElementById('timingList');
+  TIMING_LIST.forEach((t) => {
+    const span = document.createElement('span');
+    span.className = 'pill';
+    span.textContent = `${TIMING_LABELS[t]} (${t})`;
+    timingEl.appendChild(span);
+  });
+
+  // 4. 完整展示全部动作表条目
+  const rowsEl = document.getElementById('actionRows');
+  Object.values(DEFAULT_ACTION_TABLE).forEach((def) => {
+    const tr = document.createElement('tr');
+    const sources = def.allowedSources.map((s) => EFFECT_SOURCE_LABELS[s]).join('、');
+    const durations = def.allowedDurations.map((d) => ACTION_DURATION_LABELS[d]).join(' / ');
+    tr.innerHTML = `
+      <td class="mono">${def.id}</td>
+      <td>${def.label}</td>
+      <td>${sources}</td>
+      <td>${durations}</td>
+      <td>${RETRIGGER_POLICY_LABELS[def.retrigger.policy]}</td>
+    `;
+    rowsEl.appendChild(tr);
+  });
+
+  // 5. 四样约定样本自检（含正例 + 刻意触发拦截的反例）
+  const drawByColor = createEmptyDrawPileByColor();
+  drawByColor.red = 5;
+  drawByColor.yellow = 4;
+  drawByColor.green = 5;
+  drawByColor.cyan = 4;
+  drawByColor.blue = 5;
+  drawByColor.purple = 4;
+  drawByColor.white = 2;
+
+  const sampleStart = {
+    schemaVersion: SCHEMA_VERSION,
+    seed: 'demo-seed-1',
+    player: {
+      deck: [{ uid: 'c1', defId: 'gem_red', kind: 'gem', usage: 'chain', color: 'red', gems: ['red'], enhanced: false, label: '红宝石' }],
+      stats: { attack: 60, damageBonus: 0, critRate: 0.1, critDamage: 1.5 },
+      drawTarget: 4,
+      hearts: 3,
+      maxHearts: 3,
+      buffs: [],
+      allies: [],
+      gearTraits: [],
+      gemLevels: { red: { level: 1, exp: 0 }, green: { level: 1, exp: 0 }, blue: { level: 1, exp: 0 } },
+    },
+    monsters: [{
+      uid: 'm1', defId: 'dual_shield', tier: 'normal', label: '双色盾普通怪',
+      attackDamage: 0.5, initialCountdown: 4,
+      bars: [{ maxHp: 10000, shields: [{ color: 'red', max: 3 }, { color: 'blue', max: 3 }], traits: [] }],
+    }],
+  };
+
+  const sampleSnapshot = {
+    schemaVersion: SCHEMA_VERSION,
+    turn: 1,
+    phase: 'player_input',
+    outcome: null,
+    currentColor: 'red',
+    recordedColors: ['red'],
+    selectedTargetUid: 'm1',
+    player: {
+      hearts: 3, maxHearts: 3, drawTarget: 4, maxHandSize: 12,
+      stats: { attack: 60, damageBonus: 0, critRate: 0.1, critDamage: 1.5 },
+      blocks: { thisTurn: 0, untilConsumed: 1, allyCharges: 0 },
+      gemLevels: {
+        red: { level: 1, exp: 0, nextExp: 10 },
+        green: { level: 1, exp: 0, nextExp: 10 },
+        blue: { level: 1, exp: 0, nextExp: 10 },
+      },
+      buffs: [], allies: [], gearTraits: [],
+    },
+    hand: [
+      { uid: 'h1', hidden: false, defId: 'gem_yellow', kind: 'gem', usage: 'chain', color: 'yellow', gems: ['red', 'green'], relationToCurrent: CHAIN_RELATIONS.CONNECT, label: '黄宝石', enhanced: false },
+      { uid: 'h2', hidden: true, color: null, gems: null, relationToCurrent: CHAIN_RELATIONS.HIDDEN, label: '已遮住' },
+    ],
+    chain: [],
+    drawPileCount: 29,
+    drawPileByColor: drawByColor,
+    discardPileCount: 0,
+    monsters: [{
+      uid: 'm1', defId: 'dual_shield', tier: 'normal', label: '双色盾普通怪',
+      alive: true, barIndex: 0, totalBars: 1, hp: 10000, maxHp: 10000,
+      shields: [{ color: 'red', current: 3, max: 3 }], shieldBroken: false,
+      countdown: 4, attacksDone: 0, attackDamage: 0.5, intentLabel: '打主角 0.5 颗心', activeTraits: [],
+    }],
+  };
+
+  const samplePreview = {
+    schemaVersion: SCHEMA_VERSION,
+    chainLength: 1,
+    steps: [{ cardUid: 'h1', resolvedColor: 'yellow', relation: CHAIN_RELATIONS.CONNECT, multiplierAfter: 2, hits: 4, triggersComplementWhite: false, triggersRainbow: false }],
+    finalMultiplier: 2,
+    hasComplementWhite: false,
+    willTriggerRainbow: false,
+    colorsNeededForRainbow: 4,
+    shieldShred: { red: 1, green: 1, blue: 0 },
+    expectedBreakUids: [],
+    estimatedHits: 4,
+    estimatedDamage: 240,
+  };
+
+  const sampleEvents = [
+    { seq: 1, type: BATTLE_EVENT_TYPES.TURN_START, payload: { turn: 1 } },
+    { seq: 2, type: BATTLE_EVENT_TYPES.DAMAGE_PACKET, payload: { targetUid: 'm1', damage: 240, hitsInPacket: 4, isCrit: false } },
+  ];
+
+  const sampleResult = {
+    schemaVersion: SCHEMA_VERSION,
+    outcome: 'win',
+    remainingHearts: 2.5,
+    maxHearts: 3,
+    gemLevels: { red: { level: 2, exp: 1 }, green: { level: 1, exp: 4 }, blue: { level: 1, exp: 2 } },
+    defeatedMonsters: [{ uid: 'm1', defId: 'dual_shield', tier: 'normal' }],
+    encounteredMonsters: ['dual_shield'],
+    deckChanges: { addedCards: [], removedCardUids: [] },
+    stats: { turns: 3, rainbowCount: 0, maxChainLength: 4, heartsLost: 0.5, shieldBreaks: 1, totalDamage: 11200, maxSingleHit: 210 },
+  };
+
+  const badResultWithLoot = { ...sampleResult, loot: ['gold'] };
+
+  const checks = [
+    { name: '1. 动作表校验', res: validateActionTable(DEFAULT_ACTION_TABLE), expectOk: true, note: `共 ${Object.keys(DEFAULT_ACTION_TABLE).length} 个动作，含持续时间与再触发` },
+    { name: '2. 开战包校验', res: validateBattleStartPacket(sampleStart), expectOk: true, note: '含随机数种子、心上限、装备小特性、怪血条' },
+    { name: '3. 快照 / 预览 / 演出事件', res: { ok: validateBattleSnapshot(sampleSnapshot).ok && validateBattlePreview(samplePreview).ok && validateBattleEvents(sampleEvents).ok, errors: [] }, expectOk: true, note: '含接链提示、牌堆各色计数、遮住手牌防泄漏' },
+    { name: '4. 战斗结果校验 + 掉落边界拦截', res: { ok: validateBattleResult(sampleResult).ok && !validateBattleResult(badResultWithLoot).ok, errors: validateBattleResult(badResultWithLoot).errors }, expectOk: true, note: '正常结果通过；误带 loot 字段成功拦截' },
+  ];
+
+  const checksEl = document.getElementById('contractChecks');
+  checks.forEach((item) => {
+    const passed = item.res.ok === item.expectOk;
+    const div = document.createElement('div');
+    div.className = 'check-item';
+    div.innerHTML = `
+      <div class="title">
+        <strong>${item.name}</strong>
+        <span class="badge ${passed ? 'ok' : 'fail'}">${passed ? '通过' : '失败'}</span>
+      </div>
+      <div class="detail">${item.note}</div>
+    `;
+    checksEl.appendChild(div);
+  });
+
+  // 6. 随机数交互
+  function runRng() {
+    const seed = document.getElementById('seedInput').value.trim() || 'code00-demo';
+    const r1 = createRng(seed);
+    const r2 = createRng(seed);
+    const nums1 = Array.from({ length: 6 }, () => r1.int(1, 999));
+    const nums2 = Array.from({ length: 6 }, () => r2.int(1, 999));
+    const same = nums1.every((n, i) => n === nums2[i]);
+    document.getElementById('rngOut').textContent = `种子 "${seed}" → [${nums1.join(', ')}]（重复运行一致：${same ? '是' : '否'}）`;
+  }
+  document.getElementById('rollBtn').addEventListener('click', runRng);
+  runRng();
+</script>
+</body>
+</html>

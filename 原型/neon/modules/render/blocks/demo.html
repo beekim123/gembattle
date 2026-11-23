@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>code00 · render/blocks 演示</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #12141a;
+    color: #e4e8f0;
+    font: 14px/1.5 system-ui, -apple-system, "PingFang SC", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+  canvas {
+    border: 1px solid #303748;
+    border-radius: 8px;
+    max-width: 96vw;
+    height: auto;
+  }
+  .note { color: #9aa4b6; font-size: 12px; }
+</style>
+</head>
+<body>
+  <canvas id="stage" width="960" height="540"></canvas>
+  <div class="note">modules/render/blocks/demo.html · 纯色块渲染后端演示（假数据，不含任何玩法）</div>
+
+<script type="module">
+  import { createBlockRenderer } from './index.js';
+  import { COLOR_META, COLOR_RING, SEVEN_COLORS } from '../../shared/index.js';
+
+  const canvas = document.getElementById('stage');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const r = createBlockRenderer(canvas, { width: 960, height: 540, dpr });
+
+  r.clear('#171a22');
+
+  // 顶部标题条
+  r.rect({ x: 24, y: 20, w: 912, h: 48, fill: '#222733', stroke: '#363f54', lineWidth: 1.5, radius: 8 });
+  r.text({ text: 'modules/render/blocks 色块后端演示', x: 42, y: 44, size: 18, weight: 'bold', baseline: 'middle' });
+  r.text({ text: '后端：blocks · 逻辑画布 960 × 540', x: 916, y: 44, size: 13, color: '#9aa6bd', align: 'right', baseline: 'middle' });
+
+  // 左区：基础几何图元
+  r.rect({ x: 24, y: 86, w: 440, h: 205, fill: '#1e232e', stroke: '#31384a', radius: 8 });
+  r.text({ text: '1. 基础图元：方块 / 圆 / 线段 / 多边形 / 裁剪', x: 40, y: 102, size: 14, weight: 'bold', color: '#c8d4ea' });
+
+  r.rect({ x: 44, y: 136, w: 88, h: 56, fill: '#4a88e8', stroke: '#dbe8ff', lineWidth: 2, radius: 8 });
+  r.text({ text: '圆角方块', x: 88, y: 164, size: 12, align: 'center', baseline: 'middle' });
+
+  r.circle({ x: 188, y: 164, r: 28, fill: '#46b868', stroke: '#dff7e6', lineWidth: 2 });
+  r.text({ text: '圆', x: 188, y: 164, size: 13, weight: 'bold', align: 'center', baseline: 'middle' });
+
+  r.polygon({
+    points: [
+      { x: 274, y: 134 },
+      { x: 306, y: 164 },
+      { x: 274, y: 194 },
+      { x: 242, y: 164 },
+    ],
+    fill: '#e6c347',
+    stroke: '#fff7d4',
+    lineWidth: 2,
+  });
+  r.text({ text: '菱形', x: 274, y: 164, size: 12, color: '#171a22', weight: 'bold', align: 'center', baseline: 'middle' });
+
+  // 实线与虚线
+  r.line({ x1: 332, y1: 146, x2: 442, y2: 146, color: '#e05252', lineWidth: 3 });
+  r.line({ x1: 332, y1: 178, x2: 442, y2: 178, color: '#3ec2c8', lineWidth: 2, dash: [8, 5] });
+  r.text({ text: '实线 / 虚线', x: 387, y: 204, size: 12, color: '#9aa6bd', align: 'center' });
+
+  // 透明度与裁剪示范
+  r.clipRect({ x: 44, y: 218, w: 180, h: 54 }, () => {
+    r.rect({ x: 44, y: 218, w: 180, h: 54, fill: '#151820', stroke: '#384158' });
+    r.withAlpha(0.75, () => {
+      r.circle({ x: 64, y: 245, r: 34, fill: '#a662df' });
+      r.circle({ x: 112, y: 245, r: 34, fill: '#3ec2c8' });
+      r.circle({ x: 160, y: 245, r: 34, fill: '#e05252' });
+    });
+  });
+  r.text({ text: '裁剪框 + 透明度叠加', x: 240, y: 238, size: 12, color: '#9aa6bd' });
+
+  // 右区：实体色块占位（阶段 5 换像素堆叠的替换口）
+  r.rect({ x: 484, y: 86, w: 452, h: 205, fill: '#1e232e', stroke: '#31384a', radius: 8 });
+  r.text({ text: '2. 实体占位（spriteSlot，未来换像素堆叠只改这一层）', x: 500, y: 102, size: 14, weight: 'bold', color: '#c8d4ea' });
+
+  r.spriteSlot({ x: 506, y: 140, w: 118, h: 124, color: '#3767b5', borderColor: '#b7d2ff', label: '主角色块', sublabel: '心：3 / 3', badge: '远程' });
+  r.spriteSlot({ x: 644, y: 140, w: 126, h: 124, color: '#9e3b46', borderColor: '#ffb8c0', label: '双色盾怪', sublabel: '血：10000', badge: '普通' });
+  r.spriteSlot({ x: 790, y: 140, w: 126, h: 124, color: '#584499', borderColor: '#d7c8ff', label: '看门的占位', sublabel: '3 条血', badge: '3 条' });
+
+  // 底部：七色牌面色块样板（带红绿蓝原色小点）
+  r.rect({ x: 24, y: 310, w: 912, h: 206, fill: '#1e232e', stroke: '#31384a', radius: 8 });
+  r.text({ text: '3. 七色宝石色块样板（直接画出红 / 绿 / 蓝原色小点）', x: 40, y: 326, size: 14, weight: 'bold', color: '#c8d4ea' });
+
+  SEVEN_COLORS.forEach((id, idx) => {
+    const meta = COLOR_META[id];
+    const x = 44 + idx * 126;
+    const y = 362;
+    const w = 110;
+    const h = 132;
+    const darkText = id === 'white' || id === 'yellow' || id === 'cyan';
+
+    r.group(x, y, () => {
+      r.rect({ x: 0, y: 0, w, h, fill: meta.swatch, stroke: '#101218', lineWidth: 2, radius: 10 });
+      r.rect({ x: 6, y: 6, w: w - 12, h: h - 12, stroke: darkText ? '#2c3240' : '#ffffff', lineWidth: 1, radius: 6, alpha: 0.45 });
+      r.text({
+        text: `${meta.label}宝石`,
+        x: w / 2,
+        y: 34,
+        color: darkText ? '#171a22' : '#ffffff',
+        size: 16,
+        weight: 'bold',
+        align: 'center',
+        baseline: 'middle',
+      });
+      r.text({
+        text: `${meta.gemCount} 颗 / ${meta.baseDeckCount} 张`,
+        x: w / 2,
+        y: 62,
+        color: darkText ? '#2c3240' : '#eef2f7',
+        size: 12,
+        align: 'center',
+        baseline: 'middle',
+      });
+
+      // 绘制原色小点
+      const gap = 22;
+      const sx = w / 2 - ((meta.gems.length - 1) * gap) / 2;
+      meta.gems.forEach((g, gi) => {
+        r.circle({
+          x: sx + gi * gap,
+          y: 98,
+          r: 8,
+          fill: COLOR_META[g].swatch,
+          stroke: '#171a22',
+          lineWidth: 2,
+        });
+      });
+    });
+  });
+
+  // 确认色环顺序引用无误
+  void COLOR_RING;
+</script>
+</body>
+</html>

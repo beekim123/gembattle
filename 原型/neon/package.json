@@ -1,0 +1,11 @@
+{
+  "name": "code00-prototype-neon",
+  "private": true,
+  "type": "module",
+  "description": "code00 原型（neon）：浏览器运行，原生 ES 模块 + Canvas 2D，零依赖",
+  "scripts": {
+    "start": "node tools/serve.js --open",
+    "test": "node tools/test.js",
+    "shot": "node tools/shot.js"
+  }
+}

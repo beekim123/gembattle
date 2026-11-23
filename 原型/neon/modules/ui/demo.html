@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>code00 · ui 模块演示</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #12141a;
+    color: #e4e8f0;
+    font: 14px/1.5 system-ui, -apple-system, "PingFang SC", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+  canvas {
+    border: 1px solid #303748;
+    border-radius: 8px;
+    max-width: 96vw;
+    height: auto;
+  }
+  .note { color: #9aa4b6; font-size: 12px; }
+</style>
+</head>
+<body>
+  <canvas id="stage" width="960" height="540"></canvas>
+  <div class="note">modules/ui/demo.html · 按钮、文字、纯数字、面板、提示框演示（全部通过 modules/render 接口绘制）</div>
+
+<script type="module">
+  import { createRenderer } from '../render/index.js';
+  import { COLOR_META } from '../shared/index.js';
+  import {
+    UI_THEME,
+    createButton,
+    createUiLayer,
+    drawNumber,
+    drawPanel,
+    drawText,
+    drawTooltip,
+  } from './index.js';
+
+  const canvas = document.getElementById('stage');
+  const LOGICAL_W = 960;
+  const LOGICAL_H = 540;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const renderer = createRenderer(canvas, { width: LOGICAL_W, height: LOGICAL_H, dpr });
+  const ui = createUiLayer();
+
+  let clickCount = 0;
+  let lastAction = '可点击左侧任意可用按钮，或悬停查看动态提示框';
+  let locked = true;
+
+  function syncButtons() {
+    ui.setButtons([
+      createButton({
+        id: 'btn-primary',
+        label: '主操作按钮',
+        x: 48,
+        y: 148,
+        w: 170,
+        h: 44,
+        variant: 'primary',
+        tooltip: {
+          title: '主操作（primary）',
+          lines: ['用于页面核心入口，比如「试打」或「打出」。'],
+          tag: '状态：可点击',
+          accentColor: COLOR_META.blue.swatch,
+        },
+        onClick: () => {
+          clickCount++;
+          lastAction = `点击了「主操作按钮」，累计 ${clickCount} 次`;
+          renderFrame();
+        },
+      }),
+      createButton({
+        id: 'btn-default',
+        label: '切换禁用演示',
+        x: 234,
+        y: 148,
+        w: 170,
+        h: 44,
+        variant: 'default',
+        tooltip: {
+          title: '普通按钮（default）',
+          lines: ['点击可把下方的按钮在禁用 / 可用之间切换。'],
+          tag: '交互测试',
+        },
+        onClick: () => {
+          locked = !locked;
+          lastAction = `下方按钮已切换为：${locked ? '禁用态' : '可用态'}`;
+          syncButtons();
+          renderFrame();
+        },
+      }),
+      createButton({
+        id: 'btn-danger',
+        label: '危险 / 警示按钮',
+        x: 48,
+        y: 208,
+        w: 170,
+        h: 44,
+        variant: 'danger',
+        tooltip: {
+          title: '警示操作（danger）',
+          lines: ['用于高风险入口，比如精英出口或放弃任务。'],
+          tag: '风险提示',
+          accentColor: COLOR_META.red.swatch,
+        },
+        onClick: () => {
+          clickCount++;
+          lastAction = `点击了「警示按钮」，累计 ${clickCount} 次`;
+          renderFrame();
+        },
+      }),
+      createButton({
+        id: 'btn-disabled',
+        label: locked ? '禁用态按钮' : '已解锁按钮',
+        x: 234,
+        y: 208,
+        w: 170,
+        h: 44,
+        variant: 'primary',
+        disabled: locked,
+        tooltip: {
+          title: '状态演示',
+          lines: [locked ? '禁用态不响应点击。' : '当前已启用，可正常触发回调。'],
+        },
+        onClick: () => {
+          clickCount++;
+          lastAction = `点击了已解锁按钮，累计 ${clickCount} 次`;
+          renderFrame();
+        },
+      }),
+    ]);
+  }
+
+  function renderFrame() {
+    renderer.clear(UI_THEME.bg);
+
+    // 顶栏
+    drawPanel(renderer, { x: 24, y: 20, w: 912, h: 52, fill: '#202532', border: '#38435a', radius: 8, padding: 12 });
+    drawText(renderer, { text: 'modules/ui 公共界面小件演示', x: 42, y: 36, size: 18, weight: 'bold' });
+    drawText(renderer, { text: '按钮 · 文字 · 纯数字 · 面板 · 提示框', x: 916, y: 39, size: 13, color: UI_THEME.textSecondary, align: 'right' });
+
+    // 左上：按钮面板
+    const btnBox = drawPanel(renderer, { x: 24, y: 90, w: 406, h: 224, title: '1. 按钮与状态机', subtitle: '悬停 / 按下 / 禁用' });
+    drawText(renderer, {
+      text: lastAction,
+      x: btnBox.x,
+      y: 268,
+      size: 12,
+      color: '#88d99c',
+      maxWidth: btnBox.w,
+    });
+
+    // 右上：纯数字面板（硬约束：绝不写万/亿）
+    const numBox = drawPanel(renderer, { x: 450, y: 90, w: 486, h: 224, title: '2. 纯数字组件（严禁写万 / 亿）', subtitle: 'formatNumber / drawNumber' });
+    drawText(renderer, { text: '前期单发', x: numBox.x, y: numBox.y + 4, size: 12, color: UI_THEME.textSecondary });
+    drawNumber(renderer, { value: 64, x: numBox.x, y: numBox.y + 24, size: 26, tone: 'normal' });
+
+    drawText(renderer, { text: '中段纯数字', x: numBox.x + 130, y: numBox.y + 4, size: 12, color: UI_THEME.textSecondary });
+    drawNumber(renderer, { value: 52381, x: numBox.x + 130, y: numBox.y + 24, size: 26, tone: 'accent' });
+
+    drawText(renderer, { text: '后期暴击单发', x: numBox.x + 286, y: numBox.y + 4, size: 12, color: UI_THEME.textSecondary });
+    drawNumber(renderer, { value: 156000, x: numBox.x + 286, y: numBox.y + 22, size: 26, tone: 'crit' });
+
+    drawText(renderer, { text: '看门的血条（纯数字显示）', x: numBox.x, y: numBox.y + 84, size: 12, color: UI_THEME.textSecondary });
+    drawNumber(renderer, { value: 28000000, x: numBox.x, y: numBox.y + 104, size: 24, tone: 'normal' });
+
+    drawText(renderer, { text: '剩余心（0.5 步进）', x: numBox.x + 240, y: numBox.y + 84, size: 12, color: UI_THEME.textSecondary });
+    drawNumber(renderer, { value: 2.5, decimals: 'auto', suffix: ' / 3', x: numBox.x + 240, y: numBox.y + 104, size: 24, tone: 'accent' });
+
+    // 左下：自动换行文字与嵌套面板
+    const txtBox = drawPanel(renderer, { x: 24, y: 332, w: 406, h: 184, title: '3. 面板与中文自动折行', subtitle: 'drawPanel + drawText' });
+    drawText(renderer, {
+      text: '所有界面小件都只调用 modules/render/index.js 提供的绘制接口，不直接触碰浏览器 DOM，因此核心布局与点击命中逻辑都能在 Node 中直接运行单测。',
+      x: txtBox.x,
+      y: txtBox.y,
+      size: 13,
+      color: UI_THEME.textPrimary,
+      maxWidth: txtBox.w,
+    });
+    drawText(renderer, {
+      text: '将来阶段 5 替换成像素堆叠后端时，界面层代码保持不变。',
+      x: txtBox.x,
+      y: txtBox.y + 88,
+      size: 12,
+      color: UI_THEME.textSecondary,
+      maxWidth: txtBox.w,
+    });
+
+    // 右下：静态提示框演示（展示防边界裁切与样式）
+    const tipBox = drawPanel(renderer, { x: 450, y: 332, w: 486, h: 184, title: '4. 提示框（自动防裁切）', subtitle: 'drawTooltip' });
+    drawText(renderer, {
+      text: '右侧展示一个贴边定位的提示框样例；悬停左侧按钮也会出现跟随指针的提示框。',
+      x: tipBox.x,
+      y: tipBox.y,
+      size: 12,
+      color: UI_THEME.textSecondary,
+      maxWidth: 195,
+    });
+
+    drawTooltip(
+      renderer,
+      {
+        x: 662,
+        y: 386,
+        maxWidth: 244,
+        title: '功能牌：挡掉下一次攻击',
+        lines: ['无色牌马上用，用完补摸 1 张。', '这一仗里一直留到挡掉为止。'],
+        tag: '持续：挡掉或消耗为止',
+        accentColor: COLOR_META.cyan.swatch,
+      },
+      { width: LOGICAL_W, height: LOGICAL_H },
+    );
+
+    // 按钮与动态悬停提示框绘制在最上层
+    ui.render(renderer);
+  }
+
+  function toLogical(ev) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((ev.clientX - rect.left) / rect.width) * LOGICAL_W,
+      y: ((ev.clientY - rect.top) / rect.height) * LOGICAL_H,
+    };
+  }
+
+  canvas.addEventListener('pointermove', (ev) => {
+    const pt = toLogical(ev);
+    const res = ui.onPointerMove(pt.x, pt.y);
+    canvas.style.cursor = res.cursor;
+    renderFrame();
+  });
+  canvas.addEventListener('pointerdown', (ev) => {
+    const pt = toLogical(ev);
+    ui.onPointerDown(pt.x, pt.y);
+    renderFrame();
+  });
+  canvas.addEventListener('pointerup', (ev) => {
+    const pt = toLogical(ev);
+    ui.onPointerUp(pt.x, pt.y);
+    renderFrame();
+  });
+  canvas.addEventListener('pointerleave', () => {
+    ui.onPointerLeave();
+    canvas.style.cursor = 'default';
+    renderFrame();
+  });
+
+  syncButtons();
+  renderFrame();
+</script>
+</body>
+</html>

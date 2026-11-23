@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>code00 · render 模块演示</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #12141a;
+    color: #e4e8f0;
+    font: 14px/1.5 system-ui, -apple-system, "PingFang SC", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+  canvas {
+    border: 1px solid #303748;
+    border-radius: 8px;
+    max-width: 96vw;
+    height: auto;
+  }
+  .note { color: #9aa4b6; font-size: 12px; }
+</style>
+</head>
+<body>
+  <canvas id="stage" width="960" height="540"></canvas>
+  <div class="note">modules/render/demo.html · 仅通过 ./index.js 调用统一绘制接口（当前后端：blocks）</div>
+
+<script type="module">
+  import { RENDER_BACKEND, createRenderer } from './index.js';
+  import { COLOR_META, COLOR_RING } from '../shared/index.js';
+
+  const canvas = document.getElementById('stage');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const r = createRenderer(canvas, { width: 960, height: 540, dpr });
+
+  r.clear('#151821');
+
+  // 背景网格线（验证 line 与坐标精度）
+  for (let x = 0; x <= 960; x += 40) {
+    r.line({ x1: x, y1: 0, x2: x, y2: 540, color: '#1e2330', lineWidth: 1 });
+  }
+  for (let y = 0; y <= 540; y += 40) {
+    r.line({ x1: 0, y1: y, x2: 960, y2: y, color: '#1e2330', lineWidth: 1 });
+  }
+
+  // 头部
+  r.rect({ x: 28, y: 24, w: 904, h: 52, fill: '#202532', stroke: '#3a455e', lineWidth: 1.5, radius: 8 });
+  r.text({ text: `modules/render 统一接口演示（当前后端：${RENDER_BACKEND}）`, x: 48, y: 50, size: 18, weight: 'bold', baseline: 'middle' });
+  r.text({ text: '画面模块只调这套接口，换正式美术只换此模块', x: 912, y: 50, size: 12, color: '#9fb0cc', align: 'right', baseline: 'middle' });
+
+  // 左侧：通过统一接口绘制色环
+  r.rect({ x: 28, y: 96, w: 360, h: 416, fill: '#1c212c', stroke: '#323a4d', lineWidth: 1.5, radius: 10 });
+  r.text({ text: '色环绘制（circle + line + text）', x: 48, y: 116, size: 15, weight: 'bold' });
+
+  const cx = 208;
+  const cy = 312;
+  const rad = 112;
+  r.circle({ x: cx, y: cy, r: rad, stroke: '#3c465c', lineWidth: 2 });
+
+  for (let i = 0; i < 3; i++) {
+    const a1 = -Math.PI / 2 + (i * Math.PI) / 3;
+    const a2 = a1 + Math.PI;
+    r.line({
+      x1: cx + Math.cos(a1) * rad,
+      y1: cy + Math.sin(a1) * rad,
+      x2: cx + Math.cos(a2) * rad,
+      y2: cy + Math.sin(a2) * rad,
+      color: '#414c66',
+      lineWidth: 1.5,
+      dash: [5, 5],
+    });
+  }
+
+  COLOR_RING.forEach((id, i) => {
+    const a = -Math.PI / 2 + (i * Math.PI) / 3;
+    const x = cx + Math.cos(a) * rad;
+    const y = cy + Math.sin(a) * rad;
+    const m = COLOR_META[id];
+    const dark = id === 'yellow' || id === 'cyan';
+    r.circle({ x, y, r: 28, fill: m.swatch, stroke: '#151821', lineWidth: 2.5 });
+    r.text({ text: m.label, x, y, color: dark ? '#151821' : '#ffffff', size: 15, weight: 'bold', align: 'center', baseline: 'middle' });
+  });
+  r.circle({ x: cx, y: cy, r: 28, fill: COLOR_META.white.swatch, stroke: '#151821', lineWidth: 2.5 });
+  r.text({ text: '白', x: cx, y: cy, color: '#151821', size: 15, weight: 'bold', align: 'center', baseline: 'middle' });
+
+  // 右侧：占位场景草图（不含任何规则，纯色块布局能力验证）
+  r.rect({ x: 408, y: 96, w: 524, h: 416, fill: '#1c212c', stroke: '#323a4d', lineWidth: 1.5, radius: 10 });
+  r.text({ text: '占位色块排版验证（rect + spriteSlot + polygon）', x: 428, y: 116, size: 15, weight: 'bold' });
+
+  // 怪区域示意
+  r.spriteSlot({ x: 432, y: 156, w: 140, h: 120, color: '#9c3e49', borderColor: '#f5b5bc', label: '双色盾怪', sublabel: '血条占位', badge: '倒计时 4' });
+  r.spriteSlot({ x: 594, y: 156, w: 140, h: 120, color: '#397358', borderColor: '#b5f0d2', label: '小怪占位', sublabel: '血条占位', badge: '倒计时 2' });
+  r.spriteSlot({ x: 756, y: 156, w: 152, h: 120, color: '#3c68ad', borderColor: '#bfd8ff', label: '主角色块', sublabel: '心 3 / 3', badge: '挡 1' });
+
+  // 箭头指示
+  r.polygon({
+    points: [
+      { x: 646, y: 312 },
+      { x: 682, y: 312 },
+      { x: 682, y: 300 },
+      { x: 706, y: 322 },
+      { x: 682, y: 344 },
+      { x: 682, y: 332 },
+      { x: 646, y: 332 },
+    ],
+    fill: '#e6c347',
+    stroke: '#151821',
+    lineWidth: 2,
+  });
+
+  // 伤害纯数字展示（不写万/亿）
+  r.rect({ x: 432, y: 298, w: 196, h: 52, fill: '#151821', stroke: '#404b66', radius: 6 });
+  r.text({ text: '纯数字：52381', x: 530, y: 324, color: '#f3d263', size: 18, weight: 'bold', align: 'center', baseline: 'middle' });
+
+  r.rect({ x: 726, y: 298, w: 182, h: 52, fill: '#151821', stroke: '#404b66', radius: 6 });
+  r.text({ text: '顶天单发：156000', x: 817, y: 324, color: '#ff8a8a', size: 16, weight: 'bold', align: 'center', baseline: 'middle' });
+
+  // 底部说明条
+  r.rect({ x: 432, y: 374, w: 476, h: 114, fill: '#151821', stroke: '#323a4d', radius: 8 });
+  r.text({ text: '接口清单：', x: 448, y: 392, size: 13, weight: 'bold', color: '#c8d4ea' });
+  r.text({ text: 'clear · rect · circle · line · polygon · text · measureText', x: 448, y: 418, size: 13, color: '#9fb0cc' });
+  r.text({ text: 'clipRect · withAlpha · group · spriteSlot · getSize · resize', x: 448, y: 442, size: 13, color: '#9fb0cc' });
+  r.text({ text: '全部不依赖 DOM 全局变量，可在 Node 中直接跑单测。', x: 448, y: 466, size: 12, color: '#7ee39b' });
+</script>
+</body>
+</html>

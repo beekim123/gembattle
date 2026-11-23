@@ -1,0 +1,34 @@
+# modules/shared
+
+## 管什么
+
+跨模块共用的基础定义与数据约定（设计稿 5.2、5.9、10.3）：
+
+1. **色环与七种颜色**：红、黄、绿、青、蓝、紫六色环 + 圆心白，外加「变色」「无色」标记、三原色宝石组成、邻色与补色查表、固定 29 张宝石牌数量定义。
+2. **时机与动作表**：15 个时机名、18 个动作定义（含参数说明、允许来源、持续多久、会不会再触发别的）。
+3. **可指定种子的随机数**：`createRng(seed)`，跨平台确定性输出，支持 `next`、`int`、`chance`、`pick`、`shuffle`、`getState`、`setState`、`fork`。
+4. **战斗四样约定及校验函数**：
+   - 动作表（`validateActionTable`、`validateEffect`）
+   - 开战包（`validateBattleStartPacket`）
+   - 战斗快照 / 预览 / 演出事件（`validateBattleSnapshot`、`validateBattlePreview`、`validateBattleEvent`、`validateBattleEvents`）
+   - 战斗结果（`validateBattleResult`，明确拒绝携带掉落字段）
+
+不放玩法逻辑（不算接链、不算伤害、不执行动作），不碰 `document` 或 `canvas`。
+
+## 对外接口
+
+唯一对外入口：`modules/shared/index.js`。
+
+- 颜色常量与查表：`PRIMARY_GEMS`、`COLOR_RING`、`SEVEN_COLORS`、`CARD_COLORS`、`BASE_GEM_DECK_TOTAL`、`CHAIN_RELATIONS`、`CHAIN_RELATION_LABELS`、`COLOR_META`、`isPrimaryGem`、`isRingColor`、`isSevenColor`、`isCardColor`、`getColorMeta`
+- 时机与动作：`EFFECT_SOURCES`、`TIMINGS`、`TIMING_LABELS`、`ACTION_DURATIONS`、`ACTION_DURATION_LABELS`、`RETRIGGER_POLICIES`、`RETRIGGER_POLICY_LABELS`、`ACTIONS`、`DEFAULT_ACTION_TABLE`
+- 随机数：`createRng`
+- 约定校验：`SCHEMA_VERSION`、`BATTLE_EVENT_TYPES`、`createEmptyDrawPileByColor` 及上述 7 个 `validate*` 函数
+
+## 读写哪些数据
+
+- 只读外部传入的数据对象进行结构校验，不修改入参，不读写存档，不持有全局可变状态。
+
+## 单独运行与测试
+
+- 单测（不开浏览器）：`node --test modules/shared/test/shared.test.js`
+- 演示页：启动本地小服务后打开 `/modules/shared/demo.html`
