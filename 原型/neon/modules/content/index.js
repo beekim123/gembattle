@@ -23,6 +23,7 @@ import {
   CORE_ENCOUNTERS,
 } from './monsters/encounters.js';
 import { BUFF_DEFS, BUFF_LIST, BUFF_POOL, TRIAL_BUFF_IDS } from './buffs/buffs.js';
+import { CORE_TRIAL } from './core/core-trial.js';
 import { ALLY_DEFS, ALLY_LIST, TRIAL_ALLY_IDS } from './allies/allies.js';
 
 export {
@@ -54,6 +55,9 @@ export {
   FREE_GEAR,
   HERO_BASE,
 };
+
+/** 核心试玩：只有宝石牌连打 10 只怪（设计稿 10.4，2026-11-24） */
+export { CORE_TRIAL };
 
 /** 试打台默认带的加成、队友（阶段 1 那 4 个加成、2 个队友；试打台上能换） */
 export { TRIAL_BUFF_IDS, TRIAL_ALLY_IDS };
@@ -203,6 +207,27 @@ export function createBattlePacket({
     },
     monsters: cloneMonsters(encounter.monsters, mergedConfig.initialCountdown),
   };
+}
+
+/**
+ * 核心试玩第 index 只怪的开战包（设计稿 10.4）：只有宝石牌，主角属性固定，
+ * 心是上一只打完剩下的，怪的血照 hpScale 放大缩小。
+ */
+export function createCoreTrialPacket({ index = 0, hearts = CORE_TRIAL.hearts, seed = 'core-trial' } = {}) {
+  const fight = CORE_TRIAL.fights[index];
+  if (!fight) throw new Error(`核心试玩没有第 ${index + 1} 只怪`);
+  const packet = createBattlePacket({
+    encounterId: fight.encounterId,
+    presetId: CORE_TRIAL.presetId,
+    extraCards: [],
+    seed: `${seed}-${index + 1}`,
+    rulesConfig: CORE_TRIAL.rulesConfig,
+  });
+  packet.player.hearts = Math.min(packet.player.maxHearts, hearts);
+  for (const m of packet.monsters) {
+    for (const bar of m.bars) bar.maxHp = Math.round((bar.maxHp * fight.hpScale) / 100) * 100;
+  }
+  return packet;
 }
 
 /** 29 张宝石牌的 defId（照固定牌组的顺序） */

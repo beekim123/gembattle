@@ -7,13 +7,14 @@
 | 文件 | 干什么 |
 |---|---|
 | `index.html` | 浏览器入口页。以后套 Electron 的壳也只打开这一个 |
-| `main.js` | 建画布（至少按 1920×1080 画，设计稿 10.6）、存档、注册场景、转发鼠标和键盘；URL 参数直达（`?fresh=1` 新档、`?run=1` 直接进林子、`?encounter=` 直接打一仗、`?scene=trial` 试打台） |
+| `main.js` | 建画布（至少按 1920×1080 画，设计稿 10.6）、存档、注册场景、转发鼠标和键盘。**`OUTER_ON = false`（设计稿 10.4 第 7 版）**：只注册核心试玩和战斗，打开就是核心试玩，`?encounter=` 直接打一仗（只有宝石牌）。改成 true 是原来的整圈：URL 参数直达（`?fresh=1` 新档、`?run=1` 直接进林子、`?encounter=` 直接打一仗、`?scene=trial` 试打台） |
 | `loop.js` | 主循环 |
 | `scene-manager.js` | 场景注册和切换 |
 | `session.js` | 跨场景的东西：这一趟、存档、出发包、结算以后的小结、试打台改的开关、试玩记录（`playLog`，战斗场景每回合记想了几秒、打了几张，`formatPlayLog` 写成文字；试打台「复制试玩记录」、控制台 `__CODE00_APP__.getPlayLog()` 都能拿）。场景每次切换都会重建，所以这些不放在场景里 |
+| `scenes/core-scene.js` | 核心试玩（现在的入口）：10 只怪排一排、剩几颗心、下一只是什么；开打把开战包（`content` 的 `createCoreTrialPacket`）交给战斗场景，带 `returnTo: 'core'`，打完回来记下一只。这一趟放在 `session.core` |
 | `scenes/hub-scene.js` | 大厅：`hub` 摆入口，点了哪个就把工会 / 招募 / 出发 / 卡册的板画在右边；各模块交回的新存档交给 `save` 写；出发时拼出发包 |
 | `scenes/run-scene.js` | 走一趟：`run-rules` + `explore-view`；碰到鬼火换到战斗场景，打完回来；走完结算进存档 |
-| `scenes/battle-scene.js` | 打一仗：`battle-rules` + `battle-view`；走一趟里的仗打完把战斗结果交回走一趟 |
+| `scenes/battle-scene.js` | 打一仗：`battle-rules` + `battle-view`；走一趟里的仗打完把战斗结果交回走一趟（核心试玩的仗交回 `returnTo` 写的场景）；单打一仗「回去」到 `backTo`（默认试打台） |
 | `scenes/trial-scene.js` | 试打台（从大厅的「设置」进）：只打一仗、测手感；开关（设计稿 10.4）改了出发也照着用 |
 
 ## 一局里包怎么递（设计稿 10.0）

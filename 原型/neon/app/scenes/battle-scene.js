@@ -80,6 +80,7 @@ export function createBattleScene(context) {
     view = createBattleView({
       allowAutoArrange: config.rulesConfig?.allowAutoArrange ?? true,
       outcomeMode: config.runPacket ? 'run' : 'single',
+      outcomeLabels: config.outcomeLabels || null,
       callbacks: {
         onSelectTarget(uid) {
           if (battle.selectTarget(uid)) syncView();
@@ -120,10 +121,11 @@ export function createBattleScene(context) {
         onBack() {
           if (config.runPacket) {
             const result = battle.getResult();
-            if (result) context.switchTo('run', { battleResult: result });
+            // 走一趟里的仗回走一趟；核心试玩的仗回核心试玩（returnTo: 'core'）
+            if (result) context.switchTo(config.returnTo || 'run', { battleResult: result });
             return;
           }
-          context.switchTo('trial', {
+          context.switchTo(lastConfig.backTo || 'trial', {
             encounterId: lastConfig.encounterId,
             rulesConfig: lastConfig.rulesConfig,
             buffs: lastConfig.buffs,
@@ -165,7 +167,7 @@ export function createBattleScene(context) {
       } else if (key === 'z' || key === 'Z') {
         if (battle.undoLast()) syncView();
       } else if (key === 'Escape' && !lastConfig.runPacket) {
-        context.switchTo('trial', {
+        context.switchTo(lastConfig.backTo || 'trial', {
           encounterId: lastConfig.encounterId,
           rulesConfig: lastConfig.rulesConfig,
           buffs: lastConfig.buffs,

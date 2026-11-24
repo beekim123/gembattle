@@ -39,6 +39,8 @@ const ALLY_COLORS = ['#9a78c2', '#86d6a6', '#86b4dc', '#e09a62'];
 /**
  * @param {object} [options]
  * @param {boolean} [options.allowAutoArrange=true]
+ * @param {'single'|'run'} [options.outcomeMode='single'] run：打完只有一个按钮，不能再打一次、不能半路走
+ * @param {{win?: string, lose?: string}} [options.outcomeLabels] run 时那个按钮的字（默认「接着走」「看看这一趟」）
  * @param {object} [options.callbacks] onQueueCard(uid, index) / onUnqueueCard(uid) / onMoveChainCard(uid, index) / onPlayInstant(uid)
  *   / onSelectTarget(uid) / onCommitChain() / onAutoArrange(mode) / onClearChain() / onRetry() / onBack()
  */
@@ -272,7 +274,8 @@ export function createBattleView(options = {}) {
   function outcomeButtons() {
     // 走一趟里打的仗：只有一个「接着走」（死了是「看看这一趟」），不能再打一次
     if (options.outcomeMode === 'run') {
-      return [{ id: 'back', x: 410, y: 300, w: 140, h: 36, label: snapshot?.outcome === 'win' ? '接着走' : '看看这一趟' }];
+      const L = options.outcomeLabels || {};
+      return [{ id: 'back', x: 410, y: 300, w: 140, h: 36, label: snapshot?.outcome === 'win' ? (L.win || '接着走') : (L.lose || '看看这一趟') }];
     }
     return [
       { id: 'retry', x: 360, y: 300, w: 110, h: 36, label: '再打一次' },

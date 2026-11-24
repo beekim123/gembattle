@@ -9,6 +9,7 @@ import { createTrialScene } from './scenes/trial-scene.js';
 import { createBattleScene } from './scenes/battle-scene.js';
 import { createRunScene } from './scenes/run-scene.js';
 import { createHubScene } from './scenes/hub-scene.js';
+import { createCoreScene } from './scenes/core-scene.js';
 import { createSaveStore } from '../modules/save/index.js';
 import { formatPlayLog, session } from './session.js';
 import { TRIAL_ALLY_IDS, TRIAL_BUFF_IDS, QUEST_DEFS, buildHeroLoadout } from '../modules/content/index.js';
@@ -46,46 +47,69 @@ const sceneManager = createSceneManager({
 session.saveStore = createSaveStore(window.localStorage);
 session.saveStore.load();
 
-sceneManager.register('home', createHubScene);
-sceneManager.register('trial', createTrialScene); // 试打台：只打一仗、测手感
-sceneManager.register('battle', createBattleScene);
-sceneManager.register('run', createRunScene);
+// 外圈冻住（用户 2026-11-24 定的，设计稿 10.4、设计/做原型的方法.md）：
+// 先把「只用宝石牌打怪」做到好玩，大厅、工会、招募、出发、卡册、走一趟、试打台的入口都关掉。
+// 代码都留着，核心过关以后一层层接回来：把 OUTER_ON 改成 true 就是原来的整圈。
+const OUTER_ON = false;
 
-// 支持通过 URL 参数直达指定仗（方便调试与自动截图，例如 ?encounter=gatekeeper_layer2）
+sceneManager.register('core', createCoreScene); // 核心试玩：只有宝石牌连打 10 只
+sceneManager.register('battle', createBattleScene);
+if (OUTER_ON) {
+  sceneManager.register('home', createHubScene);
+  sceneManager.register('trial', createTrialScene); // 试打台：只打一仗、测手感
+  sceneManager.register('run', createRunScene);
+}
+
 const params = new URLSearchParams(window.location.search);
-if (params.get('fresh') === '1') session.saveStore.reset(); // 截图、测试用：新档
 const directEncounter = params.get('encounter');
-if (directEncounter) {
+if (OUTER_ON) enterOuter();
+else if (directEncounter) {
+  // 截图、调试用：?encounter=dual_shield 直接打一仗（只有宝石牌）
   sceneManager.switchTo('battle', {
     encounterId: directEncounter,
     seed: params.get('seed') || `direct-${directEncounter}`,
-    extraCards: params.get('loadout') === 'pure'
-      ? []
-      : ['fn_draw_2', 'fn_hit_percent_50', 'fn_shred_shield_2', 'fn_block_next'],
-    stressMode: params.get('stress') === '1',
-    // 默认带上 4 个加成、2 个队友（跟试打台一样）；?bare=1 什么都不带
-    buffs: params.get('bare') === '1' ? [] : [...TRIAL_BUFF_IDS],
-    allies: params.get('bare') === '1' ? [] : [...TRIAL_ALLY_IDS],
+    extraCards: [],
+    rulesConfig: { allowAutoArrange: false },
+    backTo: 'core', // 外圈冻住时没有试打台，「回大厅」「Esc」回核心试玩
   });
-} else if (params.get('run') === '1') {
-  // 截图、调试用：穿 C 级武器、带两个 C 级任务直接进林子
-  const save = session.saveStore.get();
-  session.save = save;
-  session.onSettled = (next) => session.saveStore.replace(next);
-  const lo = buildHeroLoadout({ weapon: 'gear_c_weapon_1', armor: null, trinket: null });
-  sceneManager.switchTo('run', {
-    depart: {
-      schemaVersion: SCHEMA_VERSION,
-      seed: params.get('seed') || 'direct-run',
-      zoneId: 'forest',
-      player: { ...lo, extraCards: [], buffs: [], allies: ['ally_assassin_break'] },
-      quests: [{ ...QUEST_DEFS.q_c_gather }, { ...QUEST_DEFS.q_c_hunt }],
-    },
-  });
-} else if (params.get('scene') === 'trial') {
-  sceneManager.switchTo('trial');
-} else {
-  sceneManager.switchTo('home', params.get('panel') ? { panel: params.get('panel') } : null);
+} else sceneManager.switchTo('core');
+
+/** 外圈开着时原来的入口：大厅，或照 URL 参数直达 */
+function enterOuter() {
+  if (params.get('fresh') === '1') session.saveStore.reset(); // 截图、测试用：新档
+  if (directEncounter) {
+    // 支持通过 URL 参数直达指定仗（方便调试与自动截图，例如 ?encounter=gatekeeper_layer2）
+    sceneManager.switchTo('battle', {
+      encounterId: directEncounter,
+      seed: params.get('seed') || `direct-${directEncounter}`,
+      extraCards: params.get('loadout') === 'pure'
+        ? []
+        : ['fn_draw_2', 'fn_hit_percent_50', 'fn_shred_shield_2', 'fn_block_next'],
+      stressMode: params.get('stress') === '1',
+      // 默认带上 4 个加成、2 个队友（跟试打台一样）；?bare=1 什么都不带
+      buffs: params.get('bare') === '1' ? [] : [...TRIAL_BUFF_IDS],
+      allies: params.get('bare') === '1' ? [] : [...TRIAL_ALLY_IDS],
+    });
+  } else if (params.get('run') === '1') {
+    // 截图、调试用：穿 C 级武器、带两个 C 级任务直接进林子
+    const save = session.saveStore.get();
+    session.save = save;
+    session.onSettled = (next) => session.saveStore.replace(next);
+    const lo = buildHeroLoadout({ weapon: 'gear_c_weapon_1', armor: null, trinket: null });
+    sceneManager.switchTo('run', {
+      depart: {
+        schemaVersion: SCHEMA_VERSION,
+        seed: params.get('seed') || 'direct-run',
+        zoneId: 'forest',
+        player: { ...lo, extraCards: [], buffs: [], allies: ['ally_assassin_break'] },
+        quests: [{ ...QUEST_DEFS.q_c_gather }, { ...QUEST_DEFS.q_c_hunt }],
+      },
+    });
+  } else if (params.get('scene') === 'trial') {
+    sceneManager.switchTo('trial');
+  } else {
+    sceneManager.switchTo('home', params.get('panel') ? { panel: params.get('panel') } : null);
+  }
 }
 
 const loop = createGameLoop({

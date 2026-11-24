@@ -8,6 +8,7 @@ import { createTrialScene } from '../scenes/trial-scene.js';
 import { createBattleScene } from '../scenes/battle-scene.js';
 import { createRunScene } from '../scenes/run-scene.js';
 import { createHubScene } from '../scenes/hub-scene.js';
+import { createCoreScene } from '../scenes/core-scene.js';
 import { createSaveStore } from '../../modules/save/index.js';
 import { session } from '../session.js';
 
@@ -252,4 +253,58 @@ test('一整圈：大厅 → 工会接任务、买武器 → 出发 → 空地 �
   assert.equal(after.runs, 1);
   assert.equal(after.gear.owned[0].wear, 6, '出一趟磨 1 点');
   assert.ok(after.album.monsters.length >= 1, '碰到过的怪进卡册');
+});
+
+test('核心试玩：只有宝石牌，打赢回来到下一只、心接着用；输了从第 1 只重来', () => {
+  session.core = null;
+  const { renderer, texts } = makeFakeRenderer();
+  const sm = createSceneManager();
+  sm.register('core', createCoreScene);
+  sm.register('battle', createBattleScene);
+  const tap = (b) => {
+    sm.dispatchPointer({ type: 'move', x: b.x + b.w / 2, y: b.y + b.h / 2 });
+    sm.dispatchPointer({ type: 'down', x: b.x + b.w / 2, y: b.y + b.h / 2 });
+    sm.dispatchPointer({ type: 'up', x: b.x + b.w / 2, y: b.y + b.h / 2 });
+  };
+
+  sm.switchTo('core');
+  sm.render(renderer);
+  assert.ok(texts.includes('打第 1 只'));
+  tap(sm.getCurrentScene().getHitBoxes().find((b) => b.id === 'go'));
+  assert.equal(sm.getCurrentName(), 'battle');
+
+  // 真打一仗：只有宝石牌，没有加成、队友，打完点结算框的键回核心试玩
+  const scene = sm.getCurrentScene();
+  const battle = scene.getBattle();
+  const view = scene.getView();
+  const snap = battle.getSnapshot();
+  assert.ok(snap.hand.every((c) => c.kind === 'gem'));
+  assert.equal(snap.player.buffs.length, 0);
+  assert.equal(snap.player.allies.length, 0);
+  for (let turn = 0; turn < 30 && !battle.getResult(); turn++) {
+    battle.autoArrange('longest');
+    scene.onKeyDown(' ');
+    for (let i = 0; i < 600 && view.isBusy(); i++) sm.update(0.05);
+  }
+  assert.equal(battle.getResult().outcome, 'win');
+  texts.length = 0;
+  sm.render(renderer);
+  assert.ok(texts.includes('下一只'));
+  tap({ x: 410, y: 300, w: 140, h: 36 });
+  assert.equal(sm.getCurrentName(), 'core');
+  assert.equal(session.core.index, 1);
+  assert.equal(session.core.hearts, battle.getResult().remainingHearts);
+
+  // 输了：从头再来，心回满，记下最好打过几只
+  sm.switchTo('core', { battleResult: { outcome: 'lose', remainingHearts: 0, stats: { turns: 6, heartsLost: 3 } } });
+  assert.equal(session.core.status, 'lost');
+  texts.length = 0;
+  sm.render(renderer);
+  assert.ok(texts.includes('从头再来'));
+  tap(sm.getCurrentScene().getHitBoxes().find((b) => b.id === 'go'));
+  assert.equal(session.core.status, 'ready');
+  assert.equal(session.core.index, 0);
+  assert.equal(session.core.hearts, 3);
+  assert.equal(session.core.attempt, 2);
+  assert.equal(session.core.best, 1);
 });

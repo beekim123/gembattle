@@ -30,7 +30,24 @@ const CHROME_CANDIDATES = [
 
 const DEFAULT_JOBS = [
   {
+    name: '核心试玩（只有宝石牌连打 10 只）',
+    path: '/app/',
+    out: 'shots/core.png',
+    width: 1040,
+    height: 600,
+    full: false,
+  },
+  {
+    name: '核心试玩·打一仗（只有宝石牌，没有自动排）',
+    path: '/app/?encounter=dual_shield&seed=shot-core-1',
+    out: 'shots/core-battle.png',
+    width: 1040,
+    height: 600,
+    full: false,
+  },
+  {
     name: '大厅（只摆入口）',
+    outer: true, // 外圈冻住时不截（app/main.js 的 OUTER_ON 改成 true 再用 --outer 截）
     path: '/app/?fresh=1',
     out: 'shots/app.png',
     width: 1040,
@@ -39,6 +56,7 @@ const DEFAULT_JOBS = [
   },
   {
     name: '大厅·工会任务板',
+    outer: true, // 外圈冻住时不截（app/main.js 的 OUTER_ON 改成 true 再用 --outer 截）
     path: '/app/?fresh=1&panel=guild',
     out: 'shots/app-guild.png',
     width: 1040,
@@ -48,6 +66,7 @@ const DEFAULT_JOBS = [
   },
   {
     name: '大厅·出发',
+    outer: true, // 外圈冻住时不截（app/main.js 的 OUTER_ON 改成 true 再用 --outer 截）
     path: '/app/?fresh=1&panel=depart',
     out: 'shots/app-depart.png',
     width: 1040,
@@ -57,6 +76,7 @@ const DEFAULT_JOBS = [
   },
   {
     name: '走一趟·第一片空地',
+    outer: true, // 外圈冻住时不截（app/main.js 的 OUTER_ON 改成 true 再用 --outer 截）
     path: '/app/?fresh=1&run=1&seed=shot-run-1',
     out: 'shots/explore.png',
     width: 1040,
@@ -66,6 +86,7 @@ const DEFAULT_JOBS = [
   },
   {
     name: '试打台·挑这一仗',
+    outer: true, // 外圈冻住时不截（app/main.js 的 OUTER_ON 改成 true 再用 --outer 截）
     path: '/app/?scene=trial',
     out: 'shots/app-start.png',
     width: 1040,
@@ -75,6 +96,7 @@ const DEFAULT_JOBS = [
   },
   {
     name: '实战·双色盾（自动帮排预览）',
+    outer: true, // 外圈冻住时不截（app/main.js 的 OUTER_ON 改成 true 再用 --outer 截）
     path: '/app/?encounter=dual_shield&seed=shot-dual-1',
     out: 'shots/battle-dual-shield.png',
     width: 1040,
@@ -84,6 +106,7 @@ const DEFAULT_JOBS = [
   },
   {
     name: '实战·一群怪（打出飘纯数字）',
+    outer: true, // 外圈冻住时不截（app/main.js 的 OUTER_ON 改成 true 再用 --outer 截）
     path: '/app/?encounter=pack_mixed&seed=shot-pack-1',
     out: 'shots/battle-pack-cast.png',
     width: 1040,
@@ -97,6 +120,7 @@ const DEFAULT_JOBS = [
   },
   {
     name: '实战·看门的 3 条血',
+    outer: true, // 外圈冻住时不截（app/main.js 的 OUTER_ON 改成 true 再用 --outer 截）
     path: '/app/?encounter=gatekeeper_layer2&seed=shot-gate-1',
     out: 'shots/battle-gatekeeper.png',
     width: 1040,
@@ -105,6 +129,7 @@ const DEFAULT_JOBS = [
   },
   {
     name: '实战·万发飘字压测（12 张大链）',
+    outer: true, // 外圈冻住时不截（app/main.js 的 OUTER_ON 改成 true 再用 --outer 截）
     path: '/app/?encounter=dual_shield&stress=1&seed=shot-stress',
     out: 'shots/battle-stress.png',
     width: 1040,
@@ -219,7 +244,9 @@ async function findChrome() {
 }
 
 function parseCliArgs(argv) {
-  if (argv.length === 0) return DEFAULT_JOBS;
+  // 外圈冻住（设计稿 10.4 第 7 版）：默认只截核心试玩和各模块演示页；--outer 连外圈一起截（要先把 OUTER_ON 改成 true）
+  if (argv.length === 0) return DEFAULT_JOBS.filter((j) => !j.outer);
+  if (argv[0] === '--outer') return DEFAULT_JOBS;
 
   const pagePath = argv[0].startsWith('/') ? argv[0] : `/${argv[0]}`;
   let out = 'shots/page.png';

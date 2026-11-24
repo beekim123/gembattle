@@ -15,6 +15,8 @@ import {
   CORE_ENCOUNTERS,
   buildDeck,
   createBattlePacket,
+  CORE_TRIAL,
+  createCoreTrialPacket,
 } from '../index.js';
 
 test('固定宝石牌组严格为 29 张，原型功能牌共 8 种且遵守第 3 版无色马上用规则', () => {
@@ -84,4 +86,21 @@ test('「改规则」用到的名字都在 shared 的 RULE_KEYS 里（写错名�
   ].filter((ef) => ef.action === ACTIONS.MODIFY_RULE);
   assert.ok(effects.length >= 12);
   for (const ef of effects) assert.ok(RULE_KEY_LIST.includes(ef.params.ruleKey), `没登记的规则名：${ef.params.ruleKey}`);
+});
+
+test('核心试玩 10 只：只有 29 张宝石牌、不带加成队友，心接上一只剩的，血照倍数改，开战包都过契约', () => {
+  assert.equal(CORE_TRIAL.fights.length, 10);
+  CORE_TRIAL.fights.forEach((f, i) => {
+    const packet = createCoreTrialPacket({ index: i, hearts: 1.5, seed: 'test-core' });
+    const res = validateBattleStartPacket(packet);
+    assert.equal(res.ok, true, `第 ${i + 1} 只开战包校验失败：\n${res.errors.join('\n')}`);
+    assert.equal(packet.player.deck.length, BASE_GEM_DECK_TOTAL);
+    assert.ok(packet.player.deck.every((c) => c.kind === 'gem'));
+    assert.equal(packet.player.buffs.length, 0);
+    assert.equal(packet.player.allies.length, 0);
+    assert.equal(packet.player.hearts, 1.5);
+    const base = createBattlePacket({ encounterId: f.encounterId, presetId: CORE_TRIAL.presetId, seed: 'x' });
+    assert.equal(packet.monsters[0].bars[0].maxHp, Math.round((base.monsters[0].bars[0].maxHp * f.hpScale) / 100) * 100);
+  });
+  assert.throws(() => createCoreTrialPacket({ index: 10 }));
 });
