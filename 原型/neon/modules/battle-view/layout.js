@@ -1,8 +1,9 @@
 // 战斗画面的区域表（上下布局，用户 2026-11-23 定的）：所有位置都从这里取，画的地方不写死坐标。
-// 逻辑分辨率 960×540。怪在上，链浮在中间，主角和队友在下，手牌在最下面排成一道弧。
+// 坐标是 960×540 的布局单位（设计稿 10.6：画面按 1920×1080 设计，一个单位 = 2 像素）。怪在上，链浮在中间，主角和队友在下，手牌在最下面排成一道弧。
 
-export const W = 960;
-export const H = 540;
+import { SCREEN } from '../shared/index.js';
+
+export const { w: W, h: H } = SCREEN;
 
 export const REGIONS = Object.freeze({
   bar: { h: 30 },

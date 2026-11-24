@@ -32,3 +32,8 @@
 
 - 单测（不开浏览器）：`node --test modules/shared/test/shared.test.js`
 - 演示页：启动本地小服务后打开 `/modules/shared/demo.html`
+
+## 第 4 版加的两样
+
+- `rule-keys.js`：「改规则」动作（`ACTIONS.MODIFY_RULE`）能改的规则名，加成、装备、怪的特性都只能用这里的名字（`RULE_KEYS.xxx`），`content` 的单测会查有没有写错。
+- `screen.js`：画面尺寸 `SCREEN`。画面按 1920×1080 设计，代码坐标用 960×540 的布局单位（设计稿 10.6）。

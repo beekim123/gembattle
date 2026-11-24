@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { createRenderer } from '../../modules/render/index.js';
 import { createGameLoop } from '../loop.js';
 import { createSceneManager } from '../scene-manager.js';
-import { createLobbyScene } from '../scenes/lobby.js';
+import { createTrialScene } from '../scenes/trial-scene.js';
 import { createBattleScene } from '../scenes/battle-scene.js';
 import { createRunScene } from '../scenes/run-scene.js';
 import { createHubScene } from '../scenes/hub-scene.js';
@@ -104,7 +104,7 @@ test('createSceneManager 正确触发 onExit/onEnter 并拦住未注册场景', 
 test('大厅点「试打一仗」→ 挑仗板点「出发」能进实战，拖一张牌打出一回合', () => {
   const { renderer, texts } = makeFakeRenderer();
   const sm = createSceneManager();
-  sm.register('trial', createLobbyScene);
+  sm.register('trial', createTrialScene);
   sm.register('battle', createBattleScene);
 
   sm.switchTo('trial');

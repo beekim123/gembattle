@@ -4,7 +4,7 @@
 // 这一页会动：排链 → 打出 → 一张张飞出去 → 数字炸开 → 合白 / 破盾 / 队友补刀 / 彩虹 → 总数 → 怪的回合。
 // draw(r, scene, t)：t < 0 是还在排链；t ≥ 0 是点了打出以后第 t 秒。
 
-import { COLOR_META, COLOR_RING } from '../../shared/index.js';
+import { COLOR_META, COLOR_RING } from '../../modules/shared/index.js';
 import {
   F, LANE, T, bold, buffIcon, chainJoint, colorRing, fnCard, gemCard, gemDot, hearts, rainbowText,
   smallButton, stackSprite, swatch, txt,

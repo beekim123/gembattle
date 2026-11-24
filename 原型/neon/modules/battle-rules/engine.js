@@ -1,4 +1,4 @@
-// 一仗的完整规则引擎（设计稿 5.1~5.9、10.3 第 3 版）。
+// 一仗的规则引擎（设计稿 5.1~5.9、10.3）。初始状态在 battle-state.js，动作在 actions.js，接链的算法在 chain-math.js，自动帮排在 arrange.js。
 // 不碰 document / canvas / window，可直接跑在 Node 单测和假玩家模拟器里。
 
 import {
@@ -14,6 +14,7 @@ import {
   createEmptyDrawPileByColor,
   createRng,
   validateBattleStartPacket,
+  RULE_KEYS,
 } from '../shared/index.js';
 import { executeAction } from './actions.js';
 import { findBestChainOrder } from './arrange.js';
@@ -26,98 +27,7 @@ import {
   resolveCardForChain,
 } from './chain-math.js';
 
-const DEFAULT_CFG = Object.freeze({
-  // 第 4 版 5.1（用户定的）：每回合先摸 2 张，不到 N 补到 N；回合开始手里最多 N + 2 张
-  drawMode: 'draw_floor',
-  drawPerTurn: 2,
-  handOverN: 2,
-  freeKeepCount: 0,
-  shieldActiveMultiplier: 0.75,
-  shieldBrokenMultiplier: 1.5,
-  shieldBreakPush: 1,
-  initialCountdown: 4,
-  maxHandSize: 12,
-  showExactDamage: true,
-});
-
-function cloneCard(card) {
-  return {
-    uid: card.uid,
-    defId: card.defId,
-    kind: card.kind,
-    usage: card.usage,
-    color: card.color,
-    gems: [...card.gems],
-    enhanced: Boolean(card.enhanced),
-    enhance: card.enhance ? { ...card.enhance } : null, // 宝石强化的方向（6.3）：pain / more / shred / record
-    drawAfterPlay: card.drawAfterPlay ?? 0,
-    label: card.label || card.defId,
-    description: card.description || '',
-    effects: Array.isArray(card.effects)
-      ? card.effects.map((ef) => ({
-          timing: ef.timing,
-          action: ef.action,
-          ...(ef.duration ? { duration: ef.duration } : {}),
-          ...(ef.condition ? { condition: { ...ef.condition } } : {}),
-          params: { ...(ef.params || {}) },
-        }))
-      : [],
-    hidden: false,
-  };
-}
-
-function buildMonsterState(spec) {
-  const firstBar = spec.bars[0];
-  return {
-    uid: spec.uid,
-    defId: spec.defId,
-    tier: spec.tier,
-    label: spec.label,
-    look: spec.look || null,
-    alive: true,
-    attackDamage: spec.attackDamage,
-    initialCountdown: spec.initialCountdown,
-    countdown: spec.initialCountdown,
-    attacksDone: 0,
-    queuedAttackThisTurn: false,
-    bars: spec.bars.map((bar) => ({
-      maxHp: bar.maxHp,
-      shields: bar.shields.map((s) => ({ color: s.color, max: s.max })),
-      traits: bar.traits.map((t) => ({
-        id: t.id,
-        label: t.label,
-        effects: t.effects.map((ef) => ({ ...ef, params: { ...(ef.params || {}) } })),
-      })),
-    })),
-    barIndex: 0,
-    hp: firstBar.maxHp,
-    maxHp: firstBar.maxHp,
-    shields: firstBar.shields.map((s) => ({ color: s.color, current: s.max, max: s.max })),
-    shieldBroken: firstBar.shields.length === 0 ? false : false,
-    // 当前血条内的回合动态状态
-    turnHalvedColor: null,
-    turnIgnoredHitsLeft: 0,
-  };
-}
-
-function getMonsterPassiveRule(monster, ruleKey) {
-  const bar = monster.bars[monster.barIndex];
-  if (!bar) return null;
-  for (const tr of bar.traits) {
-    for (const ef of tr.effects) {
-      if (ef.timing === TIMINGS.PASSIVE && ef.action === ACTIONS.MODIFY_RULE && ef.params?.ruleKey === ruleKey) {
-        return ef.params.value;
-      }
-    }
-  }
-  return null;
-}
-
-function initBarTurnCounters(monster) {
-  const ignoreN = getMonsterPassiveRule(monster, 'ignoreFirstHitsPerTurn');
-  monster.turnIgnoredHitsLeft = typeof ignoreN === 'number' && ignoreN > 0 ? Math.floor(ignoreN) : 0;
-  monster.turnHalvedColor = null;
-}
+import { DEFAULT_CFG, buildMonsterState, cloneCard, getMonsterPassiveRule, initBarTurnCounters } from './battle-state.js';
 
 /**
  * 创建一场战斗状态机实例。
@@ -202,10 +112,10 @@ export function createBattle(startPacket, options = {}) {
   let bonusDrawNextTurn = 0; // 下回合多补几张（合白摸牌的加成）
   let complementDrawUsedThisTurn = false;
   const colorAdvanceOpts = () => ({
-    keepAll: ruleOn('keepRecordedColors'),
-    keepOnComplement: ruleOn('complementKeepsRecorded'),
-    rainbowKeepNeighbors: ruleOn('rainbowKeepsNeighbors'),
-    keepOnBreak: ruleOn('breakKeepsRecorded'),
+    keepAll: ruleOn(RULE_KEYS.keepRecordedColors),
+    keepOnComplement: ruleOn(RULE_KEYS.complementKeepsRecorded),
+    rainbowKeepNeighbors: ruleOn(RULE_KEYS.rainbowKeepsNeighbors),
+    keepOnBreak: ruleOn(RULE_KEYS.breakKeepsRecorded),
   });
 
   // 战绩与试玩统计（10.3 + 10.4）
@@ -295,7 +205,7 @@ export function createBattle(startPacket, options = {}) {
 
   /** 第 4 版摸牌：手里留着 kept 张，回合开始先摸几张（不算「不到 N 补到 N」那步） */
   function floorDrawCount(kept) {
-    const freeKeep = Math.max(0, (cfg.freeKeepCount || 0) + (ruleVal('extraFreeKeep') || 0));
+    const freeKeep = Math.max(0, (cfg.freeKeepCount || 0) + (ruleVal(RULE_KEYS.extraFreeKeep) || 0));
     const cap = Math.min(cfg.maxHandSize, player.drawTarget + (cfg.handOverN ?? 2) + freeKeep + bonusDrawNextTurn);
     return Math.max(0, Math.min((cfg.drawPerTurn ?? 2) + bonusDrawNextTurn, cap - kept));
   }
@@ -304,7 +214,7 @@ export function createBattle(startPacket, options = {}) {
   function nextTurnHandSize(kept) {
     if (cfg.drawMode === 'draw_one') return Math.min(cfg.maxHandSize, kept + 1);
     if (cfg.drawMode === 'draw_floor') return Math.max(player.drawTarget, kept + floorDrawCount(kept));
-    const freeKept = Math.min(kept, Math.max(0, (cfg.freeKeepCount || 0) + (ruleVal('extraFreeKeep') || 0)));
+    const freeKept = Math.min(kept, Math.max(0, (cfg.freeKeepCount || 0) + (ruleVal(RULE_KEYS.extraFreeKeep) || 0)));
     return Math.max(kept, Math.min(cfg.maxHandSize, player.drawTarget + freeKept + bonusDrawNextTurn));
   }
 
@@ -554,9 +464,9 @@ export function createBattle(startPacket, options = {}) {
     if (!metrics.everTookHit) metrics.brokeBeforeFirstHit = true;
 
     // 第 3 版 5.5：特性如「每被破一次盾倒计时 -1」盖掉基础推 1 格
-    const traitDelta = getMonsterPassiveRule(mon, 'shieldBreakCountdownDelta');
+    const traitDelta = getMonsterPassiveRule(mon, RULE_KEYS.shieldBreakCountdownDelta);
     // 加成「破盾更疼但不推倒计时」：基础推的那 1 格没了（怪的特性照旧）
-    const baseDelta = typeof traitDelta === 'number' ? traitDelta : (ruleOn('noBreakPush') ? 0 : cfg.shieldBreakPush);
+    const baseDelta = typeof traitDelta === 'number' ? traitDelta : (ruleOn(RULE_KEYS.noBreakPush) ? 0 : cfg.shieldBreakPush);
 
     const beforeCd = mon.countdown;
     mon.countdown = Math.max(0, mon.countdown + baseDelta);
@@ -581,7 +491,7 @@ export function createBattle(startPacket, options = {}) {
   }
 
   function brokenMult() {
-    return ruleVal('brokenMultiplier') ?? cfg.shieldBrokenMultiplier;
+    return ruleVal(RULE_KEYS.brokenMultiplier) ?? cfg.shieldBrokenMultiplier;
   }
 
   function getMonsterTraitDamageFactor(mon, cardColor, ignoreTraits) {
@@ -589,7 +499,7 @@ export function createBattle(startPacket, options = {}) {
     let factor = 1;
 
     // 特性：回合开始时已集到几种颜色，少受几成（5.8，按回合开始时的数算）
-    const dimPer = getMonsterPassiveRule(mon, 'damageReductionPerRecordedColor');
+    const dimPer = getMonsterPassiveRule(mon, RULE_KEYS.damageReductionPerRecordedColor);
     if (typeof dimPer === 'number' && dimPer > 0 && turnStartRecordedCount > 0) {
       factor *= Math.max(0.1, 1 - dimPer * turnStartRecordedCount);
     }
@@ -836,7 +746,7 @@ export function createBattle(startPacket, options = {}) {
     } else {
       // 补到 N 张；如开启 freeKeepCount，留下的前 K 张不占名额（第 3 版开关）
       const kept = hand.length;
-      const freeKept = Math.min(kept, Math.max(0, (cfg.freeKeepCount || 0) + (ruleVal('extraFreeKeep') || 0)));
+      const freeKept = Math.min(kept, Math.max(0, (cfg.freeKeepCount || 0) + (ruleVal(RULE_KEYS.extraFreeKeep) || 0)));
       const targetHand = Math.min(cfg.maxHandSize, player.drawTarget + freeKept + bonusDrawNextTurn);
       bonusDrawNextTurn = 0;
       const need = Math.max(0, targetHand - kept);
@@ -1011,13 +921,13 @@ export function createBattle(startPacket, options = {}) {
       shields: m.shields.map((s) => ({ color: s.color, current: s.current })),
       broken: m.shieldBroken,
       turnHalvedColor: m.turnHalvedColor,
-      dimPer: getMonsterPassiveRule(m, 'damageReductionPerRecordedColor') || 0,
+      dimPer: getMonsterPassiveRule(m, RULE_KEYS.damageReductionPerRecordedColor) || 0,
     }));
     const simTarget = simMonsters.find((m) => m.uid === primaryTarget?.uid) || simMonsters[0] || null;
 
     let cursor = currentColor;
     let rec = new Set(recordedColors);
-    let mult = ruleOn('keptStartsDouble') && turnStartKeptCount > 0 && chain.length > 0 ? 2 : 1;
+    let mult = ruleOn(RULE_KEYS.keptStartsDouble) && turnStartKeptCount > 0 && chain.length > 0 ? 2 : 1;
     let previewFirstMatch = false;
     let rainbow = false;
     let hasComplementWhite = false;
@@ -1052,7 +962,7 @@ export function createBattle(startPacket, options = {}) {
 
       if (rel === CHAIN_RELATIONS.CONNECT || rel === CHAIN_RELATIONS.COMPLEMENT) {
         mult *= 2;
-      } else if (rel === CHAIN_RELATIONS.BREAK && ruleOn('firstBreakStillDoubles') && !previewBreakUsed) {
+      } else if (rel === CHAIN_RELATIONS.BREAK && ruleOn(RULE_KEYS.firstBreakStillDoubles) && !previewBreakUsed) {
         mult *= 2; // 加成「第一次断色照样 ×2」
         previewBreakUsed = true;
       }
@@ -1081,7 +991,7 @@ export function createBattle(startPacket, options = {}) {
 
       // 合白那一轮白色群攻（不削盾）
       if (isComplement) {
-        for (let round = 0; round < (ruleOn('complementExtraRound') ? 2 : 1); round++)
+        for (let round = 0; round < (ruleOn(RULE_KEYS.complementExtraRound) ? 2 : 1); round++)
         for (const gem of PRIMARY_GEMS) {
           const perHit = eff.attack * gemLevelMultiplier(player.gemLevels[gem].level) * baseHitMultiplier * pPain;
           stepHits += mult * Math.max(1, simMonsters.length);
@@ -1097,7 +1007,7 @@ export function createBattle(startPacket, options = {}) {
       // 实时削盾（仅宝石削盾）
       const shredTargets = resolved.isWhite ? simMonsters : (simTarget ? [simTarget] : []);
       let pPerGem = 1 + (pDir === 'shred' ? 1 : 0);
-      if (!resolved.isWhite && simTarget && !simTarget.broken && ruleOn('firstMatchExtraShred') && !previewFirstMatch
+      if (!resolved.isWhite && simTarget && !simTarget.broken && ruleOn(RULE_KEYS.firstMatchExtraShred) && !previewFirstMatch
         && resolved.gems.some((g) => simTarget.shields.some((sh) => sh.color === g && sh.current > 0))) {
         previewFirstMatch = true;
         pPerGem += 1;
@@ -1143,7 +1053,7 @@ export function createBattle(startPacket, options = {}) {
     // 彩虹再打两遍（吃链尾破盾状态、全体存活怪吃满、不削盾）
     if (rainbow) {
       for (const bt of gemBatchesForRainbow) {
-        const extraHits = bt.count * (ruleOn('rainbowExtraRepeat') ? 3 : 2);
+        const extraHits = bt.count * (ruleOn(RULE_KEYS.rainbowExtraRepeat) ? 3 : 2);
         const perHit = eff.attack * gemLevelMultiplier(player.gemLevels[bt.gem].level) * baseHitMultiplier;
         totalHits += extraHits * Math.max(1, simMonsters.length);
         for (const tm of simMonsters) {
@@ -1352,7 +1262,7 @@ export function createBattle(startPacket, options = {}) {
 
     const eff = getEffectiveStats();
     // 加成「回合结束手里留着牌，下回合的链从 ×2 起」
-    const startDouble = ruleOn('keptStartsDouble') && turnStartKeptCount > 0 && chain.length > 0;
+    const startDouble = ruleOn(RULE_KEYS.keptStartsDouble) && turnStartKeptCount > 0 && chain.length > 0;
     let multRef = { value: startDouble ? 2 : 1 };
     if (startDouble) emit(BATTLE_EVENT_TYPES.EFFECT_TRIGGERED, { source: '留着牌，链从 ×2 起', label: '从 ×2 起' });
     activeChainMultRef = multRef;
@@ -1371,7 +1281,7 @@ export function createBattle(startPacket, options = {}) {
 
       if (rel === CHAIN_RELATIONS.CONNECT || rel === CHAIN_RELATIONS.COMPLEMENT) {
         multRef.value *= 2;
-      } else if (rel === CHAIN_RELATIONS.BREAK && ruleOn('firstBreakStillDoubles') && !chainBreakUsed) {
+      } else if (rel === CHAIN_RELATIONS.BREAK && ruleOn(RULE_KEYS.firstBreakStillDoubles) && !chainBreakUsed) {
         multRef.value *= 2; // 加成「第一次断色照样 ×2」
         chainBreakUsed = true;
         emit(BATTLE_EVENT_TYPES.EFFECT_TRIGGERED, { source: '第一次断色照样 ×2', label: '断色照样 ×2' });
@@ -1463,9 +1373,9 @@ export function createBattle(startPacket, options = {}) {
           });
           const aliveNow = getAliveMonsters();
           // 加成「合白多打的那一轮，再多打一轮」
-          const whiteRounds = ruleOn('complementExtraRound') ? 2 : 1;
+          const whiteRounds = ruleOn(RULE_KEYS.complementExtraRound) ? 2 : 1;
           if (whiteRounds > 1) emit(BATTLE_EVENT_TYPES.EFFECT_TRIGGERED, { source: '合白再多打一轮', label: '再一轮白' });
-          if (ruleOn('complementBonusDraw') && !complementDrawUsedThisTurn) {
+          if (ruleOn(RULE_KEYS.complementBonusDraw) && !complementDrawUsedThisTurn) {
             complementDrawUsedThisTurn = true;
             bonusDrawNextTurn += 1;
             emit(BATTLE_EVENT_TYPES.EFFECT_TRIGGERED, { source: '合白：下回合多摸 1 张', label: '下回合 +1 张' });
@@ -1527,7 +1437,7 @@ export function createBattle(startPacket, options = {}) {
             // 加成「每条链第一张对色的牌，每颗宝石多削 1 格」；强化「破盾：每颗多削 1 格」
             const matches = resolved.gems.some((g) => currentTarget.shields.some((sh) => sh.color === g && sh.current > 0));
             let perGem = 1 + (enhDir === 'shred' ? 1 : 0);
-            if (matches && ruleOn('firstMatchExtraShred') && !firstMatchUsed) {
+            if (matches && ruleOn(RULE_KEYS.firstMatchExtraShred) && !firstMatchUsed) {
               firstMatchUsed = true;
               perGem += 1;
               emit(BATTLE_EVENT_TYPES.EFFECT_TRIGGERED, { source: '第一张对色多削 1 格', label: '多削 1 格' });
@@ -1588,9 +1498,9 @@ export function createBattle(startPacket, options = {}) {
         batches: rainbowBatches.length,
         repeats: 2,
       });
-      const baseDmgMod = (1 + eff.damageBonus + eff.hitPercent) * (1 + (ruleVal('rainbowHitBonus') || 0));
+      const baseDmgMod = (1 + eff.damageBonus + eff.hitPercent) * (1 + (ruleVal(RULE_KEYS.rainbowHitBonus) || 0));
       for (const bt of rainbowBatches) {
-        const extraHits = bt.hits * (ruleOn('rainbowExtraRepeat') ? 3 : 2);
+        const extraHits = bt.hits * (ruleOn(RULE_KEYS.rainbowExtraRepeat) ? 3 : 2);
         const perHitBase = eff.attack * gemLevelMultiplier(player.gemLevels[bt.gem].level) * baseDmgMod;
         for (const mon of getAliveMonsters()) {
           if (!mon.alive) continue;

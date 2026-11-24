@@ -2,20 +2,29 @@
 
 ## 管什么
 
-整个游戏的唯一组装入口（设计稿 10.1、10.2）：
+整个游戏**唯一的组装处**（设计稿 10.0、10.1、10.2）。各模块互相不认识，全靠这里把一块交出来的包递给下一块。
 
-- `index.html`：浏览器入口页（将来阶段 5 套 Electron 壳时也只打开这一个文件）。
-- `main.js`：初始化 `render`、注册 `home`（选仗与开关页）和 `battle`（实战场景）、启动主循环并转发指针和快捷键事件（空格打出、`Z` 撤回、`Esc` 返回）。
-- `loop.js`：主循环（带 dt 限幅，支持无浏览器单步驱动）。
-- `scene-manager.js`：场景注册与切换器。
-- `scenes/lobby.js`：大厅（用户 2026-11-23 定的，跟旧样片一样干净）：整屏森林，左边文字按钮「开始游戏 / 卡册 / 设置 / 退出」。开始游戏 → 右边滑出挑仗板（7 种仗、牌组、加成和队友，点「出发」）；设置 → 「试玩调整」（设计稿 10.4 的手感开关、万发压测）；卡册 → 牌 / 加成 / 队友三栏。阶段 1 没有地图，以后「开始游戏」换成真的出发。
-- `scenes/battle-scene.js`：唯一把 `content`、`battle-rules`、`battle-view` 拼在一起的战斗场景。
+| 文件 | 干什么 |
+|---|---|
+| `index.html` | 浏览器入口页。以后套 Electron 的壳也只打开这一个 |
+| `main.js` | 建画布（至少按 1920×1080 画，设计稿 10.6）、存档、注册场景、转发鼠标和键盘；URL 参数直达（`?fresh=1` 新档、`?run=1` 直接进林子、`?encounter=` 直接打一仗、`?scene=trial` 试打台） |
+| `loop.js` | 主循环 |
+| `scene-manager.js` | 场景注册和切换 |
+| `session.js` | 跨场景的东西：这一趟、存档、出发包、结算以后的小结、试打台改的开关。场景每次切换都会重建，所以这些不放在场景里 |
+| `scenes/hub-scene.js` | 大厅：`hub` 摆入口，点了哪个就把工会 / 招募 / 出发 / 卡册的板画在右边；各模块交回的新存档交给 `save` 写；出发时拼出发包 |
+| `scenes/run-scene.js` | 走一趟：`run-rules` + `explore-view`；碰到鬼火换到战斗场景，打完回来；走完结算进存档 |
+| `scenes/battle-scene.js` | 打一仗：`battle-rules` + `battle-view`；走一趟里的仗打完把战斗结果交回走一趟 |
+| `scenes/trial-scene.js` | 试打台（从大厅的「设置」进）：只打一仗、测手感；开关（设计稿 10.4）改了出发也照着用 |
+
+## 一局里包怎么递（设计稿 10.0）
+
+大厅 `hub-scene` → 出发包 → `run-scene`（`run-rules`）→ 开战包 → `battle-scene`（`battle-rules`）→ 战斗结果 → `run-scene` → 回来包 → `settleRun` → 存档 → 大厅。
 
 ## 依赖边界
 
-- 只导入各模块的唯一对外入口：`../modules/shared/index.js`、`../modules/render/index.js`、`../modules/ui/index.js`、`../modules/content/index.js`、`../modules/battle-rules/index.js`、`../modules/battle-view/index.js`。
+- 只导入各模块的对外入口 `../modules/<模块>/index.js`。`tools/boundary.test.js` 自动查。
 
 ## 单独运行与测试
 
-- 浏览器打开：运行 `npm start` 或双击 `启动.command`，访问 `/app/`
-- 单测（不开浏览器）：`node --test app/test/app.test.js`
+- 浏览器：`npm start` 或双击 `启动.command`，开 `/app/`。
+- 单测：`node --test app/test/app.test.js`。

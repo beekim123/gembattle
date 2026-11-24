@@ -14,8 +14,7 @@
 - `view.js`：`createBattleView`，画面 + 鼠标；
 - `layout.js`：所有位置（`REGIONS`、手牌弧 `fanSlots`、链 `chainSlots`、插第几个 `chainInsertIndex`）；
 - `playback.js`：`buildPlayback(events, prevSnap, nextSnap)`，把一回合的事件排成时间表；
-- `draw.js`：色块小画法（牌、心、宝石点、色环、像素堆叠色块小人……）；
-- `proposals/`：布局候选页（记录用，不进游戏）。
+- 色块小画法（牌、心、宝石点、色环……）在 `ui/kit.js`，空地、大厅也用。以前挑布局的候选页挪到了 `原型/neon/记录/布局候选/`，只当记录。
 
 ## 对外接口
 

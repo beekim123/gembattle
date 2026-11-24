@@ -1,4 +1,4 @@
-// 阶段 2 新加的 8 个加成 + 宝石强化的 4 个方向（设计稿 6.1、6.3；候选见 给用户挑-阶段2到4.md E1、E4）。
+// 阶段 2 新加的 8 个加成 + 宝石强化的 4 个方向（设计稿 6.1、6.3；候选见 记录/给用户挑-阶段2到4.md E1、E4）。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 

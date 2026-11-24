@@ -4,5 +4,3 @@
 export { createBattleView } from './view.js';
 export { buildPlayback } from './playback.js';
 export { REGIONS, fanSlots, chainSlots, monsterSlots } from './layout.js';
-// 色块小画法：大厅这些画面也用，跟战斗一个样子
-export { F, LANE, T, bold, buffIcon, ellipse, fnCard, forest, gemCard, gemDot, stackSprite, swatch, txt } from './draw.js';

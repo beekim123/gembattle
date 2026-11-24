@@ -1,24 +1,24 @@
 // app/main.js —— 唯一组装处。
 // 只从各模块对外入口 index.js 导入，不伸手进模块内部。
 
-import { SCHEMA_VERSION } from '../modules/shared/index.js';
+import { SCHEMA_VERSION, SCREEN } from '../modules/shared/index.js';
 import { RENDER_BACKEND, createRenderer } from '../modules/render/index.js';
 import { createGameLoop } from './loop.js';
 import { createSceneManager } from './scene-manager.js';
-import { createLobbyScene } from './scenes/lobby.js';
+import { createTrialScene } from './scenes/trial-scene.js';
 import { createBattleScene } from './scenes/battle-scene.js';
 import { createRunScene } from './scenes/run-scene.js';
 import { createHubScene } from './scenes/hub-scene.js';
 import { createSaveStore } from '../modules/save/index.js';
 import { session } from './session.js';
-import { DEFAULT_ALLY_IDS, DEFAULT_BUFF_IDS, QUEST_DEFS, buildHeroLoadout } from '../modules/content/index.js';
+import { TRIAL_ALLY_IDS, TRIAL_BUFF_IDS, QUEST_DEFS, buildHeroLoadout } from '../modules/content/index.js';
 
 // 画面按 1920×1080 设计（用户 2026-11-23 定的，设计稿 10 节）。
 // 代码里的坐标用「布局单位」：960×540，一个单位 = 1920×1080 上的 2 个像素。
 // 画的时候至少按 1920×1080 的清晰度画；窗口在屏幕上更大（2K、4K），就照屏幕上的真像素画。
-const LOGICAL_WIDTH = 960;
-const LOGICAL_HEIGHT = 540;
-const MIN_SCALE = 2; // 1920 / 960
+const LOGICAL_WIDTH = SCREEN.w;
+const LOGICAL_HEIGHT = SCREEN.h;
+const MIN_SCALE = SCREEN.designW / SCREEN.w; // 2
 const MAX_SCALE = 4; // 4K
 
 const canvas = document.getElementById('game-canvas');
@@ -47,7 +47,7 @@ session.saveStore = createSaveStore(window.localStorage);
 session.saveStore.load();
 
 sceneManager.register('home', createHubScene);
-sceneManager.register('trial', createLobbyScene); // 试打台：只打一仗、测手感
+sceneManager.register('trial', createTrialScene); // 试打台：只打一仗、测手感
 sceneManager.register('battle', createBattleScene);
 sceneManager.register('run', createRunScene);
 
@@ -64,8 +64,8 @@ if (directEncounter) {
       : ['fn_draw_2', 'fn_hit_percent_50', 'fn_shred_shield_2', 'fn_block_next'],
     stressMode: params.get('stress') === '1',
     // 默认带上 4 个加成、2 个队友（跟试打台一样）；?bare=1 什么都不带
-    buffs: params.get('bare') === '1' ? [] : [...DEFAULT_BUFF_IDS],
-    allies: params.get('bare') === '1' ? [] : [...DEFAULT_ALLY_IDS],
+    buffs: params.get('bare') === '1' ? [] : [...TRIAL_BUFF_IDS],
+    allies: params.get('bare') === '1' ? [] : [...TRIAL_ALLY_IDS],
   });
 } else if (params.get('run') === '1') {
   // 截图、调试用：穿 C 级武器、带两个 C 级任务直接进林子

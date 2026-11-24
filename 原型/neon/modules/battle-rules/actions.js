@@ -8,6 +8,7 @@ import {
   COLOR_META,
   COLOR_RING,
   PRIMARY_GEMS,
+  RULE_KEYS,
 } from '../shared/index.js';
 import { pickColorsToRecord } from './chain-math.js';
 
@@ -115,7 +116,7 @@ export const ACTION_HANDLERS = Object.freeze({
   [ACTIONS.MODIFY_RULE](ctx, params, meta) {
     const ruleKey = params.ruleKey;
     if (!ruleKey) return;
-    if (ruleKey === 'halveRandomRingColor' && meta.monster) {
+    if (ruleKey === RULE_KEYS.halveRandomRingColor && meta.monster) {
       // 5.8：每回合挑色环上的一种颜色减半（白不会被挑中）
       const picked = ctx.rng.pick(COLOR_RING);
       meta.monster.turnHalvedColor = picked;

@@ -2,7 +2,7 @@
 // 主推阶段 1 规定的 5 种仗（双色盾、集色减伤、倒计时短、一群、看门的），另附 5.8 的另 2 种仗（挑色减半、精英前 N 发不掉血）供拓展试打。
 // 原型阶段不取名，怪与特性只写功能。
 
-import { ACTIONS, ACTION_DURATIONS, TIMINGS } from '../../shared/index.js';
+import { ACTIONS, ACTION_DURATIONS, TIMINGS, RULE_KEYS } from '../../shared/index.js';
 
 /**
  * 阶段 1 的战斗遭遇列表（外头区第 1、2 层口径，参考设计稿 9.2）：
@@ -12,7 +12,7 @@ import { ACTIONS, ACTION_DURATIONS, TIMINGS } from '../../shared/index.js';
 export const ENCOUNTERS = Object.freeze({
   dual_shield: Object.freeze({
     id: 'dual_shield',
-    stage1Core: true,
+    core: true,
     layer: 1,
     label: '双色盾普通怪',
     summary: '1 条血，红 3 格 + 蓝 3 格双色盾；试破盾与组合色当桥',
@@ -42,7 +42,7 @@ export const ENCOUNTERS = Object.freeze({
 
   recorded_damage_down: Object.freeze({
     id: 'recorded_damage_down',
-    stage1Core: true,
+    core: true,
     layer: 1,
     label: '集色减伤普通怪',
     summary: '1 条血，回合开始每集到 1 色少受 10% 伤害；试集色与出伤取舍',
@@ -71,7 +71,7 @@ export const ENCOUNTERS = Object.freeze({
                     timing: TIMINGS.PASSIVE,
                     action: ACTIONS.MODIFY_RULE,
                     duration: ACTION_DURATIONS.THIS_BATTLE,
-                    params: Object.freeze({ ruleKey: 'damageReductionPerRecordedColor', value: 0.1 }),
+                    params: Object.freeze({ ruleKey: RULE_KEYS.damageReductionPerRecordedColor, value: 0.1 }),
                   }),
                 ]),
               }),
@@ -84,7 +84,7 @@ export const ENCOUNTERS = Object.freeze({
 
   fast_countdown: Object.freeze({
     id: 'fast_countdown',
-    stage1Core: true,
+    core: true,
     layer: 1,
     label: '倒计时短普通怪',
     summary: '1 条血，初始倒计时只有 2；试抢杀、破盾推条或防守',
@@ -119,7 +119,7 @@ export const ENCOUNTERS = Object.freeze({
 
   pack_mixed: Object.freeze({
     id: 'pack_mixed',
-    stage1Core: true,
+    core: true,
     layer: 1,
     label: '一群怪（1 厚 2 薄）',
     summary: '1 只血厚带单色盾 + 2 只血少、倒计时 2 的小怪；试选目标、溢出、单攻与群攻',
@@ -184,7 +184,7 @@ export const ENCOUNTERS = Object.freeze({
 
   gatekeeper_layer2: Object.freeze({
     id: 'gatekeeper_layer2',
-    stage1Core: true,
+    core: true,
     layer: 2,
     label: '看门的（3 条血换特性）',
     summary: '3 条血各 16000，每条换特性：盾每回合换色 → 每次出手清空集色 → 被破盾倒计时 -1',
@@ -253,7 +253,7 @@ export const ENCOUNTERS = Object.freeze({
                     timing: TIMINGS.PASSIVE,
                     action: ACTIONS.MODIFY_RULE,
                     duration: ACTION_DURATIONS.THIS_BATTLE,
-                    params: Object.freeze({ ruleKey: 'shieldBreakCountdownDelta', value: -1 }),
+                    params: Object.freeze({ ruleKey: RULE_KEYS.shieldBreakCountdownDelta, value: -1 }),
                   }),
                 ]),
               }),
@@ -267,7 +267,7 @@ export const ENCOUNTERS = Object.freeze({
   // 以下 2 种来自设计稿 5.8 另两场原型仗，方便后续随时试打
   halve_one_color: Object.freeze({
     id: 'halve_one_color',
-    stage1Core: false,
+    core: false,
     layer: 1,
     label: '挑色减半普通怪',
     summary: '1 条血，每回合挑色环上 1 色，该色牌打它伤害减半（白不被挑中）',
@@ -296,7 +296,7 @@ export const ENCOUNTERS = Object.freeze({
                     timing: TIMINGS.TURN_START,
                     action: ACTIONS.MODIFY_RULE,
                     duration: ACTION_DURATIONS.THIS_TURN,
-                    params: Object.freeze({ ruleKey: 'halveRandomRingColor', value: 0.5 }),
+                    params: Object.freeze({ ruleKey: RULE_KEYS.halveRandomRingColor, value: 0.5 }),
                   }),
                 ]),
               }),
@@ -309,7 +309,7 @@ export const ENCOUNTERS = Object.freeze({
 
   elite_ignore_first_hits: Object.freeze({
     id: 'elite_ignore_first_hits',
-    stage1Core: false,
+    core: false,
     layer: 1,
     label: '精英（前 N 发不掉血）',
     summary: '2 条血各 7500，打一下掉 1 颗心；每回合前 12 发不掉血',
@@ -338,7 +338,7 @@ export const ENCOUNTERS = Object.freeze({
                     timing: TIMINGS.PASSIVE,
                     action: ACTIONS.MODIFY_RULE,
                     duration: ACTION_DURATIONS.THIS_BATTLE,
-                    params: Object.freeze({ ruleKey: 'ignoreFirstHitsPerTurn', value: 12 }),
+                    params: Object.freeze({ ruleKey: RULE_KEYS.ignoreFirstHitsPerTurn, value: 12 }),
                   }),
                 ]),
               }),
@@ -358,7 +358,7 @@ export const ENCOUNTERS = Object.freeze({
                     timing: TIMINGS.PASSIVE,
                     action: ACTIONS.MODIFY_RULE,
                     duration: ACTION_DURATIONS.THIS_BATTLE,
-                    params: Object.freeze({ ruleKey: 'ignoreFirstHitsPerTurn', value: 12 }),
+                    params: Object.freeze({ ruleKey: RULE_KEYS.ignoreFirstHitsPerTurn, value: 12 }),
                   }),
                 ]),
               }),
@@ -370,8 +370,8 @@ export const ENCOUNTERS = Object.freeze({
   }),
 });
 
-export const STAGE1_CORE_ENCOUNTERS = Object.freeze(
-  Object.values(ENCOUNTERS).filter((e) => e.stage1Core),
+export const CORE_ENCOUNTERS = Object.freeze(
+  Object.values(ENCOUNTERS).filter((e) => e.core),
 );
 
 export const ALL_ENCOUNTERS = Object.freeze(Object.values(ENCOUNTERS));

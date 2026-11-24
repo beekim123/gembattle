@@ -1,5 +1,5 @@
 // 3~4 个小事件（设计稿 7.1：二选一，有得有失；扣心最多扣到剩半颗）。
-// 只写功能，样子和说法以后跟用户定。候选见 给用户挑-阶段2到4.md E3。
+// 只写功能，样子和说法以后跟用户定。定在设计稿 9.3（第 4 版）；当初的候选在 记录/给用户挑-阶段2到4.md E3。
 // effects 的 kind 由 run-rules 认：lose_hearts / gain_hearts / pay_gold / gain_gold / reward /
 // add_junk / enhance_random_gem / remove_random_function / add_random_function。
 

@@ -1,8 +1,8 @@
 // 布局候选用的画图小件（只给 proposals/ 的假数据页用，用户挑定以后，留下的做法搬进主题和画面模块）。
 // 全是色块：怪、主角、队友画成一摞往上叠的色块，大小就是以后像素堆叠立绘要占的位子。
 
-import { COLOR_META, COLOR_RING } from '../../shared/index.js';
-import { wrapText } from '../../ui/index.js';
+import { COLOR_META, COLOR_RING } from '../../modules/shared/index.js';
+import { wrapText } from '../../modules/ui/index.js';
 
 const FONT = 'system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
 

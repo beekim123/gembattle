@@ -12,7 +12,7 @@ import {
   BUFF_LIST,
   DECK_LOADOUTS,
   FUNCTION_CARD_LIST,
-  STAGE1_CORE_ENCOUNTERS,
+  CORE_ENCOUNTERS,
   buildDeck,
   createBattlePacket,
 } from '../index.js';
@@ -32,7 +32,7 @@ test('固定宝石牌组严格为 29 张，原型功能牌共 8 种且遵守第 
 });
 
 test('阶段 1 核心 5 种仗与全部 7 种仗拼出的开战包全部通过 shared 契约校验', () => {
-  assert.equal(STAGE1_CORE_ENCOUNTERS.length, 5);
+  assert.equal(CORE_ENCOUNTERS.length, 5);
   assert.equal(ALL_ENCOUNTERS.length, 7);
 
   for (const encounter of ALL_ENCOUNTERS) {
@@ -72,4 +72,16 @@ test('13 个加成（12 个 + 1 个要解锁）、4 个队友带进开战包：�
   packet.player.buffs[0].effects[0].params.target = 'x';
   assert.notEqual(BUFF_LIST[0].effects[0].params.target, 'x');
   assert.throws(() => createBattlePacket({ encounterId: 'dual_shield', buffs: ['nope'] }), /未知的加成/);
+});
+
+test('「改规则」用到的名字都在 shared 的 RULE_KEYS 里（写错名字会悄悄不生效）', async () => {
+  const C = await import('../index.js');
+  const { ACTIONS, RULE_KEY_LIST } = await import('../../shared/index.js');
+  const effects = [
+    ...C.BUFF_LIST.flatMap((b) => b.effects || []),
+    ...Object.values(C.GEAR_DEFS).flatMap((g) => g.traits?.flatMap((t) => t.effects || []) || g.effects || []),
+    ...Object.values(C.ENCOUNTERS).flatMap((e) => e.monsters.flatMap((m) => m.bars.flatMap((b) => b.traits.flatMap((t) => t.effects || [])))),
+  ].filter((ef) => ef.action === ACTIONS.MODIFY_RULE);
+  assert.ok(effects.length >= 12);
+  for (const ef of effects) assert.ok(RULE_KEY_LIST.includes(ef.params.ruleKey), `没登记的规则名：${ef.params.ruleKey}`);
 });

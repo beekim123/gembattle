@@ -1,7 +1,7 @@
-// 9 件装备 + 一套免费的（设计稿 6.5、9.2；候选见 给用户挑-阶段2到4.md F2）。
+// 9 件装备 + 一套免费的（设计稿 8.1、9.2，具体的数定在 9.3；当初的候选在 记录/给用户挑-阶段2到4.md F2）。
 // stats 是加在主角底子上的；trait 是装备的小特性（一个弱一点的加成，写成「时机 + 动作」）。
 
-import { ACTIONS, TIMINGS } from '../../shared/index.js';
+import { ACTIONS, TIMINGS, RULE_KEYS } from '../../shared/index.js';
 
 /** 主角底子（9.2：攻击 30） */
 export const HERO_BASE = Object.freeze({ attack: 30, damageBonus: 0, critRate: 0.1, critDamage: 1.5, hearts: 3, drawTarget: 4 });
@@ -26,7 +26,7 @@ export const GEAR_DEFS = Object.freeze({
   gear_c_trinket_2: Object.freeze({ id: 'gear_c_trinket_2', slot: 'trinket', grade: 'C', label: '饰品：暴伤 +0.3', price: 75, uses: 7, stats: { critDamage: 0.3 } }),
   gear_c_trinket_3: Object.freeze({
     id: 'gear_c_trinket_3', slot: 'trinket', grade: 'C', label: '饰品：增伤 +10%，彩虹每发 +20%', price: 90, uses: 7, stats: { damageBonus: 0.1 },
-    trait: { label: '彩虹那两遍每发 +20%', effects: [{ timing: TIMINGS.BATTLE_START, action: ACTIONS.MODIFY_RULE, duration: 'this_battle', params: { ruleKey: 'rainbowHitBonus', value: 0.2 } }] },
+    trait: { label: '彩虹那两遍每发 +20%', effects: [{ timing: TIMINGS.BATTLE_START, action: ACTIONS.MODIFY_RULE, duration: 'this_battle', params: { ruleKey: RULE_KEYS.rainbowHitBonus, value: 0.2 } }] },
   }),
 });
 

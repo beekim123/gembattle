@@ -1,4 +1,4 @@
-// 原型的 4 个队友（设计稿 5.7、7.4；候选在 原型/neon/给用户挑-画面和加成队友.md C 段、给用户挑-阶段2到4.md F1）。
+// 原型的 4 个队友（设计稿 5.7、7.4，定在 9.3；当初的候选在 记录/给用户挑-画面和加成队友.md C 段、记录/给用户挑-阶段2到4.md F1）。
 // 先照 claude 的倾向做（刺客、辅助是阶段 1 的；坦克、战士是阶段 3 加的），用户还没拍板。
 // explore 是探索的小本事（run-rules 认 kind）：reveal_hidden / rest_extra / event_half_damage / elite_gold。
 // role / mode 照 shared 约定；roleTag 是画面上写的一个字（刺、辅），只是职业，不是名字。
@@ -62,6 +62,6 @@ export const ALLY_DEFS = Object.freeze({
 });
 
 /** 阶段 1 试打默认带的 2 个（跟以前一样） */
-export const STAGE1_ALLY_IDS = Object.freeze(['ally_assassin_break', 'ally_support_cards']);
+export const TRIAL_ALLY_IDS = Object.freeze(['ally_assassin_break', 'ally_support_cards']);
 
 export const ALLY_LIST = Object.freeze(Object.values(ALLY_DEFS));

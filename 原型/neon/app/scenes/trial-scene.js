@@ -1,10 +1,6 @@
-// 大厅（用户 2026-11-23 定的，见 给用户挑-画面和加成队友.md D2）：
-// 跟旧样片的大厅一样干净：整屏森林，左上大字 code00，下面一列没框的文字按钮。
-// 要配置的东西不摆在大厅上：
-//   - 开始游戏：右边滑出一块板，挑这一仗（仗、牌组、加成和队友），点「出发」；
-//   - 设置：「试玩调整」，测手感用的开关和万发压测都收在这里；
-//   - 卡册：牌 / 加成 / 队友三栏。
-// 阶段 1 还没有地图，「开始游戏」先直接接挑仗板；以后有了冒险再换成真的出发。
+// 试打台（从「设置」进）：只打一仗、测手感。原来阶段 1 的大厅，阶段 3 有了真大厅（hub-scene.js）以后改成这个。
+// 左边文字按钮：试打一仗（挑仗、牌组、加成和队友）/ 牌和加成 / 开关（设计稿 10.4 的手感开关、万发压测）/ 回大厅。
+// 这里改的开关写进 session.rulesConfig，出发走一趟也照着用。
 // 只经各模块 index.js 导入，不碰 DOM。
 
 import {
@@ -12,18 +8,17 @@ import {
   ALL_ENCOUNTERS,
   BUFF_LIST,
   DECK_LOADOUTS,
-  DEFAULT_ALLY_IDS,
-  DEFAULT_BUFF_IDS,
+  TRIAL_ALLY_IDS,
+  TRIAL_BUFF_IDS,
   DEFAULT_RULES_CONFIG,
   FUNCTION_CARD_LIST,
   GEM_CARD_DEFS,
 } from '../../modules/content/index.js';
-import { COLOR_META, SEVEN_COLORS } from '../../modules/shared/index.js';
+import { COLOR_META, SEVEN_COLORS, SCREEN } from '../../modules/shared/index.js';
 import { session } from '../session.js';
-import { F, LANE, T, bold, buffIcon, fnCard, forest, gemCard, stackSprite, txt } from '../../modules/battle-view/index.js';
+import { F, LANE, T, bold, buffIcon, fnCard, forest, gemCard, inRect, stackSprite, txt } from '../../modules/ui/index.js';
 
-const W = 960;
-const H = 540;
+const { w: W, h: H } = SCREEN;
 const LOADOUT_IDS = ['all_8_functions', 'starter_4_functions', 'pure_gems'];
 const LOADOUT_SHORT = { all_8_functions: '宝石 + 8 种功能牌', starter_4_functions: '宝石 + 4 张常用', pure_gems: '只有宝石' };
 const N_VALUES = [4, 5, 6, 8];
@@ -39,7 +34,6 @@ const PANEL = { x: 392, y: 26, w: 544, h: 488 };
 const ROLE_COLOR = { assassin: '#9a78c2', support: '#86d6a6', tank: '#86b4dc', warrior: '#e09a62' };
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const inRect = (b, x, y) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
 
 /** 按宽度折行（中文一个字一个字量） */
 function wrap(r, s, maxW, size) {
@@ -52,13 +46,13 @@ function wrap(r, s, maxW, size) {
   return lines;
 }
 
-export function createLobbyScene(context) {
+export function createTrialScene(context) {
   let encounterId = 'dual_shield';
   let loadoutIdx = 0;
   let drawTargetIdx = 0;
   let rulesConfig = { ...DEFAULT_RULES_CONFIG, ...(session.rulesConfig || {}) };
-  let buffIds = new Set(DEFAULT_BUFF_IDS);
-  let allyIds = new Set(DEFAULT_ALLY_IDS);
+  let buffIds = new Set(TRIAL_BUFF_IDS);
+  let allyIds = new Set(TRIAL_ALLY_IDS);
   let battleCounter = 1;
 
   let panel = null; // null | 'start' | 'album' | 'settings'
@@ -177,7 +171,7 @@ export function createLobbyScene(context) {
       const h = hot === b.id;
       r.rect({ x: b.x, y: b.y, w: b.w, h: b.h, radius: 8, fill: on ? '#1d2840' : '#11151d', stroke: on ? GOLD : (h ? '#5a6788' : '#2c3446'), lineWidth: on ? 1.5 : 1 });
       txt(r, enc.label, b.x + 12, b.y + b.h / 2, { size: F.s, weight: on ? 'bold' : 'normal', color: on ? CREAM : T.text });
-      if (!enc.stage1Core) txt(r, '拓展', b.x + b.w - 12, b.y + b.h / 2, { size: 11, align: 'right', color: T.text3 });
+      if (!enc.core) txt(r, '拓展', b.x + b.w - 12, b.y + b.h / 2, { size: 11, align: 'right', color: T.text3 });
       boxes.push({ ...b, info: `${enc.label}：${enc.summary}`, onClick: () => { encounterId = enc.id; } });
     });
 

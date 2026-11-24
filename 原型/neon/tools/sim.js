@@ -8,7 +8,7 @@ import {
   BUFF_LIST,
   DECK_LOADOUTS,
   FUNCTION_CARD_LIST,
-  STAGE1_CORE_ENCOUNTERS,
+  CORE_ENCOUNTERS,
   createBattlePacket,
 } from '../modules/content/index.js';
 
@@ -118,7 +118,7 @@ console.log(`=== code00 阶段 1 假玩家模拟器（每组 ${RUNS} 仗） ===\
 
 // 1. 4 种假玩家 × 5 种核心仗（带 4 张常用功能牌）
 console.log('【一】5 种核心仗 × 4 种假玩家（29 宝石 + 4 张常用功能牌）');
-for (const enc of STAGE1_CORE_ENCOUNTERS) {
+for (const enc of CORE_ENCOUNTERS) {
   console.log(`\n▶ ${enc.label}（${enc.id}，推荐档位：${enc.recommendedPreset}）`);
   for (const bot of BOTS) {
     const r = runBatch({
@@ -200,7 +200,7 @@ const extras = [
   ...ALLY_LIST.map((a) => ({ label: `队友：${a.label}`, buffs: [], allies: [a.id] })),
   { label: '全带', buffs: BUFF_LIST.map((b) => b.id), allies: ALLY_LIST.map((a) => a.id) },
 ];
-for (const enc of STAGE1_CORE_ENCOUNTERS) {
+for (const enc of CORE_ENCOUNTERS) {
   console.log(`\n▶ ${enc.label}（${enc.id}）`);
   for (const ex of extras) {
     const r = runBatch({ encounterId: enc.id, bot: BOTS[0], extraCards: DECK_LOADOUTS.starter_4_functions.extraCards, buffs: ex.buffs, allies: ex.allies });

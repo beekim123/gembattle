@@ -5,10 +5,10 @@
 // 打完出口亮起来，走进出口去下一片。等着挑的东西（奖励三选一、强化、事件、歇脚）弹一块板。
 // 样子全走 render.drawActor(look)，以后换成堆叠美术不改这里。
 
-import { F, LANE, T, bold, buffIcon, ellipse, fnCard, gemCard, hearts, smallButton, swatch, txt, wrapText } from '../ui/index.js';
+import { SCREEN } from '../shared/index.js';
+import { F, LANE, T, bold, buffIcon, ellipse, fnCard, gemCard, hearts, inRect, smallButton, swatch, txt, wrapText } from '../ui/index.js';
 
-const W = 960;
-const H = 540;
+const { w: W, h: H } = SCREEN;
 const FIELD = { cx: 480, cy: 318, rx: 410, ry: 188 };
 const SPEED = 240;
 const TOUCH = 34;
@@ -20,7 +20,6 @@ const KIND_COLOR = { normal: '#9fb6d8', elite: '#ff6b6b', rest: '#86d6a6', event
 const REWARD_GLYPH = { function_card: '牌', buff: '加', enhance: '强', remove: '删', stat: '属', draw_plus: '+1', heal: '心', gold: '金' };
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const inRect = (b, x, y) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
 /** 种子 → 0~1 的固定小随机（同一片每次画出来一样） */

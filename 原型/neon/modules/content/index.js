@@ -20,10 +20,10 @@ import {
   ALL_ENCOUNTERS,
   ENCOUNTERS,
   PLAYER_PRESETS,
-  STAGE1_CORE_ENCOUNTERS,
+  CORE_ENCOUNTERS,
 } from './monsters/encounters.js';
-import { BUFF_DEFS, BUFF_LIST, BUFF_POOL, STAGE1_BUFF_IDS } from './buffs/buffs.js';
-import { ALLY_DEFS, ALLY_LIST, STAGE1_ALLY_IDS } from './allies/allies.js';
+import { BUFF_DEFS, BUFF_LIST, BUFF_POOL, TRIAL_BUFF_IDS } from './buffs/buffs.js';
+import { ALLY_DEFS, ALLY_LIST, TRIAL_ALLY_IDS } from './allies/allies.js';
 
 export {
   GEM_CARD_DEFS,
@@ -34,7 +34,7 @@ export {
   instantiateCard,
   buildDeck,
   ENCOUNTERS,
-  STAGE1_CORE_ENCOUNTERS,
+  CORE_ENCOUNTERS,
   ALL_ENCOUNTERS,
   PLAYER_PRESETS,
   BUFF_DEFS,
@@ -55,9 +55,8 @@ export {
   HERO_BASE,
 };
 
-/** 加成、队友试打默认带哪些（claude 的倾向，用户还没拍板，试打台上能换） */
-export const DEFAULT_BUFF_IDS = STAGE1_BUFF_IDS;
-export const DEFAULT_ALLY_IDS = STAGE1_ALLY_IDS;
+/** 试打台默认带的加成、队友（阶段 1 那 4 个加成、2 个队友；试打台上能换） */
+export { TRIAL_BUFF_IDS, TRIAL_ALLY_IDS };
 
 function cloneEffects(effects) {
   return (effects || []).map((ef) => ({

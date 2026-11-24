@@ -1,15 +1,14 @@
 // 走一趟的组装场景：run-rules（一趟的规则）+ explore-view（空地画面），碰到鬼火换到战斗场景，打完回来。
 // 场景每次切换都会重新建，所以这一趟本身放在 session 里（app/session.js），不放在场景里。
 
+import { SCREEN } from '../../modules/shared/index.js';
 import { createRun, settleRun } from '../../modules/run-rules/index.js';
 import { createExploreView } from '../../modules/explore-view/index.js';
 import { ALLY_DEFS, ALL_CARD_DEFS, BUFF_DEFS, createRunContent } from '../../modules/content/index.js';
-import { F, T, bold, txt } from '../../modules/ui/index.js';
+import { F, T, bold, inRect, panelButton, txt } from '../../modules/ui/index.js';
 import { session } from '../session.js';
 
-const W = 960;
-const H = 540;
-const inRect = (b, x, y) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
+const { w: W, h: H } = SCREEN;
 
 let RUN_CONTENT = null;
 const runContent = () => (RUN_CONTENT ||= createRunContent());
@@ -155,8 +154,7 @@ export function createRunScene(context) {
   };
 
   function drawBtn(r, b, hov) {
-    r.rect({ x: b.x, y: b.y, w: b.w, h: b.h, radius: 8, fill: hov ? '#2c3650' : '#1b2030', stroke: hov ? '#ffffff' : '#3e4862', lineWidth: 1 });
-    txt(r, b.label, b.x + b.w / 2, b.y + b.h / 2, { size: F.s, weight: 'bold', align: 'center' });
+    panelButton(r, b, b.label, { hot: hov });
   }
 
   function drawSummary(r) {

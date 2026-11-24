@@ -9,8 +9,8 @@
 import { COLOR_META, COLOR_RING, BATTLE_EVENT_TYPES as E } from '../shared/index.js';
 import {
   F, LANE, T, bold, buffIcon, chainJoint, colorRing, fnCard, gemCard, gemDot, hearts, rainbowText,
-  ellipse, forest, smallButton, swatch, txt,
-} from './draw.js';
+  ellipse, forest, inRect, smallButton, swatch, txt,
+} from '../ui/index.js';
 import { REGIONS, W, H, castListSlots, chainInsertIndex, chainSlots, fanSlots, hitRotated, monsterSlots } from './layout.js';
 import { buildPlayback } from './playback.js';
 
@@ -23,7 +23,6 @@ const pop = (k) => {
   return x < 0.4 ? lerp(0.6, 1.25, x / 0.4) : lerp(1.25, 1, (x - 0.4) / 0.6);
 };
 const life = (t, t0, dur) => (t - t0) / dur;
-const inRect = (b, x, y) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h;
 const TIER = { normal: '普通', elite: '精英', gatekeeper: '看门的' };
 
 function heartIcon(r, x, y, s, fill) {
