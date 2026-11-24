@@ -415,6 +415,12 @@ export function createBattleView(options = {}) {
     txt(r, casting ? '…' : (snap.chain.length ? '打出' : '结束'), C.cx, C.cy - 6, { size: F.l, weight: 'bold', align: 'center' });
     txt(r, casting ? (speed > 1 ? '再点跳过' : '点画面加速') : '空格', C.cx, C.cy + 16, { size: F.xs, align: 'center', color: '#d6e4ff' });
     txt(r, `弃 ${snap.discardPileCount}`, C.cx + 30, C.cy + 54, { size: F.xs, color: T.text3 });
+    // 留几张、下回合手里几张（5.1 第 4 版：留牌也能摸，但回合开始最多 N + 2）
+    if (!casting && snapshot.phase === 'player_input' && Number.isFinite(snap.player?.nextTurnHand)) {
+      const kept = snap.hand.length;
+      const line = kept ? `留 ${kept} 张 → 下回合 ${snap.player.nextTurnHand} 张` : `下回合 ${snap.player.nextTurnHand} 张`;
+      txt(r, line, C.cx, C.cy - C.r - 12, { size: F.xs, align: 'center', color: kept ? '#d6e4ff' : T.text3 });
+    }
 
     // 不在播放里的小字（马上用的功能牌等）
     for (let i = notes.length - 1; i >= 0; i--) {

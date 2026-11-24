@@ -223,7 +223,7 @@ export function createLobbyScene(context) {
 
   function settingRows() {
     return [
-      { label: '摸牌', value: rulesConfig.drawMode === 'refill' ? '每回合补到 N 张' : '每回合摸 1 张（第 1 版）', click: () => { rulesConfig.drawMode = rulesConfig.drawMode === 'refill' ? 'draw_one' : 'refill'; } },
+      { label: '摸牌', value: ({ draw_floor: '摸 2，不到 N 补到 N（第 4 版）', refill: '补到 N 张（第 3 版）', draw_one: '每回合摸 1 张（第 1 版）' })[rulesConfig.drawMode] || rulesConfig.drawMode, click: () => { const order = ['draw_floor', 'refill', 'draw_one']; rulesConfig.drawMode = order[(order.indexOf(rulesConfig.drawMode) + 1) % order.length]; } },
       { label: '每回合补到几张（N）', value: `${N_VALUES[drawTargetIdx]} 张`, click: () => { drawTargetIdx = (drawTargetIdx + 1) % N_VALUES.length; } },
       { label: '留 1 张不占名额', value: rulesConfig.freeKeepCount > 0 ? '开' : '关', click: () => { rulesConfig.freeKeepCount = rulesConfig.freeKeepCount > 0 ? 0 : 1; } },
       {

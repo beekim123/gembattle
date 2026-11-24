@@ -27,7 +27,10 @@ import {
 } from './chain-math.js';
 
 const DEFAULT_CFG = Object.freeze({
-  drawMode: 'refill',
+  // 第 4 版 5.1（用户定的）：每回合先摸 2 张，不到 N 补到 N；回合开始手里最多 N + 2 张
+  drawMode: 'draw_floor',
+  drawPerTurn: 2,
+  handOverN: 2,
   freeKeepCount: 0,
   shieldActiveMultiplier: 0.75,
   shieldBrokenMultiplier: 1.5,
@@ -288,6 +291,21 @@ export function createBattle(startPacket, options = {}) {
     }
     hand.push(card);
     return { card, overflowed: false };
+  }
+
+  /** 第 4 版摸牌：手里留着 kept 张，回合开始先摸几张（不算「不到 N 补到 N」那步） */
+  function floorDrawCount(kept) {
+    const freeKeep = Math.max(0, (cfg.freeKeepCount || 0) + (ruleVal('extraFreeKeep') || 0));
+    const cap = Math.min(cfg.maxHandSize, player.drawTarget + (cfg.handOverN ?? 2) + freeKeep + bonusDrawNextTurn);
+    return Math.max(0, Math.min((cfg.drawPerTurn ?? 2) + bonusDrawNextTurn, cap - kept));
+  }
+
+  /** 手里留着 kept 张结束回合，下回合开始手里大概几张（不算牌堆摸空；给画面提示用） */
+  function nextTurnHandSize(kept) {
+    if (cfg.drawMode === 'draw_one') return Math.min(cfg.maxHandSize, kept + 1);
+    if (cfg.drawMode === 'draw_floor') return Math.max(player.drawTarget, kept + floorDrawCount(kept));
+    const freeKept = Math.min(kept, Math.max(0, (cfg.freeKeepCount || 0) + (ruleVal('extraFreeKeep') || 0)));
+    return Math.max(kept, Math.min(cfg.maxHandSize, player.drawTarget + freeKept + bonusDrawNextTurn));
   }
 
   function drawCards(count, colorFilter = null) {
@@ -807,6 +825,14 @@ export function createBattle(startPacket, options = {}) {
     if (cfg.drawMode === 'draw_one') {
       const toDraw = turn === 1 ? Math.max(1, Math.min(3, player.drawTarget)) : 1;
       drawCards(toDraw);
+    } else if (cfg.drawMode === 'draw_floor') {
+      // 第 4 版：先摸 2 张（加成的「下回合多补」也加在这），摸完不到 N 就补到 N。
+      // 回合开始手里最多 N + 2 张（「多留 1 张不占名额」这类加成再往上加）：管住「攒几回合一把打爆」。
+      // 回合中间「马上摸几张」不受这条管，照旧最多 12 张。
+      const toDraw = floorDrawCount(hand.length);
+      bonusDrawNextTurn = 0;
+      if (toDraw > 0) drawCards(toDraw);
+      if (hand.length < player.drawTarget) drawCards(player.drawTarget - hand.length);
     } else {
       // 补到 N 张；如开启 freeKeepCount，留下的前 K 张不占名额（第 3 版开关）
       const kept = hand.length;
@@ -869,6 +895,8 @@ export function createBattle(startPacket, options = {}) {
         maxHearts: player.maxHearts,
         drawTarget: player.drawTarget,
         maxHandSize: cfg.maxHandSize,
+        // 留着手里这些牌（链上的会打出去）结束回合，下回合开始手里几张（5.1 第 4 版，给画面提示）
+        nextTurnHand: nextTurnHandSize(hand.length),
         stats: {
           attack: getEffectiveStats().attack,
           damageBonus: getEffectiveStats().damageBonus + getEffectiveStats().hitPercent,

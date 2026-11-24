@@ -415,3 +415,31 @@ test('摸牌开关（draw_one 与 freeKeepCount）正常工作', () => {
   const r2 = b2.commitChain();
   assert.equal(r2.snapshot.hand.length, 5);
 });
+
+test('第 4 版摸牌（draw_floor）：先摸 2，不到 N 补到 N，回合开始最多 N + 2', () => {
+  const deck = Array.from({ length: 40 }, (_, i) => makeGem(`g-${i}`, 'red', ['red']));
+  const b = createBattle(makePacket({
+    deck,
+    drawTarget: 4,
+    rulesConfig: { drawMode: 'draw_floor', drawPerTurn: 2, handOverN: 2 },
+    monsters: [makeMonster({ maxHp: 9999999 })],
+  }));
+  const handLen = () => b.getSnapshot().hand.length;
+  const play = (n) => { b.getSnapshot().hand.slice(0, n).forEach((c) => b.queueCard(c.uid)); return b.commitChain().snapshot.hand.length; };
+  assert.equal(handLen(), 4, '起手补到 N');
+  assert.equal(play(0), 6, '一张不打：留 4 摸 2');
+  assert.equal(play(0), 6, '再不打：到 N + 2 就不摸了');
+  assert.equal(play(3), 5, '打 3 留 3：摸 2');
+  assert.equal(play(4), 4, '打 4 留 1：摸 2 只有 3，补到 N');
+
+  // N 跟着养成涨，上限一起涨（摸牌加成不会被卡死）
+  const b5 = createBattle(makePacket({
+    deck,
+    drawTarget: 5,
+    rulesConfig: { drawMode: 'draw_floor', drawPerTurn: 2, handOverN: 2 },
+    monsters: [makeMonster({ maxHp: 9999999 })],
+  }));
+  assert.equal(b5.getSnapshot().hand.length, 5);
+  assert.equal(b5.commitChain().snapshot.hand.length, 7);
+  assert.equal(b5.commitChain().snapshot.hand.length, 7);
+});

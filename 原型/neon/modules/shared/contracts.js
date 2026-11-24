@@ -380,8 +380,11 @@ export function validateBattleStartPacket(packet, actionTable = DEFAULT_ACTION_T
     if (!isPlainObject(cfg)) {
       errors.push('rulesConfig 如果提供，必须是对象');
     } else {
-      if (cfg.drawMode !== undefined && !['refill', 'draw_one'].includes(cfg.drawMode)) {
-        errors.push('rulesConfig.drawMode 只能是 refill 或 draw_one');
+      if (cfg.drawMode !== undefined && !['draw_floor', 'refill', 'draw_one'].includes(cfg.drawMode)) {
+        errors.push('rulesConfig.drawMode 只能是 draw_floor、refill 或 draw_one');
+      }
+      for (const k of ['drawPerTurn', 'handOverN']) {
+        if (cfg[k] !== undefined && !isNonNegativeInt(cfg[k])) errors.push(`rulesConfig.${k} 必须是非负整数`);
       }
       if (cfg.freeKeepCount !== undefined && !isNonNegativeInt(cfg.freeKeepCount)) {
         errors.push('rulesConfig.freeKeepCount 必须是非负整数');

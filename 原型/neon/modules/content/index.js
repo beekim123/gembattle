@@ -107,9 +107,11 @@ export const DECK_LOADOUTS = Object.freeze({
   }),
 });
 
-/** 默认规则开关（对应设计稿第 3 版默认值） */
+/** 默认规则开关（对应设计稿默认值；摸牌是第 4 版 5.1） */
 export const DEFAULT_RULES_CONFIG = Object.freeze({
-  drawMode: 'refill',
+  drawMode: 'draw_floor',
+  drawPerTurn: 2,
+  handOverN: 2,
   freeKeepCount: 0,
   shieldActiveMultiplier: 0.75,
   shieldBrokenMultiplier: 1.5,
@@ -176,6 +178,8 @@ export function createBattlePacket({
     seed,
     rulesConfig: {
       drawMode: mergedConfig.drawMode,
+      drawPerTurn: mergedConfig.drawPerTurn,
+      handOverN: mergedConfig.handOverN,
       freeKeepCount: mergedConfig.freeKeepCount,
       shieldActiveMultiplier: mergedConfig.shieldActiveMultiplier,
       shieldBrokenMultiplier: mergedConfig.shieldBrokenMultiplier,
@@ -226,6 +230,8 @@ export function createRunContent() {
     gearDefs: GEAR_DEFS,
     defaultRules: {
       drawMode: DEFAULT_RULES_CONFIG.drawMode,
+      drawPerTurn: DEFAULT_RULES_CONFIG.drawPerTurn,
+      handOverN: DEFAULT_RULES_CONFIG.handOverN,
       freeKeepCount: DEFAULT_RULES_CONFIG.freeKeepCount,
       shieldActiveMultiplier: DEFAULT_RULES_CONFIG.shieldActiveMultiplier,
       shieldBrokenMultiplier: DEFAULT_RULES_CONFIG.shieldBrokenMultiplier,
