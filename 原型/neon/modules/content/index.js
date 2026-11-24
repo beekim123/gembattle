@@ -110,7 +110,7 @@ export const DECK_LOADOUTS = Object.freeze({
 export const DEFAULT_RULES_CONFIG = Object.freeze({
   drawMode: 'draw_floor',
   drawPerTurn: 2,
-  handOverN: 2,
+  handOverN: 1,
   freeKeepCount: 0,
   shieldActiveMultiplier: 0.75,
   shieldBrokenMultiplier: 1.5,

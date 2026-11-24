@@ -486,9 +486,10 @@ export function createBattleView(options = {}) {
       if (lag > ratio) r.rect({ x: bx, y, w: bw * lag, h: O.barH, radius: 2, fill: '#ffd0d0' });
     }
     if (ratio > 0) r.rect({ x: bx, y, w: Math.max(2, bw * ratio), h: O.barH, radius: 2, fill: pb && now - m.barSwitchAt < 0.15 ? '#ffffff' : T.hp });
-    // 排链时：这条链大概能打掉多少（只算选中的那只）
-    if (selected && preview && snapshot.chain.length && ratio > 0) {
-      const ghost = Math.min(m.hp, preview.estimatedDamage || 0);
+    // 排链时：这条链大概能打掉多少（预览按每只怪各算；老数据没有 byMonster 就只画选中的那只）
+    const pm = preview && snapshot.chain.length ? (preview.byMonster ? preview.byMonster[m.uid] : (selected ? { damage: preview.estimatedDamage, shieldShred: preview.shieldShred } : null)) : null;
+    if (pm && pm.damage > 0 && ratio > 0) {
+      const ghost = Math.min(m.hp, pm.damage);
       const gx = bx + bw * clamp((m.hp - ghost) / m.maxHp, 0, 1);
       r.rect({ x: gx, y, w: bx + bw * ratio - gx, h: O.barH, fill: '#ffffff', alpha: 0.35 + 0.25 * Math.sin(clock * 6) });
     }
@@ -496,7 +497,7 @@ export function createBattleView(options = {}) {
     if (m.shieldBroken) {
       r.rect({ x: bx, y: ty, w: bw, h: O.toughH, radius: 2, fill: T.breakCol, alpha: 0.5 + 0.3 * Math.sin(clock * 8) });
     } else if (m.shields?.length) {
-      const will = selected && preview && snapshot.chain.length ? preview.shieldShred || {} : {};
+      const will = pm?.shieldShred || {};
       const cells = m.shields.flatMap((s) => Array.from({ length: s.max }, (_, k) => ({ c: s.color, on: k < s.current, blink: k < s.current && k >= s.current - (will[s.color] || 0) })));
       const cw = (bw - (cells.length - 1)) / cells.length;
       cells.forEach((c, i) => {

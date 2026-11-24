@@ -847,6 +847,16 @@ export function validateBattlePreview(preview) {
     errors.push('expectedBreakUids 必须是数组');
   }
   if (!isNonNegativeInt(preview.estimatedHits)) errors.push('estimatedHits 必须是非负整数');
+  if (preview.byMonster !== undefined) {
+    if (!isPlainObject(preview.byMonster)) errors.push('byMonster 必须是对象（怪的 uid → 这条链打它多少、削它几格）');
+    else {
+      for (const [uid, slot] of Object.entries(preview.byMonster)) {
+        if (!isPlainObject(slot)) { errors.push(`byMonster.${uid} 必须是对象`); continue; }
+        if (slot.damage !== null && !(typeof slot.damage === 'number' && slot.damage >= 0)) errors.push(`byMonster.${uid}.damage 必须是非负数字或 null`);
+        if (!isPlainObject(slot.shieldShred)) errors.push(`byMonster.${uid}.shieldShred 必须是对象`);
+      }
+    }
+  }
   if (preview.estimatedDamage !== null && (!isFiniteNumber(preview.estimatedDamage) || preview.estimatedDamage < 0)) {
     errors.push('estimatedDamage 必须是非负数字或 null');
   }

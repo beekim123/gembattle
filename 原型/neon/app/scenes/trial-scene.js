@@ -183,7 +183,7 @@ export function createTrialScene(context) {
       boxes.push({ ...b, info: DECK_LOADOUTS[id].label, onClick: () => { loadoutIdx = i; } });
     });
 
-    section(r, P, P.y + 306, '带上', '加成和队友先照倾向做的，还没拍板');
+    section(r, P, P.y + 306, '带上', '加成和队友见设计稿 9.3');
     // 加成：一排小图标（鼠标放上去看说明，点一下带 / 不带）；队友：一排小牌子
     BUFF_LIST.forEach((d, i) => {
       const b = { id: `take-${d.id}`, x: x0 + i * 37, y: P.y + 318, w: 32, h: 32 };
@@ -217,9 +217,9 @@ export function createTrialScene(context) {
 
   function settingRows() {
     return [
-      { label: '摸牌', value: ({ draw_floor: '摸 2，不到 N 补到 N（第 4 版）', refill: '补到 N 张（第 3 版）', draw_one: '每回合摸 1 张（第 1 版）' })[rulesConfig.drawMode] || rulesConfig.drawMode, click: () => { const order = ['draw_floor', 'refill', 'draw_one']; rulesConfig.drawMode = order[(order.indexOf(rulesConfig.drawMode) + 1) % order.length]; } },
+      { label: '摸牌', value: ({ draw_floor: '摸 2，不到 N 补到 N（现在的）', refill: '补到 N 张（第 3 版）', draw_one: '每回合摸 1 张（第 1 版）' })[rulesConfig.drawMode] || rulesConfig.drawMode, click: () => { const order = ['draw_floor', 'refill', 'draw_one']; rulesConfig.drawMode = order[(order.indexOf(rulesConfig.drawMode) + 1) % order.length]; } },
       { label: '每回合补到几张（N）', value: `${N_VALUES[drawTargetIdx]} 张`, click: () => { drawTargetIdx = (drawTargetIdx + 1) % N_VALUES.length; } },
-      { label: '留 1 张不占名额', value: rulesConfig.freeKeepCount > 0 ? '开' : '关', click: () => { rulesConfig.freeKeepCount = rulesConfig.freeKeepCount > 0 ? 0 : 1; } },
+      { label: '回合开始手里最多几张', value: `N + ${rulesConfig.handOverN ?? 1}${(rulesConfig.handOverN ?? 1) === 1 ? '（现在的）' : '（第 4 版）'}`, click: () => { rulesConfig.handOverN = (rulesConfig.handOverN ?? 1) === 1 ? 2 : 1; } },
       {
         label: '盾的倍数（没破 / 破了）',
         value: `×${rulesConfig.shieldActiveMultiplier} / ×${rulesConfig.shieldBrokenMultiplier}`,
@@ -250,7 +250,7 @@ export function createTrialScene(context) {
       txt(r, row.value, P.x + P.w - 28 - vw / 2, y + 17, { size: F.s, weight: 'bold', align: 'center', color: CREAM });
       boxes.push({ ...b, info: '点一下换', onClick: row.click });
     });
-    const y = P.y + 96 + 8 * 40 + 8;
+    const y = P.y + 96 + settingRows().length * 40 + 8;
     const b = { id: 'stress', x: P.x + 16, y, w: P.w - 32, h: 34 };
     if (hot === b.id) r.rect({ x: b.x, y: b.y, w: b.w, h: b.h, radius: 8, fill: '#151a25' });
     txt(r, '万发飘字压测：满手 12 张，一下打出上万发', P.x + 28, y + 17, { size: F.s, color: T.text });
@@ -296,7 +296,7 @@ export function createTrialScene(context) {
       lines.slice(0, 9).forEach((line, j) => txt(r, line, ib.x + 12, ib.y + 20 + j * 21, { size: F.s, color: hb ? T.text : T.text3 }));
     } else {
       const list = albumTab === 'buffs' ? BUFF_LIST : ALLY_LIST;
-      txt(r, '先照倾向做的，还没跟用户拍板', x0, P.y + 104, { size: F.xs, color: T.text3 });
+      txt(r, '设计稿 9.3 定的；数是第一版，跑假玩家、试玩再调', x0, P.y + 104, { size: F.xs, color: T.text3 });
       const cols = albumTab === 'buffs' ? 3 : 2;
       const cw = (P.w - 32 - (cols - 1) * 8) / cols;
       list.forEach((d, i) => {

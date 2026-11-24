@@ -427,7 +427,7 @@ export function createRun(depart, pack) {
         card.label = up.label;
         card.description = up.description || up.label;
       }
-      card.enhance = { dir: 'number' };
+      card.enhance = { dir: up?.dir || 'number' };
     }
     return true;
   }

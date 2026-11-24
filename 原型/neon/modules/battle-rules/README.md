@@ -14,14 +14,16 @@
 
 | 文件 | 干什么 |
 |---|---|
-| `engine.js` | 一仗的状态机：回合开始（摸牌照设计稿 5.1 第 4 版 `draw_floor`：先摸 2、不到 N 补到 N、回合开始最多 N + 2）、排链、预览、打出去一张张结算、怪出手、结果 |
+| `engine.js` | 一仗的状态机：回合开始（摸牌照设计稿 5.1 `draw_floor`：先摸 2、不到 N 补到 N、回合开始最多 N + 1）、排链、打出去一张张结算（`resolveChain`）、预览、怪出手、结果 |
 | `battle-state.js` | 默认规则开关、从开战包建出牌和怪的初始状态（纯函数） |
 | `actions.js` | 动作表：每个动作一个小函数（设计稿 5.9） |
 | `chain-math.js` | 接链的算法：关系（接上 / 断 / 合白）、集色、宝石等级 |
 | `arrange.js` | 自动帮排 |
 
 - 加成、装备、怪的特性要「改规则」，用 `shared` 的 `RULE_KEYS` 里的名字（`ruleOn(RULE_KEYS.xxx)` / `ruleVal(...)`），名字全列在 `shared/rule-keys.js`。
-- **已知的毛病**：预览（`getPreview`）和打出去（`commitChain`）是两份算法，加一个改规则的加成要两处都改；`engine.js` 还是一个大文件。以后要把预览改成「照打出去的算法空跑一遍」，再按阶段拆文件。
+- **预览和打出去是同一份算法**（第 3 轮审核以后改的）：`resolveChain` 管一条链怎么结算；`commitChain` 真打，`getPreview` 先把状态记下来（怪换成复制品），照 `resolveChain` 空跑一遍，读完结果全换回去。空跑时暴击按期望算、不掷骰子。加一个改规则的加成，只改 `resolveChain` 一处。`test/review3.test.js` 查「预览 = 打出去」和「看预览不动状态」。
+  - 空跑要换回去的状态都列在 `saveStateForDryRun` 里。**往 engine 里加新的、会在链里变的状态，要记得加进去**，不然预览会把它改掉。
+- **已知的毛病**：`engine.js` 还是一个大文件（一千六百多行）。以后按「回合开始 / 链结算 / 怪出手」拆。
 
 ## 对外接口
 
@@ -38,4 +40,4 @@
 
 ## 单独运行与测试
 
-- 单测（不开浏览器）：`node --test modules/battle-rules/test/battle-rules.test.js`
+- 单测（不开浏览器）：`node --test modules/battle-rules/test/`

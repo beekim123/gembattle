@@ -12,7 +12,7 @@ export const RULE_KEY_LABELS = Object.freeze({
   brokenMultiplier: '破盾以后受到的伤害倍数（数）',
   noBreakPush: '破盾不推倒计时',
   complementExtraRound: '合白多打的那一轮再多打一轮',
-  complementBonusDraw: '每回合第一次合白，下回合多补 1 张',
+  complementBonusDraw: '一条链里合白 2 次，下回合多 1 张（不到 N + 1 补到 N + 1）',
   breakKeepsRecorded: '断色不清空集到的颜色',
   extraFreeKeep: '回合开始的手牌上限多几张（数）',
   keptStartsDouble: '回合结束手里留着牌，下回合的链从 ×2 起',

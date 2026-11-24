@@ -1,6 +1,6 @@
 // 阶段 4 假玩家：从头跑一整趟（设计稿 10.4）。只用 battle-rules、run-rules、content，不碰画面。
 // 用法：node tools/sim-run.js [--runs 300]
-// 摸牌照第 4 版 5.1：先摸 2，不到 N 补到 N，回合开始最多 N + 2；有一组「攒牌」的假玩家，看攒牌是不是永远最好。
+// 摸牌照 5.1：先摸 2，不到 N 补到 N，回合开始最多 N + 1（第 3 轮审核后从 N + 2 改的）；有一组「攒牌」的假玩家，看攒牌是不是永远最好。
 //
 // 假玩家怎么走：每回合先用掉马上用的牌，再「自动帮排·最长」打出去；奖励挑第一个（加成挑跟已有路子对得上的）；
 // 出口：心 ≤ 1 就走「回去」，否则往里走；歇脚先回心；事件挑第一个能选的。
@@ -8,7 +8,7 @@
 
 import { createBattle } from '../modules/battle-rules/index.js';
 import { createRun, settleRun } from '../modules/run-rules/index.js';
-import { buildHeroLoadout, createRunContent, FREE_GEAR, HIDDEN_QUEST, QUEST_DEFS } from '../modules/content/index.js';
+import { buildHeroLoadout, createRunContent, DEFAULT_RULES_CONFIG, FREE_GEAR, HIDDEN_QUEST, QUEST_DEFS } from '../modules/content/index.js';
 
 const ALL_QUESTS = { ...QUEST_DEFS, [HIDDEN_QUEST.id]: HIDDEN_QUEST };
 import { SCHEMA_VERSION } from '../modules/shared/index.js';
@@ -30,10 +30,10 @@ function playUsefulInstants(battle) {
 // 像真人：一半回合排到最好，一半回合只照手里的顺序排（设计稿 9.2 按「真人排到七成」算）
 let HUMAN = false;
 let humanTick = 0;
-// 攒牌（5.1 第 4 版要看的）：手里没到 N + 2、怪也不是下回合就出手，就一张不打，攒着一把打
+// 攒牌（5.1 要看的）：手里没到上限（N + 1）、怪也不是下回合就出手，就一张不打，攒着一把打
 let HOARD = false;
 // 试别的摸牌数：DRAW=1 OVER=1 node tools/sim-run.js
-const DRAW_OVERRIDE = process.env.DRAW ? { drawPerTurn: Number(process.env.DRAW), handOverN: Number(process.env.OVER ?? 2) } : null;
+const DRAW_OVERRIDE = process.env.DRAW ? { drawPerTurn: Number(process.env.DRAW), handOverN: Number(process.env.OVER ?? DEFAULT_RULES_CONFIG.handOverN) } : null;
 function fight(packet) {
   if (DRAW_OVERRIDE) packet = { ...packet, rulesConfig: { ...packet.rulesConfig, ...DRAW_OVERRIDE } };
   const b = createBattle(packet);
@@ -42,7 +42,7 @@ function fight(packet) {
     playUsefulInstants(b);
     if (HOARD) {
       const snap = b.getSnapshot();
-      const full = snap.hand.length >= snap.player.drawTarget + (DRAW_OVERRIDE?.handOverN ?? 2);
+      const full = snap.hand.length >= snap.player.drawTarget + (DRAW_OVERRIDE?.handOverN ?? DEFAULT_RULES_CONFIG.handOverN);
       const danger = snap.monsters.some((m) => m.alive !== false && m.countdown <= 1);
       if (!full && !danger) { out = b.commitChain(); continue; }
     }
@@ -106,9 +106,10 @@ const pct = (a, b) => (b ? `${Math.round((a / b) * 100)}%` : '—');
 const avg = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0);
 const f1 = (x) => x.toFixed(2);
 
-function report(title, setup) {
+function report(title, setup, seedKey = title) {
   const runs = [];
-  for (let i = 0; i < RUNS; i++) runs.push(playRun(`sim-${title}-${i}`, setup));
+  // 随机数种子跟着 seedKey 走：标题里带了会变的数（比如上限 N + 几），就给一个不变的 seedKey，换数比较才公平
+  for (let i = 0; i < RUNS; i++) runs.push(playRun(`sim-${seedKey}-${i}`, setup));
   const fights = runs.flatMap((r) => r.fights);
   console.log(`\n## ${title}（${RUNS} 趟）`);
   const groups = {};
@@ -143,7 +144,7 @@ report('像真人（一半回合不排）· C 级武器', { equipped: { weapon: 
 report('像真人（一半回合不排）· 免费基础装', { equipped: { weapon: null, armor: null, trinket: null } });
 HUMAN = false;
 HOARD = true;
-report('攒牌（攒到 N + 2 张才打，怪要出手就打）· C 级武器', { equipped: { weapon: 'gear_c_weapon_1', armor: null, trinket: null } });
+report(`攒牌（攒到 N + ${DRAW_OVERRIDE?.handOverN ?? DEFAULT_RULES_CONFIG.handOverN} 张才打，怪要出手就打）· C 级武器`, { equipped: { weapon: 'gear_c_weapon_1', armor: null, trinket: null } }, '攒牌');
 HOARD = false;
 report('C 级武器，第 1 层打完就回去（C 级任务的走法）', { equipped: { weapon: 'gear_c_weapon_1', armor: null, trinket: null }, returnAtLayer: 1 });
 

@@ -69,8 +69,8 @@ export const BUFF_DEFS = Object.freeze({
     id: 'buff_white_draw',
     slot: 8,
     lane: 'white',
-    label: '合白下回合多摸 1 张',
-    description: '每回合第一次合白，下回合多补 1 张牌',
+    label: '合白 2 次，下回合多 1 张',
+    description: '一条链里合白 2 次，下回合多摸 1 张，不到 N + 1 张就补到 N + 1 张（每回合最多一次）',
     effects: [{ timing: TIMINGS.BATTLE_START, action: ACTIONS.MODIFY_RULE, duration: ACTION_DURATIONS.THIS_BATTLE, params: { ruleKey: RULE_KEYS.complementBonusDraw, value: true } }],
   }),
   buff_rainbow_seed: Object.freeze({
@@ -93,8 +93,8 @@ export const BUFF_DEFS = Object.freeze({
     id: 'buff_keep_free',
     slot: 11,
     lane: 'keep',
-    label: '多留 1 张不占名额',
-    description: '回合结束留在手里的牌，有 1 张不占每回合补牌的名额',
+    label: '回合开始上限多 1 张',
+    description: '回合开始手里最多 N + 2 张（平时 N + 1）：多留的牌也摸得满',
     effects: [{ timing: TIMINGS.BATTLE_START, action: ACTIONS.MODIFY_RULE, duration: ACTION_DURATIONS.THIS_BATTLE, params: { ruleKey: RULE_KEYS.extraFreeKeep, value: 1 } }],
   }),
   buff_keep_double: Object.freeze({

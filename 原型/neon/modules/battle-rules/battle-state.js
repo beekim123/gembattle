@@ -3,10 +3,10 @@
 import { ACTIONS, TIMINGS, RULE_KEYS } from '../shared/index.js';
 
 export const DEFAULT_CFG = Object.freeze({
-  // 第 4 版 5.1（用户定的）：每回合先摸 2 张，不到 N 补到 N；回合开始手里最多 N + 2 张
+  // 5.1（用户定的）：每回合先摸 2 张，不到 N 补到 N；回合开始手里最多 N + 1 张（第 3 轮审核后从 N + 2 改的）
   drawMode: 'draw_floor',
   drawPerTurn: 2,
-  handOverN: 2,
+  handOverN: 1,
   freeKeepCount: 0,
   shieldActiveMultiplier: 0.75,
   shieldBrokenMultiplier: 1.5,
