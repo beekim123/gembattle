@@ -13,9 +13,10 @@ export const GEAR_DEFS = Object.freeze({
   gear_c_weapon_1: Object.freeze({ id: 'gear_c_weapon_1', slot: 'weapon', grade: 'C', label: '武器：攻击 +50', price: 85, uses: 7, stats: { attack: 50 } }),
   gear_c_weapon_2: Object.freeze({ id: 'gear_c_weapon_2', slot: 'weapon', grade: 'C', label: '武器：攻击 +45，暴击 +15%', price: 90, uses: 7, stats: { attack: 45, critRate: 0.15 } }),
   gear_c_weapon_3: Object.freeze({
-    id: 'gear_c_weapon_3', slot: 'weapon', grade: 'C', label: '武器：攻击 +45，破盾后暴击 +35%', price: 95, uses: 7, stats: { attack: 45 },
-    // 第 6 版：原来「破盾那一下暴击率 +20%」，算下来比武器 1 还弱；改成破盾以后这条链剩下的都 +35%
-    trait: { label: '破盾以后这条链暴击率 +35%', effects: [{ timing: TIMINGS.ON_SHIELD_BREAK, action: ACTIONS.MODIFY_HIT_DAMAGE, duration: 'this_chain', params: { stat: 'critRate', value: 0.35 } }] },
+    id: 'gear_c_weapon_3', slot: 'weapon', grade: 'C', label: '武器：攻击 +45，破盾后这一仗暴击 +30%', price: 95, uses: 7, stats: { attack: 45 },
+    // 第 6 版：原来「破盾那一下暴击率 +20%」，比武器 1 还弱；「这条链剩下的 +35%」破盾常落在链尾，假玩家量出来还是最弱；
+    // 改成破盾以后这一仗都算（每破一次叠一次），破盾路子里三把武器才一把比一把强（tools/sim-run.js「破盾路子」三组）
+    trait: { label: '破盾以后这一仗暴击率 +30%（每破一次叠一次）', effects: [{ timing: TIMINGS.ON_SHIELD_BREAK, action: ACTIONS.MODIFY_HIT_DAMAGE, duration: 'this_battle', params: { stat: 'critRate', value: 0.3 } }] },
   }),
   gear_c_armor_1: Object.freeze({ id: 'gear_c_armor_1', slot: 'armor', grade: 'C', label: '护身：心上限 +½', price: 70, uses: 7, stats: { hearts: 0.5 } }),
   gear_c_armor_2: Object.freeze({ id: 'gear_c_armor_2', slot: 'armor', grade: 'C', label: '护身：心上限 +1', price: 95, uses: 7, stats: { hearts: 1 } }),

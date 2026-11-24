@@ -30,11 +30,11 @@ export const BUFF_DEFS = Object.freeze({
     id: 'buff_rainbow_keep3',
     slot: 3,
     lane: 'rainbow',
-    // 第 6 版：普通仗两三回合打完，第一次彩虹都凑不齐；加了「开打先记上 2 色」
-    label: '开打先记 2 色，彩虹以后留 3 色',
-    description: '开打时先随机记上 2 色；触发彩虹以后，不从一色重新集：留下这一色和它两边，一共 3 色',
+    // 第 6 版：普通仗两三回合打完，第一次彩虹都凑不齐；加了「开打先记几色」。2 色假玩家量出来只 +3%，4 色 +11%（tools/sim.js 第六节）
+    label: '开打先记 4 色，彩虹以后留 3 色',
+    description: '开打时先随机记上 4 色；触发彩虹以后，不从一色重新集：留下这一色和它两边，一共 3 色',
     effects: [
-      { timing: TIMINGS.BATTLE_START, action: ACTIONS.RECORD_COLORS, params: { mode: 'random', count: 2 } },
+      { timing: TIMINGS.BATTLE_START, action: ACTIONS.RECORD_COLORS, params: { mode: 'random', count: 4 } },
       { timing: TIMINGS.BATTLE_START, action: ACTIONS.MODIFY_RULE, duration: ACTION_DURATIONS.THIS_BATTLE, params: { ruleKey: RULE_KEYS.rainbowKeepsNeighbors, value: true } },
     ],
   }),

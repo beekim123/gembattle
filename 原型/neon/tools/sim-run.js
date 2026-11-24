@@ -32,6 +32,8 @@ let HUMAN = false;
 let humanTick = 0;
 // 攒牌（5.1 要看的）：手里没到上限（N + 1）、怪也不是下回合就出手，就一张不打，攒着一把打
 let HOARD = false;
+// 路子（第 3 轮第 3 块）：'break' = 先破盾排、加成挑破盾路子的，看武器 3 在破盾路子里是不是最好
+let LANE = null;
 // 试别的摸牌数：DRAW=1 OVER=1 node tools/sim-run.js
 const DRAW_OVERRIDE = process.env.DRAW ? { drawPerTurn: Number(process.env.DRAW), handOverN: Number(process.env.OVER ?? DEFAULT_RULES_CONFIG.handOverN) } : null;
 function fight(packet) {
@@ -48,7 +50,7 @@ function fight(packet) {
     }
     if (HUMAN && (humanTick++ % 2 === 1)) {
       for (const c of b.getSnapshot().hand) if (!c.hidden && c.usage === 'chain') b.queueCard(c.uid);
-    } else b.autoArrange('longest');
+    } else b.autoArrange(LANE === 'break' ? 'break_first' : 'longest');
     out = b.commitChain();
   }
   return b.getResult() || out?.result;
@@ -59,7 +61,7 @@ function choosePending(run, p) {
   switch (p.type) {
     case 'notice': return run.choose(null);
     case 'pick_card': return run.choose(p.options[0]);
-    case 'pick_buff': return run.choose(p.options[0]);
+    case 'pick_buff': return run.choose((LANE && p.options.find((id) => (PACK.buffDefs[id]?.lanes || [PACK.buffDefs[id]?.lane]).includes(LANE))) || p.options[0]);
     case 'enhance':
       if (p.step === 'dir') return run.choose(p.dirs[0]);
       return run.choose(st.player.deck.find((c) => c.kind === 'gem' && !c.enhanced && p.options.includes(c.uid) && c.gems.length >= 2)?.uid || p.options[0]);
@@ -140,7 +142,7 @@ report('C 级武器（攻 80）', { equipped: { weapon: 'gear_c_weapon_1', armor
 report('C 级全套（攻 80 + 心 +1 + 增伤 15%）', { equipped: { weapon: 'gear_c_weapon_1', armor: 'gear_c_armor_2', trinket: 'gear_c_trinket_1' } });
 // 第 6 版：三把 C 级武器要一把比一把强（85 ≤ 90 ≤ 95 金币）；B 级全套看第 2 层
 report('C 级武器 2（攻 75 + 暴击 15%）', { equipped: { weapon: 'gear_c_weapon_2', armor: null, trinket: null } });
-report('C 级武器 3（攻 75 + 破盾后暴击 35%）', { equipped: { weapon: 'gear_c_weapon_3', armor: null, trinket: null } });
+report('C 级武器 3（攻 75 + 破盾后这一仗暴击 30%）', { equipped: { weapon: 'gear_c_weapon_3', armor: null, trinket: null } });
 report('C 级武器 + 饰品 2（暴击 5% + 暴伤 0.4）', { equipped: { weapon: 'gear_c_weapon_1', armor: null, trinket: 'gear_c_trinket_2' } });
 report('B 级全套（攻 140 + 心 +1½ + 增伤 30%）', { equipped: { weapon: 'gear_b_weapon_1', armor: 'gear_b_armor_1', trinket: 'gear_b_trinket_1' } });
 report('C 级武器 + 刺客', { equipped: { weapon: 'gear_c_weapon_1', armor: null, trinket: null }, allies: ['ally_assassin_break'] });
@@ -151,6 +153,12 @@ HUMAN = false;
 HOARD = true;
 report(`攒牌（攒到 N + ${DRAW_OVERRIDE?.handOverN ?? DEFAULT_RULES_CONFIG.handOverN} 张才打，怪要出手就打）· C 级武器`, { equipped: { weapon: 'gear_c_weapon_1', armor: null, trinket: null } }, '攒牌');
 HOARD = false;
+// 第 3 轮第 3 块：破盾路子的假玩家（先破盾排、加成挑破盾的），三把 C 级武器比一比
+LANE = 'break';
+report('破盾路子 · C 级武器 1', { equipped: { weapon: 'gear_c_weapon_1', armor: null, trinket: null } }, '破盾路子');
+report('破盾路子 · C 级武器 2', { equipped: { weapon: 'gear_c_weapon_2', armor: null, trinket: null } }, '破盾路子');
+report('破盾路子 · C 级武器 3', { equipped: { weapon: 'gear_c_weapon_3', armor: null, trinket: null } }, '破盾路子');
+LANE = null;
 report('C 级武器，第 1 层打完就回去（C 级任务的走法）', { equipped: { weapon: 'gear_c_weapon_1', armor: null, trinket: null }, returnAtLayer: 1 });
 
 // ───────── 金币：新手按「死一半」算 100 趟（设计稿 8.3、9.2）─────────

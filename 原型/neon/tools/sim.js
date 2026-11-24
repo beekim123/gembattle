@@ -207,3 +207,32 @@ for (const enc of CORE_ENCOUNTERS) {
     console.log(`  ${ex.label.padEnd(14, '　')} | 胜率 ${r.winRate.padStart(6)} | 均回合 ${r.avgTurns.padStart(5)} | 均掉心 ${r.avgHeartsLost.padStart(4)} | 均回伤 ${r.avgTurnDmg}`);
   }
 }
+
+// 【六】第 3 轮第 3 块（设计稿 10.4 新合格线）：每个加成照它自己路子的排法、打它路子顺手的怪（设计稿 6.1），跟同一种排法、同一种怪什么都不带比
+// 排法：破盾 → 先破盾；彩虹 → 追彩虹；留牌 → 留 1 张；别的 → 最长链。目标：每回合伤害 +8%~+32%
+const LANE_BOT = { break: 'break_first', rainbow: 'rainbow', keep: 'keep_one' };
+const LANE_FOES = {
+  break: ['dual_shield'],
+  white: ['pack_mixed', 'dual_shield', 'recorded_damage_down'],
+  rainbow: ['pack_mixed', 'gatekeeper_layer2'],
+  keep: ['gatekeeper_layer2'],
+  chain: CORE_ENCOUNTERS.map((e) => e.id), // 长链顺手的（遮手牌、挑色减半）原型没放进核心仗，五种都算
+};
+const botFor = (b) => BOTS.find((x) => x.id === (LANE_BOT[b.lane] || 'longest'));
+console.log('\n\n【六】加成照自己路子的排法、打自己路子顺手的怪（29 宝石 + 4 张常用功能牌），跟同样打法什么都不带比；目标每回合伤害 +8%~+32%');
+{
+  const base = {};
+  const batch = (enc, bot, buffs) => runBatch({ encounterId: enc, bot, extraCards: DECK_LOADOUTS.starter_4_functions.extraCards, buffs, allies: [] });
+  for (const b of BUFF_LIST) {
+    const bot = botFor(b);
+    const foes = LANE_FOES[b.lane] || LANE_FOES.chain;
+    const ups = foes.map((enc) => {
+      const k = `${enc}|${bot.id}`;
+      base[k] ||= batch(enc, bot, []);
+      return batch(enc, bot, [b.id]).avgTurnDmg / base[k].avgTurnDmg - 1;
+    });
+    const up = Math.round((ups.reduce((x, y) => x + y, 0) / ups.length) * 100);
+    const ok = up >= 8 && up <= 32 ? '到了' : up < 8 ? '偏弱' : '偏强';
+    console.log(`  ${b.label.padEnd(16, '　')} | ${bot.label.padEnd(7, '　')} | 打 ${foes.length === CORE_ENCOUNTERS.length ? '五种都算' : foes.join('、')} | 每回合伤害 ${up >= 0 ? '+' : ''}${up}% | ${ok}`);
+  }
+}

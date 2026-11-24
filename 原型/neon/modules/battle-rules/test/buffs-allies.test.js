@@ -27,9 +27,9 @@ const ruleBuff = (id, ruleKey) => ({
 const BREAK_WHITE = ruleBuff('buff_break_white', 'breakWhiteAtChainEnd');
 const WHITE_LABEL = '破过盾，链尾补一轮白';
 const RAINBOW_KEEP3 = {
-  id: 'buff_rainbow_keep3', label: '开打先记 2 色，彩虹以后留 3 色', lane: 'rainbow',
+  id: 'buff_rainbow_keep3', label: '开打先记 4 色，彩虹以后留 3 色', lane: 'rainbow',
   effects: [
-    { timing: TIMINGS.BATTLE_START, action: ACTIONS.RECORD_COLORS, params: { mode: 'random', count: 2 } },
+    { timing: TIMINGS.BATTLE_START, action: ACTIONS.RECORD_COLORS, params: { mode: 'random', count: 4 } },
     { timing: TIMINGS.BATTLE_START, action: ACTIONS.MODIFY_RULE, duration: ACTION_DURATIONS.THIS_BATTLE, params: { ruleKey: 'rainbowKeepsNeighbors', value: true } },
   ],
 };
@@ -108,10 +108,10 @@ test('彩虹以后留 3 色：留下这一色和它两边', () => {
   assert.equal(old.nextRecorded.size, 3);
 });
 
-test('开打先记 2 色：开打就集了 2 种色环上的颜色', () => {
+test('开打先记 4 色：开打就集了 4 种色环上的颜色', () => {
   const b = createBattle(makePacket({ deck: [makeGem('a', 'red', ['red'])], drawTarget: 1, monsters: [mon('m1', [])], buffs: [RAINBOW_KEEP3] }));
   const rec = b.getSnapshot().recordedColors;
-  assert.equal(rec.length, 2);
+  assert.equal(rec.length, 4);
   assert.ok(rec.every((c) => COLOR_RING.includes(c)));
 });
 
