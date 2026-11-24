@@ -12,8 +12,9 @@ const H = 540;
 const FIELD = { cx: 480, cy: 318, rx: 410, ry: 188 };
 const SPEED = 240;
 const TOUCH = 34;
+// 藏着的东西、任务物品放的位子：都在场地里头走得到的地方，离上边的出口牌子远远的（用户试玩：放在最上边碰不到，还跟出口叠在一起）
 const CORNERS = [
-  { x: 168, y: 176 }, { x: 792, y: 176 }, { x: 150, y: 410 }, { x: 810, y: 410 }, { x: 300, y: 130 }, { x: 660, y: 130 },
+  { x: 170, y: 300 }, { x: 790, y: 300 }, { x: 205, y: 420 }, { x: 755, y: 420 }, { x: 250, y: 228 }, { x: 710, y: 228 },
 ];
 const KIND_COLOR = { normal: '#9fb6d8', elite: '#ff6b6b', rest: '#86d6a6', event: '#d6b3ff', gatekeeper: '#ff9f43', return: '#ffd79a' };
 const REWARD_GLYPH = { function_card: '牌', buff: '加', enhance: '强', remove: '删', stat: '属', draw_plus: '+1', heal: '心', gold: '金' };
@@ -120,8 +121,8 @@ export function createExploreView(options = {}) {
       tier: m.tier,
     }));
     const corners = CORNERS.slice().sort((a, b) => hashUnit(seed + a.x + a.y, 3) - hashUnit(seed + b.x + b.y, 3));
-    const hidden = c.hidden ? { ...corners[0] } : null;
-    const find = c.findQuestId ? { ...corners[1] } : null;
+    const hidden = c.hidden ? clampToField({ ...corners[0] }, 44) : null;
+    const find = c.findQuestId ? clampToField({ ...corners[1] }, 44) : null;
     const gathers = c.gathers.map((g, i) => {
       const ang = hashUnit(seed + g.id, 4) * Math.PI * 2;
       const p = clampToField({ x: 480 + Math.cos(ang) * (180 + i * 60), y: 320 + Math.sin(ang) * 120 }, 40);
@@ -431,6 +432,13 @@ export function createExploreView(options = {}) {
     });
   }
 
+  /** 走近了，东西下面写一行「怎么拿」（用户试玩：不知道紫色那个怎么拿） */
+  function pickupHint(r, p, text) {
+    const w = text.length * 12 + 16;
+    r.rect({ x: p.x - w / 2, y: p.y + 8, w, h: 18, radius: 9, fill: '#0b0d12', alpha: 0.75 });
+    txt(r, text, p.x, p.y + 17, { size: F.xs, align: 'center', color: '#efe2c4' });
+  }
+
   function drawPickups(r, c) {
     const near = (p, d) => dist(p, hero) < d;
     const reveal = state.player.exploreSkills?.includes('reveal_hidden');
@@ -447,6 +455,7 @@ export function createExploreView(options = {}) {
           txt(r, '？', p.x, p.y - 10, { size: F.s, weight: 'bold', align: 'center', color: '#d6b3ff' });
         }
         if (reveal && !near(p, 110)) txt(r, '队友标的', p.x, p.y - 34, { size: F.xs, align: 'center', color: '#9a78c2' });
+        else pickupHint(r, p, c.hidden.kind === 'stash' ? '走过去就能翻开' : '有点事 · 走过去看看');
       }
       r.circle({ x: p.x + 6, y: p.y - 22, r: 2 + tw * 2, fill: '#fff6c8', alpha: 0.35 + tw * 0.5 });
     }
@@ -458,6 +467,7 @@ export function createExploreView(options = {}) {
       ellipse(r, g.x, g.y + 2, 10, 3, { fill: '#000000', alpha: 0.3 });
       for (let k = 0; k < 3; k++) r.rect({ x: g.x - 5 + k * 4 + sw * (k - 1) * 0.3, y: g.y - 14 + (k % 2) * 3, w: 3, h: 14, fill: '#6fcf7a' });
       r.circle({ x: g.x + sw * 0.4, y: g.y - 16, r: 4, fill: T.connect });
+      if (near(g, 80)) pickupHint(r, g, '任务要采的 · 走过去采');
     });
     // 任务物品：角落里，走近或者队友标了才看得见
     if (layout.find && c.findQuestId) {
@@ -465,6 +475,7 @@ export function createExploreView(options = {}) {
       if (near(p, 80) || reveal) {
         r.rect({ x: p.x - 9, y: p.y - 16, w: 18, h: 18, radius: 4, fill: T.connect, stroke: '#ffffff', lineWidth: 1 });
         txt(r, '任', p.x, p.y - 7, { size: F.xs, weight: 'bold', align: 'center', color: '#0c0f16' });
+        if (near(p, 80)) pickupHint(r, p, '任务要的 · 走过去捡');
       } else {
         const tw = 0.5 + 0.5 * Math.sin(clock * 4 + 1.7);
         r.circle({ x: p.x, y: p.y - 10, r: 1.5 + tw * 1.5, fill: T.connect, alpha: 0.3 + tw * 0.4 });

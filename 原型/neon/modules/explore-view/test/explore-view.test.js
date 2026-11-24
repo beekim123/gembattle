@@ -75,3 +75,29 @@ test('藏着的东西：走到跟前就拿', () => {
   view.update(1 / 30);
   assert.equal(took, 1);
 });
+
+test('藏着的东西、任务物品：点过去走得到，不压在出口牌子上（用户试玩发现的）', () => {
+  for (let i = 0; i < 40; i++) {
+    let took = 0;
+    let found = 0;
+    let exited = 0;
+    const s = fakeRunState();
+    const clearing = { ...s.clearing, id: `c-${i}`, seed: `s-${i}`, needsFight: false, exits: fakeExits, findQuestId: 'q_find', hidden: { kind: 'event', taken: false } };
+    // 拿到了就跟真的一样把状态标成拿过
+    const view = createExploreView({ catalog: FAKE_CATALOG, callbacks: {
+      onTakeHidden: () => { took++; clearing.hidden = { ...clearing.hidden, taken: true }; view.setState({ ...s, clearing: { ...clearing } }); },
+      onFindItem: () => { found++; clearing.findQuestId = null; view.setState({ ...s, clearing: { ...clearing } }); },
+      onExit: () => { exited++; },
+    } });
+    view.setState({ ...s, clearing: { ...clearing } });
+    const { hidden, find, exits } = view.getLayout();
+    for (const p of [hidden, find]) {
+      assert.ok(!exits.some((b) => p.x > b.x - 20 && p.x < b.x + b.w + 20 && p.y < b.y + b.h + 40), `第 ${i} 片：${p.x},${p.y} 离出口太近`);
+    }
+    walkTo(view, hidden.x, hidden.y);
+    walkTo(view, find.x, find.y);
+    assert.equal(took, 1, `第 ${i} 片：藏着的东西点过去没拿到`);
+    assert.equal(found, 1, `第 ${i} 片：任务物品点过去没拿到`);
+    assert.equal(exited, 0);
+  }
+});

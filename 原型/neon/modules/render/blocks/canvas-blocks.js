@@ -410,6 +410,8 @@ export function createBlockRenderer(target, options = {}) {
   return {
     backend: RENDER_BACKEND,
     getSize,
+    /** 画布实际按几倍画（1920×1080 是 2 倍） */
+    getSurfaceScale: () => currentDpr,
     resize,
     clear,
     rect,

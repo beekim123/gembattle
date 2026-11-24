@@ -13,15 +13,28 @@ import { createSaveStore } from '../modules/save/index.js';
 import { session } from './session.js';
 import { DEFAULT_ALLY_IDS, DEFAULT_BUFF_IDS, QUEST_DEFS, buildHeroLoadout } from '../modules/content/index.js';
 
+// 画面按 1920×1080 设计（用户 2026-11-23 定的，设计稿 10 节）。
+// 代码里的坐标用「布局单位」：960×540，一个单位 = 1920×1080 上的 2 个像素。
+// 画的时候至少按 1920×1080 的清晰度画；窗口在屏幕上更大（2K、4K），就照屏幕上的真像素画。
 const LOGICAL_WIDTH = 960;
 const LOGICAL_HEIGHT = 540;
+const MIN_SCALE = 2; // 1920 / 960
+const MAX_SCALE = 4; // 4K
 
 const canvas = document.getElementById('game-canvas');
-const dpr = Math.min(window.devicePixelRatio || 1, 2);
+function surfaceScale() {
+  const rect = canvas.getBoundingClientRect();
+  const onScreen = ((rect.width || LOGICAL_WIDTH) * (window.devicePixelRatio || 1)) / LOGICAL_WIDTH;
+  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, Math.ceil(onScreen * 4) / 4));
+}
 const renderer = createRenderer(canvas, {
   width: LOGICAL_WIDTH,
   height: LOGICAL_HEIGHT,
-  dpr,
+  dpr: surfaceScale(),
+});
+window.addEventListener('resize', () => {
+  const s = surfaceScale();
+  if (s !== renderer.getSurfaceScale?.()) renderer.resize(LOGICAL_WIDTH, LOGICAL_HEIGHT, s);
 });
 
 const sceneManager = createSceneManager({
@@ -121,6 +134,7 @@ window.__CODE00_APP__ = Object.freeze({
   getCurrentScene: () => sceneManager.getCurrentName(),
   getScenes: () => sceneManager.list(),
   getLogicalSize: () => renderer.getSize(),
+  getSurfaceSize: () => ({ width: canvas.width, height: canvas.height }),
   getBackend: () => RENDER_BACKEND,
   getLoopStats: () => loop.getStats(),
   // 截图用：停住主循环，让飘字定在画面上（再调 unfreeze 接着走）

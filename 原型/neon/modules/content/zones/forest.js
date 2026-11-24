@@ -19,7 +19,7 @@ export const FOREST = Object.freeze({
     2: Object.freeze({
       clearings: [2, 3],
       hpScale: 2.5, // 同一区里两层差 2~3 倍（9.2：1 万 → 2.5 万）
-      eliteHpScale: 20000 / 7500,
+      eliteHpScale: 15000 / 7500, // 阶段 4 调过（用户 2026-11-23 按倾向定）：每条 2 万 → 1.5 万
       normal: ['dual_shield', 'recorded_damage_down', 'fast_countdown', 'halve_one_color'],
       pack: ['pack_mixed'],
       elite: ['elite_ignore_first_hits'],

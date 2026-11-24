@@ -7,7 +7,7 @@ import { ACTIONS, ACTION_DURATIONS, TIMINGS } from '../../shared/index.js';
 /**
  * 阶段 1 的战斗遭遇列表（外头区第 1、2 层口径，参考设计稿 9.2）：
  * - 普通怪第 1 层约 10000 血（C 级装备攻击约 80，每发约 60）
- * - 看门的位于第 2 层（3 条血，每条 20000，搭配 B 级装备攻击约 140、每发约 120）
+ * - 看门的位于第 2 层（3 条血，每条 16000（阶段 4 从 20000 调下来），搭配 B 级装备攻击约 140、每发约 120）
  */
 export const ENCOUNTERS = Object.freeze({
   dual_shield: Object.freeze({
@@ -187,7 +187,7 @@ export const ENCOUNTERS = Object.freeze({
     stage1Core: true,
     layer: 2,
     label: '看门的（3 条血换特性）',
-    summary: '3 条血各 20000，每条换特性：盾每回合换色 → 每次出手清空集色 → 被破盾倒计时 -1',
+    summary: '3 条血各 16000，每条换特性：盾每回合换色 → 每次出手清空集色 → 被破盾倒计时 -1',
     recommendedPreset: 'tier_b',
     monsters: Object.freeze([
       Object.freeze({
@@ -200,7 +200,7 @@ export const ENCOUNTERS = Object.freeze({
         initialCountdown: 4,
         bars: Object.freeze([
           Object.freeze({
-            maxHp: 20000,
+            maxHp: 16000,
             shields: Object.freeze([
               Object.freeze({ color: 'red', max: 7 }),
             ]),
@@ -220,7 +220,7 @@ export const ENCOUNTERS = Object.freeze({
             ]),
           }),
           Object.freeze({
-            maxHp: 20000,
+            maxHp: 16000,
             shields: Object.freeze([
               Object.freeze({ color: 'green', max: 7 }),
             ]),
@@ -240,7 +240,7 @@ export const ENCOUNTERS = Object.freeze({
             ]),
           }),
           Object.freeze({
-            maxHp: 20000,
+            maxHp: 16000,
             shields: Object.freeze([
               Object.freeze({ color: 'blue', max: 7 }),
             ]),
