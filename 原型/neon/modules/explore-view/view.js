@@ -143,7 +143,8 @@ export function createExploreView(options = {}) {
     const n = exits.length;
     return exits.map((e, i) => {
       const cx = 480 + (i - (n - 1) / 2) * 230;
-      return { exit: e, cx, cy: 122, x: cx - 86, y: 70, w: 172, h: 86 };
+      // 点的范围连门口地面那圈亮的一起算（下沿在 y 158；原来只到 156，点那圈的下沿会停在门外进不去）
+      return { exit: e, cx, cy: 122, x: cx - 86, y: 70, w: 172, h: 98 };
     });
   }
 
@@ -417,7 +418,9 @@ export function createExploreView(options = {}) {
       const glyph = e.kind === 'return' ? '回' : e.kind === 'rest' ? '歇' : e.kind === 'event' ? '？' : e.kind === 'gatekeeper' ? '门' : REWARD_GLYPH[e.reward?.kind] || '?';
       r.rect({ x: b.cx - 72, y: py + 6, w: 32, h: 32, radius: 6, fill: col, alpha: 0.9 * a });
       txt(r, glyph, b.cx - 56, py + 22, { size: glyph.length > 1 ? F.s : F.l, weight: 'bold', align: 'center', color: '#0c0f16', alpha: a });
-      const title = e.kind === 'return' ? '回去' : e.kind === 'gatekeeper' ? '看门的' : e.label;
+      // 属性出口：给哪样直接写进标题（原来写在右下角，跟「往里一层」撞成一团）
+      const statName = e.reward?.kind === 'stat' ? ({ attack: '攻击', damageBonus: '增伤', critRate: '暴击率', critDamage: '暴伤' })[e.reward.stat] : null;
+      const title = e.kind === 'return' ? '回去' : e.kind === 'gatekeeper' ? '看门的' : statName ? `${e.label} · ${statName}` : e.label;
       txt(r, title, b.cx - 34, py + 15, { size: F.s, weight: 'bold', alpha: a });
       const sub = e.kind === 'return' ? '带着东西回大厅'
         : e.kind === 'rest' ? '没有怪' : e.kind === 'event' ? '一件事'
@@ -427,7 +430,6 @@ export function createExploreView(options = {}) {
         r.rect({ x: b.cx + 56, y: py - 8, w: 22, h: 18, radius: 4, fill: T.connect, alpha: a });
         txt(r, '任', b.cx + 67, py + 1, { size: F.xs, weight: 'bold', align: 'center', color: '#0c0f16', alpha: a });
       }
-      if (e.reward?.kind === 'stat') txt(r, `给${({ attack: '攻击', damageBonus: '增伤', critRate: '暴击率', critDamage: '暴伤' })[e.reward.stat]}`, b.cx + 70, py + 32, { size: F.xs, align: 'right', color: col, alpha: a });
     });
   }
 
@@ -569,8 +571,11 @@ export function createExploreView(options = {}) {
   function drawQuests(r) {
     const qs = state.quests || [];
     if (!qs.length) return;
-    let y = 46;
-    r.rect({ x: 10, y: 38, w: 250, h: 10 + qs.length * 20, radius: 8, fill: '#0b0d12', alpha: 0.7 });
+    // 放左下角的树上：放左上角会挡住最左边的出口牌子（第 3 轮审核 S3）
+    const h = 10 + qs.length * 20;
+    const top = H - 8 - h;
+    let y = top + 13;
+    r.rect({ x: 10, y: top, w: 250, h, radius: 8, fill: '#0b0d12', alpha: 0.7 });
     qs.forEach((q) => {
       r.rect({ x: 18, y: y - 5, w: 10, h: 10, radius: 2, fill: q.done ? T.connect : '#5a6480' });
       txt(r, `${q.hidden ? '隐 · ' : ''}${q.label}`, 34, y, { size: F.xs, color: q.done ? T.connect : T.text2 });
@@ -662,7 +667,7 @@ export function createExploreView(options = {}) {
       if (card.enhanced) txt(r, '+', x + w - 8, y + 10, { size: F.s, weight: 'bold', color: '#ffffff' });
     } else {
       r.rect({ x, y, w, h, radius: 6, fill: card.kind === 'junk' ? '#2a2222' : '#252b3d', stroke: card.color && card.color !== 'colorless' ? swatch(card.color) : '#59657f', lineWidth: 1.5 });
-      wrapText(r, card.label, w - 6, { size: 10 }).slice(0, 3).forEach((ln, i) => txt(r, ln, x + w / 2, y + 14 + i * 13, { size: 10, align: 'center', color: card.kind === 'junk' ? '#c08a8a' : T.text }));
+      wrapText(r, card.label, w - 6, { size: F.xs }).slice(0, 3).forEach((ln, i) => txt(r, ln, x + w / 2, y + 13 + i * 15, { size: F.xs, align: 'center', color: card.kind === 'junk' ? '#c08a8a' : T.text }));
     }
   }
 
@@ -670,7 +675,7 @@ export function createExploreView(options = {}) {
     r.rect({ x: 0, y: 0, w: W, h: H, fill: '#05070a', alpha: 0.75 });
     r.rect({ x: 60, y: 50, w: 840, h: 440, radius: 14, fill: '#121722', stroke: '#3a4560', lineWidth: 1.5 });
     const deck = state.player.deck;
-    txt(r, `牌组 ${deck.length} 张 · 每回合补到 ${state.player.drawTarget} 张`, 480, 76, { size: F.l, weight: 'bold', align: 'center' });
+    txt(r, `牌组 ${deck.length} 张 · 每回合至少 ${state.player.drawTarget} 张`, 480, 76, { size: F.l, weight: 'bold', align: 'center' });
     const s = state.player.stats;
     txt(r, `攻击 ${s.attack} · 增伤 +${Math.round(s.damageBonus * 100)}% · 暴击 ${Math.round(s.critRate * 100)}% · 暴伤 ×${s.critDamage}`, 480, 100, { size: F.s, align: 'center', color: T.text2 });
     const gl = state.player.gemLevels;

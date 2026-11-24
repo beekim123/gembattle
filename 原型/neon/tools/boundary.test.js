@@ -18,7 +18,7 @@ const ALLOWED_MODULE_DEPS = {
   'battle-view': ['shared', 'render', 'ui'],
   'run-rules': ['shared'],
   'explore-view': ['shared', 'render', 'ui'],
-  save: [],
+  save: ['shared'], // 设计稿 10.0：共用约定谁都能用（存档的约定 validateSaveData 在 shared）
   guild: ['shared', 'render', 'ui'],
   recruit: ['shared', 'render', 'ui'],
   depart: ['shared', 'render', 'ui'],
@@ -207,4 +207,25 @@ test('原型全目录文本不含禁用的十个套路字或固定套路格式',
   }
 
   assert.deepEqual(hits, [], `发现禁用用词：\n${hits.join('\n')}`);
+});
+
+test('字号不小于 12 个布局单位（设计稿 10.6：1080p 下最小 24）', async () => {
+  const hits = [];
+  for (const zone of ['modules', 'app']) {
+    const files = await walkFiles(join(ROOT, zone));
+    for (const file of files) {
+      if (extname(file).toLowerCase() !== '.js') continue;
+      const rel = relative(ROOT, file);
+      // 候选页、记录、测试不查；looks.js 的 size 是怪的大小，不是字号
+      if (/[\\/](test|proposals|记录)[\\/]/.test(rel) || rel.endsWith('looks.js')) continue;
+      const lines = (await readFile(file, 'utf8')).split('\n');
+      lines.forEach((line, i) => {
+        if (!/\b(txt|bold|measureText|wrapText|text)\s*\(/.test(line)) return;
+        for (const m of line.matchAll(/\bsize:\s*(\d+(?:\.\d+)?)\b/g)) {
+          if (Number(m[1]) < 12) hits.push(`${rel}:${i + 1} 写了 size: ${m[1]}`);
+        }
+      });
+    }
+  }
+  assert.deepEqual(hits, [], `字号太小，用 F.xs（12）起：\n${hits.join('\n')}`);
 });

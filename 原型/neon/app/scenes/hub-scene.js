@@ -7,10 +7,10 @@ import { createRecruitView, hireAlly, refundAlly } from '../../modules/recruit/i
 import { createDepartView, cycleGear, buildDepartPacket } from '../../modules/depart/index.js';
 import { createAlbumView } from '../../modules/album/index.js';
 import {
-  ALLY_DEFS, ALL_CARD_DEFS, BUFF_LIST, ENCOUNTERS, FREE_GEAR, GEAR_DEFS, GEAR_LIST, HIDDEN_QUEST, QUEST_BOARD, QUEST_DEFS, ZONES, buildHeroLoadout,
+  ALLY_DEFS, ALL_CARD_DEFS, BUFF_LIST, ENCOUNTERS, FREE_GEAR, FUNCTION_ENHANCE, GEAR_DEFS, GEAR_LIST, HIDDEN_QUEST, QUEST_BOARD, QUEST_DEFS, ZONES, buildHeroLoadout,
 } from '../../modules/content/index.js';
 import { F, T, inRect, panelButton, txt, wrapText } from '../../modules/ui/index.js';
-import { COLOR_META } from '../../modules/shared/index.js';
+import { COLOR_META, COLOR_RING } from '../../modules/shared/index.js';
 import { session } from '../session.js';
 
 const ENTRIES = [
@@ -25,6 +25,22 @@ const ENTRIES = [
 const GUILD_CONTENT = { quests: QUEST_DEFS, board: QUEST_BOARD, rankQuestId: 'q_rank_b', hiddenQuest: HIDDEN_QUEST, gear: GEAR_DEFS };
 const ALL_QUESTS = { ...QUEST_DEFS, [HIDDEN_QUEST.id]: HIDDEN_QUEST };
 
+/** 卡册里一张牌写什么（设计稿 8.5）：用法、强化以后什么样、色环上挨着谁、补色是谁 */
+export function cardAlbumText(c) {
+  const name = (col) => COLOR_META[col]?.label || col;
+  if (c.kind === 'gem') {
+    let ring;
+    if (c.color === 'white') ring = '白接在谁后面都算接上（翻倍），谁接在白后面也算';
+    else {
+      const i = COLOR_RING.indexOf(c.color);
+      ring = `色环上挨着${name(COLOR_RING[(i + 5) % 6])}、${name(COLOR_RING[(i + 1) % 6])}（接上翻倍），补色是${name(COLOR_RING[(i + 3) % 6])}（接上合白），别的接上去是断色`;
+    }
+    return `${c.description}。${ring}。强化挑一个：疼、多、破盾、集色`;
+  }
+  const up = FUNCTION_ENHANCE[c.id];
+  return `${c.description}。强化以后：${up ? up.description.replace('（强化过）', '') : '没有'}`;
+}
+
 function albumData() {
   const monsters = [];
   const seen = new Set();
@@ -38,7 +54,7 @@ function albumData() {
       monsters.push({ defId: m.defId, look: m.look, label: m.label, tier: m.tier, info: `${bars} 条血 · 盾：${shields} · ${traits}` });
     }
   }
-  const cards = Object.values(ALL_CARD_DEFS).filter((c) => c.kind !== 'junk').map((c) => ({ id: c.defId, label: c.label, description: c.description, kind: c.kind, color: c.color, gems: c.gems }));
+  const cards = Object.values(ALL_CARD_DEFS).filter((c) => c.kind !== 'junk').map((c) => ({ id: c.defId, label: c.label, description: cardAlbumText({ ...c, id: c.defId }), kind: c.kind, color: c.color, gems: c.gems }));
   return { cards, buffs: BUFF_LIST, allies: Object.values(ALLY_DEFS), monsters, gear: GEAR_LIST };
 }
 

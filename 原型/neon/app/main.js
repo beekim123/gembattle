@@ -10,7 +10,7 @@ import { createBattleScene } from './scenes/battle-scene.js';
 import { createRunScene } from './scenes/run-scene.js';
 import { createHubScene } from './scenes/hub-scene.js';
 import { createSaveStore } from '../modules/save/index.js';
-import { session } from './session.js';
+import { formatPlayLog, session } from './session.js';
 import { TRIAL_ALLY_IDS, TRIAL_BUFF_IDS, QUEST_DEFS, buildHeroLoadout } from '../modules/content/index.js';
 
 // 画面按 1920×1080 设计（用户 2026-11-23 定的，设计稿 10 节）。
@@ -137,6 +137,8 @@ window.__CODE00_APP__ = Object.freeze({
   getSurfaceSize: () => ({ width: canvas.width, height: canvas.height }),
   getBackend: () => RENDER_BACKEND,
   getLoopStats: () => loop.getStats(),
+  // 试玩记录（设计稿 10.4）：每回合想了几秒、打了几张、撤回几次
+  getPlayLog: () => formatPlayLog(session.playLog || []),
   // 截图用：停住主循环，让飘字定在画面上（再调 unfreeze 接着走）
   freeze: () => { loop.stop(); sceneManager.render(renderer); },
   unfreeze: () => loop.start(),

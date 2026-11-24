@@ -12,6 +12,7 @@
    - 开战包（`validateBattleStartPacket`）
    - 战斗快照 / 预览 / 演出事件（`validateBattleSnapshot`、`validateBattlePreview`、`validateBattleEvent`、`validateBattleEvents`）
    - 战斗结果（`validateBattleResult`，明确拒绝携带掉落字段）
+5. **一趟和大厅之间的三样约定**（`run-contracts.js`，第 3 轮审核后补的）：出发包（`validateDepartPacket`）、回来包（`validateReturnPacket`）、存档（`validateSaveData`），外加 `RUN_OUTCOMES`、`ADVENTURER_RANKS`。`run-rules` 开一趟、交回来包时查，`save` 写存档时查。
 
 不放玩法逻辑（不算接链、不算伤害、不执行动作），不碰 `document` 或 `canvas`。
 
@@ -22,7 +23,7 @@
 - 颜色常量与查表：`PRIMARY_GEMS`、`COLOR_RING`、`SEVEN_COLORS`、`CARD_COLORS`、`BASE_GEM_DECK_TOTAL`、`CHAIN_RELATIONS`、`CHAIN_RELATION_LABELS`、`COLOR_META`、`isPrimaryGem`、`isRingColor`、`isSevenColor`、`isCardColor`、`getColorMeta`
 - 时机与动作：`EFFECT_SOURCES`、`TIMINGS`、`TIMING_LABELS`、`ACTION_DURATIONS`、`ACTION_DURATION_LABELS`、`RETRIGGER_POLICIES`、`RETRIGGER_POLICY_LABELS`、`ACTIONS`、`DEFAULT_ACTION_TABLE`
 - 随机数：`createRng`
-- 约定校验：`SCHEMA_VERSION`、`BATTLE_EVENT_TYPES`、`createEmptyDrawPileByColor` 及上述 7 个 `validate*` 函数
+- 约定校验：`SCHEMA_VERSION`、`BATTLE_EVENT_TYPES`、`createEmptyDrawPileByColor` 及上述 7 个 `validate*` 函数；`RUN_OUTCOMES`、`ADVENTURER_RANKS`、`validateDepartPacket`、`validateReturnPacket`、`validateSaveData`
 
 ## 读写哪些数据
 

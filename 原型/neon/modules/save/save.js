@@ -1,6 +1,8 @@
 // 存档（设计稿 8.1、10.3）：读写、版本、旧存档升级；统一写入各模块交回的「要改什么」。
 // 浏览器和桌面版不一样的地方（存在哪）只在这里：storage 由调用方传进来（浏览器里是 localStorage，单测里是一个 Map）。
 
+import { validateSaveData } from '../shared/index.js';
+
 export const SAVE_VERSION = 1;
 const KEY = 'code00.save';
 
@@ -54,7 +56,17 @@ export function createSaveStore(storage) {
       raw = null;
     }
     current = migrateSave(raw);
+    // 读回来的存档坏了（手改过、版本太旧补不齐）：就当新档，不让坏数据流进各模块
+    if (!validateSaveData(current).ok) current = createDefaultSave();
     return clone(current);
+  }
+
+  /** 各模块交回的新存档要合 shared 的约定（validateSaveData）；不合就是哪块代码写错了，直接报 */
+  function checked(next) {
+    const out = migrateSave(next);
+    const check = validateSaveData(out);
+    if (!check.ok) throw new Error(`存档不合约定：\n${check.errors.join('\n')}`);
+    return out;
   }
 
   function write() {
@@ -70,14 +82,14 @@ export function createSaveStore(storage) {
     get: () => clone(current || load()),
     /** 整份换掉（结算函数给的新存档） */
     replace(next) {
-      current = migrateSave(next);
+      current = checked(next);
       write();
       return clone(current);
     },
     /** 交回「要改什么」：一个函数，拿到旧存档的拷贝，返回新存档 */
     apply(change) {
       const next = change(clone(current || load()));
-      current = migrateSave(next);
+      current = checked(next);
       write();
       return clone(current);
     },

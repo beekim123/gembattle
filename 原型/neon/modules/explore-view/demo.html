@@ -30,6 +30,7 @@ addEventListener('keyup', (e) => view.onKey(e.key, false));
 let last = performance.now();
 function frame(now) { view.update(Math.min(0.05, (now - last) / 1000)); last = now; view.render(r); requestAnimationFrame(frame); }
 requestAnimationFrame(frame);
+window.__showExits = () => { state = { ...state, clearing: { ...state.clearing, needsFight: false, exits: fakeExits } }; view.setState(state); };
 window.__showPick = () => { state = { ...state, pending: { type: 'pick_buff', options: ['b1', 'b2', 'b3'], source: '出口' } }; view.setState(state); };
 </script>
 </body>

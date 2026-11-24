@@ -11,6 +11,8 @@
 - `createDefaultSave()`：新档（金币 120、C 级、没装备、没任务）。
 - `migrateSave(raw)`：旧存档缺什么补什么。
 - `createSaveStore(storage)` → `load()`、`get()`、`replace(next)`、`apply(change)`、`reset()`。
+- 写进去之前都过一遍 `shared` 的 `validateSaveData`：`replace` / `apply` 交回的存档形状不对就直接报错；`load` 读到的坏档（升级以后还不对）丢掉，换一份新档。
+- 只依赖 `shared`（设计稿 10.0：共用约定谁都能用）。
 
 ## 存档里有什么
 

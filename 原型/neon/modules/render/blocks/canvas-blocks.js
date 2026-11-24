@@ -347,14 +347,14 @@ export function createBlockRenderer(target, options = {}) {
       });
     }
     if (badge) {
-      const badgeW = Math.max(32, measureText(badge, { size: 11, weight: 'bold' }).width + 12);
+      const badgeW = Math.max(32, measureText(badge, { size: 12 /* 最小字号，跟 ui 的 F.xs 一样（设计稿 10.6：1080p 下 24） */, weight: 'bold' }).width + 12);
       rect({ x: x + w - badgeW - 6, y: y + 6, w: badgeW, h: 20, fill: '#17191f', stroke: borderColor, lineWidth: 1, radius: 4 });
       text({
         text: badge,
         x: x + w - badgeW / 2 - 6,
         y: y + 16,
         color: '#f2f5fb',
-        size: 11,
+        size: 12 /* 最小字号，跟 ui 的 F.xs 一样（设计稿 10.6：1080p 下 24） */,
         weight: 'bold',
         align: 'center',
         baseline: 'middle',

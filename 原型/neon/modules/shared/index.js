@@ -64,3 +64,11 @@ export {
   validateBattleResult,
   createEmptyDrawPileByColor,
 } from './contracts.js';
+
+export {
+  RUN_OUTCOMES,
+  ADVENTURER_RANKS,
+  validateDepartPacket,
+  validateReturnPacket,
+  validateSaveData,
+} from './run-contracts.js';

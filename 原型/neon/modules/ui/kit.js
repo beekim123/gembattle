@@ -166,8 +166,8 @@ export function chainJoint(r, x, y, rel) {
     r.circle({ x, y, r: 7, fill: '#123824', stroke: T.connect, lineWidth: 1.5 });
     txt(r, '›', x, y - 1, { size: F.s, weight: 'bold', align: 'center', color: T.connect });
   } else if (rel === 'complement') {
-    r.circle({ x, y, r: 8, fill: '#3a2f0c', stroke: T.complement, lineWidth: 1.5 });
-    txt(r, '白', x, y, { size: 10, weight: 'bold', align: 'center', color: T.complement });
+    r.circle({ x, y, r: 9, fill: '#3a2f0c', stroke: T.complement, lineWidth: 1.5 });
+    txt(r, '白', x, y, { size: F.xs, weight: 'bold', align: 'center', color: T.complement });
   } else if (rel === 'break') {
     r.circle({ x, y, r: 7, fill: '#3a1218', stroke: T.danger, lineWidth: 1.5 });
     txt(r, '×', x, y - 1, { size: F.s, weight: 'bold', align: 'center', color: T.danger });
@@ -218,7 +218,7 @@ export function targetRing(r, cx, baseY, size) {
 export function countdown(r, x, y, n, intentHearts, { size = 17, side = 'right' } = {}) {
   const urgent = n <= 1;
   r.circle({ x, y, r: size, fill: urgent ? '#7a1622' : '#141824', stroke: urgent ? T.danger : '#8a96b4', lineWidth: 2 });
-  txt(r, String(n), x, y + 1, { size: Math.round(size * 1.15), weight: 'bold', align: 'center', color: urgent ? '#ffffff' : T.text });
+  txt(r, String(n), x, y + 1, { size: Math.max(F.xs, Math.round(size * 1.15)), weight: 'bold', align: 'center', color: urgent ? '#ffffff' : T.text });
   const ix = side === 'right' ? x + size + 6 : x - size - 6;
   const label = `打 ${intentHearts === 0.5 ? '½' : intentHearts}`;
   const lw = r.measureText(label, { size: F.s, weight: 'bold', font: FONT }).width;
@@ -294,7 +294,7 @@ export function buffIcon(r, x, y, b, size = 26) {
   if (b.lane === 'rainbow') {
     COLOR_RING.forEach((c, i) => r.rect({ x: x + 3 + i * ((size - 6) / 6), y: y + size - 6, w: (size - 6) / 6, h: 3, fill: swatch(c) }));
   }
-  txt(r, lane.glyph, x + size / 2, y + size / 2, { size: Math.round(size * 0.52), weight: 'bold', align: 'center', color: lane.color });
+  txt(r, lane.glyph, x + size / 2, y + size / 2, { size: Math.max(F.xs, Math.round(size * 0.52)), weight: 'bold', align: 'center', color: lane.color });
   if (b.flash) r.rect({ x: x - 3, y: y - 3, w: size + 6, h: size + 6, radius: 8, stroke: '#ffffff', lineWidth: 2 });
 }
 
@@ -366,8 +366,13 @@ export function breakStamp(r, x, y) {
 }
 
 /** 集色：六个点排成一圈，白在中间；集到的亮，当前色加一个圈 */
-export function colorRing(r, cx, cy, rad, recorded, current = null, dot = 9) {
+/**
+ * 集色环。links 给了一个颜色（链尾现在是哪色），就把能接上的两边描绿圈、补色描金圈，
+ * 别的颜色接上去是断色（第 3 轮审核 S4：新手看不懂紫和青为什么接不上）。
+ */
+export function colorRing(r, cx, cy, rad, recorded, current = null, dot = 9, links = null) {
   r.circle({ x: cx, y: cy, r: rad + dot + 4, fill: '#0b0d12', stroke: T.line, lineWidth: 1 });
+  const li = links ? COLOR_RING.indexOf(links) : -1;
   COLOR_RING.forEach((c, i) => {
     const ang = -Math.PI / 2 + (i * Math.PI) / 3;
     const x = cx + Math.cos(ang) * rad;
@@ -375,6 +380,11 @@ export function colorRing(r, cx, cy, rad, recorded, current = null, dot = 9) {
     const on = recorded.includes(c);
     r.circle({ x, y, r: dot, fill: on ? swatch(c) : '#151821', stroke: swatch(c), lineWidth: 1.5, alpha: on ? 1 : 0.6 });
     if (c === current) r.circle({ x, y, r: dot + 4, stroke: '#ffffff', lineWidth: 2 });
+    else if (li >= 0) {
+      const d = Math.min((i - li + 6) % 6, (li - i + 6) % 6);
+      if (d === 1) r.circle({ x, y, r: dot + 3, stroke: T.connect, lineWidth: 1.5 });
+      else if (d === 3) r.circle({ x, y, r: dot + 3, stroke: T.complement, lineWidth: 1.5 });
+    }
   });
   r.circle({ x: cx, y: cy, r: dot * 0.8, fill: '#f2f4f8', alpha: 0.9 });
   txt(r, `${recorded.length}/6`, cx, cy + rad + dot + 16, { size: F.xs, align: 'center', color: recorded.length >= 5 ? T.gold : T.text2 });

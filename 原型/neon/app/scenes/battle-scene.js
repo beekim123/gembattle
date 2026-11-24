@@ -4,12 +4,30 @@
 import { createBattle } from '../../modules/battle-rules/index.js';
 import { createBattleView } from '../../modules/battle-view/index.js';
 import { createBattlePacket, instantiateCard } from '../../modules/content/index.js';
+import { session } from '../session.js';
 
 export function createBattleScene(context) {
   let battle = null;
   let view = null;
   let lastConfig = null;
   let retryCount = 0;
+  // 试玩记录：这回合从「能动手」到「打出去」想了几秒（演出播放的时间不算）
+  let logEntry = null;
+  let timedTurn = -1;
+  let turnStartedAt = 0;
+
+  function commit() {
+    const snap = battle.getSnapshot();
+    if (logEntry && snap.phase === 'player_input') {
+      logEntry.turns.push({ turn: snap.turn, thinkSec: Math.max(0, (Date.now() - turnStartedAt) / 1000), played: snap.chain.length });
+    }
+    const out = battle.commitChain();
+    if (logEntry) {
+      logEntry.undoCount = battle.getMetrics().undoCount;
+      if (out.result) logEntry.outcome = out.result.outcome === 'win' ? '赢' : '输';
+    }
+    syncView(out.events, out.result);
+  }
 
   function syncView(events = [], result = null) {
     if (!battle || !view) return;
@@ -52,6 +70,12 @@ export function createBattleScene(context) {
     battle = createBattle(packet, {
       showExactDamage: config.rulesConfig?.showExactDamage ?? true,
     });
+    if (!config.stressMode) {
+      const d = new Date();
+      logEntry = { at: `${d.getMonth() + 1}-${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, encounter: packet.monsters.map((m) => m.label).join('+'), outcome: null, undoCount: 0, turns: [] };
+      session.playLog = [...(session.playLog || []), logEntry].slice(-50);
+    } else logEntry = null;
+    timedTurn = -1;
 
     view = createBattleView({
       allowAutoArrange: config.rulesConfig?.allowAutoArrange ?? true,
@@ -84,8 +108,7 @@ export function createBattleScene(context) {
           syncView();
         },
         onCommitChain() {
-          const out = battle.commitChain();
-          syncView(out.events, out.result);
+          commit();
         },
         onRetry() {
           retryCount++;
@@ -123,6 +146,11 @@ export function createBattleScene(context) {
 
     onUpdate(dt) {
       if (view) view.update(dt);
+      // 新的一回合、演出播完了才开始计时
+      if (battle && view && !view.isBusy?.()) {
+        const t = battle.getSnapshot().turn;
+        if (t !== timedTurn) { timedTurn = t; turnStartedAt = Date.now(); }
+      }
     },
 
     onPointer(event) {
@@ -133,8 +161,7 @@ export function createBattleScene(context) {
       if (!battle || battle.getResult()) return;
       if (view?.isBusy?.()) return; // 正在播打出去的那一下
       if (key === ' ') {
-        const out = battle.commitChain();
-        syncView(out.events, out.result);
+        commit();
       } else if (key === 'z' || key === 'Z') {
         if (battle.undoLast()) syncView();
       } else if (key === 'Escape' && !lastConfig.runPacket) {

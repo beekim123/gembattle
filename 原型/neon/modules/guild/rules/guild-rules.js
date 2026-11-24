@@ -31,7 +31,8 @@ export function refreshBoard(save, content) {
   const ri = rankIndex(s.rank);
   const ids = [];
   for (const r of [s.rank, RANKS[ri + 1]]) for (const id of content.board[r] || []) if (!taken.has(id) && !failed.has(id)) ids.push(id);
-  if (s.rank === 'C' && s.rankDone >= RANK_UP_AFTER && content.rankQuestId && !taken.has(content.rankQuestId)) ids.unshift(content.rankQuestId);
+  // 升级任务失败了就在「上次失败的」那栏（可以再接），任务板上不再摆一份
+  if (s.rank === 'C' && s.rankDone >= RANK_UP_AFTER && content.rankQuestId && !taken.has(content.rankQuestId) && !failed.has(content.rankQuestId)) ids.unshift(content.rankQuestId);
   s.quests.board = ids.slice(0, 6);
   return s;
 }

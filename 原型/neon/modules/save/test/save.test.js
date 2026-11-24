@@ -29,3 +29,15 @@ test('get 给的是拷贝，改了不会改到存档', () => {
   s.gold = 999;
   assert.equal(a.get().gold, 120);
 });
+
+test('存档要合 shared 的约定：交回坏存档直接报；读回来坏了当新档（第 3 轮审核 S5）', () => {
+  const mem = new Map();
+  const storage = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
+  const store = createSaveStore(storage);
+  store.load();
+  assert.throws(() => store.apply((s) => ({ ...s, gold: -5 })), /存档不合约定/);
+  mem.set('code00.save', JSON.stringify({ saveVersion: 1, gold: 'lots', rank: 'Z' }));
+  const fresh = createSaveStore(storage).load();
+  assert.equal(fresh.gold, 120);
+  assert.equal(fresh.rank, 'C');
+});

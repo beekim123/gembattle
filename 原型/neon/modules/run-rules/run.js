@@ -2,7 +2,7 @@
 // 不碰画面；所有内容（怪、牌、加成、队友、事件、任务、数）都由调用方用纯数据传进来（contentPack），
 // 本模块不认识 content 模块，单测用假数据就能跑。
 
-import { SCHEMA_VERSION, createRng } from '../shared/index.js';
+import { SCHEMA_VERSION, createRng, validateDepartPacket, validateReturnPacket } from '../shared/index.js';
 
 export const RUN_SCHEMA_VERSION = 1;
 
@@ -85,7 +85,8 @@ function cloneEffects(effects) {
  * @param {object} pack contentPack：纯数据（见 README）
  */
 export function createRun(depart, pack) {
-  if (!depart || depart.schemaVersion !== SCHEMA_VERSION) throw new Error('出发包 schemaVersion 不对');
+  const check = validateDepartPacket(depart);
+  if (!check.ok) throw new Error(`出发包不合约定：\n${check.errors.join('\n')}`);
   if (!pack || !pack.zones || !pack.cardDefs) throw new Error('缺 contentPack');
   const zone = pack.zones[depart.zoneId || 'forest'];
   if (!zone) throw new Error(`未知的地点：${depart.zoneId}`);
@@ -485,7 +486,7 @@ export function createRun(depart, pack) {
       case 'draw_plus':
         player.drawTarget += 1;
         player.drawPlusTaken += 1;
-        queue({ type: 'notice', text: `每回合补到 ${player.drawTarget} 张`, icon: 'draw_plus' });
+        queue({ type: 'notice', text: `每回合手里至少 ${player.drawTarget} 张（最多 ${player.drawTarget + 1} 张）`, icon: 'draw_plus' });
         break;
       case 'heal': {
         const before = player.hearts;
@@ -817,7 +818,7 @@ export function createRun(depart, pack) {
   function getReturnPacket() {
     if (!ended) return null;
     const alive = ended.outcome === 'returned';
-    return {
+    const packet = {
       schemaVersion: SCHEMA_VERSION,
       outcome: ended.outcome,
       gold: alive ? gold.safe + gold.risky : gold.safe,
@@ -834,6 +835,9 @@ export function createRun(depart, pack) {
       loot: [],
       stats: { ...runStats, deepestLayer: clearing?.layer ?? 1, gatekeeperBeaten: clearing?.kind === 'gatekeeper' && clearing.fought && alive },
     };
+    const check = validateReturnPacket(packet);
+    if (!check.ok) throw new Error(`回来包不合约定：\n${check.errors.join('\n')}`);
+    return packet;
   }
 
   function getState() {

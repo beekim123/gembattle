@@ -32,8 +32,8 @@ export function tabRow(r, x, y, items, active, hot) {
     if (on) r.rect({ x: cx, y: y + 27, w, h: 3, radius: 1, fill: GOLD });
     txt(r, it.label, cx + w / 2, y + 14, { size: F.m, weight: 'bold', align: 'center', color: on ? GOLD : hot === b.id ? CREAM : T.text2 });
     if (it.badge) {
-      r.circle({ x: cx + w - 6, y: y + 4, r: 7, fill: T.connect });
-      txt(r, String(it.badge), cx + w - 6, y + 4, { size: 10, weight: 'bold', align: 'center', color: '#0b0d12' });
+      r.circle({ x: cx + w - 6, y: y + 4, r: 8, fill: T.connect });
+      txt(r, String(it.badge), cx + w - 6, y + 4, { size: F.xs, weight: 'bold', align: 'center', color: '#0b0d12' });
     }
     cx += w + 6;
     return b;

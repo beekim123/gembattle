@@ -2,6 +2,7 @@
 
 import { UI_THEME } from './theme.js';
 import { wrapText } from './primitives.js';
+import { F } from './kit.js';
 
 /**
  * 计算提示框的位置与尺寸，保证不超出视口四边。
@@ -33,7 +34,7 @@ export function layoutTooltip(renderer, tip, viewport) {
     contentW = Math.max(contentW, renderer.measureText(line, { size: bodySize, font: UI_THEME.font }).width);
   }
   if (tip.tag) {
-    contentW = Math.max(contentW, renderer.measureText(String(tip.tag), { size: 11, weight: 'bold', font: UI_THEME.font }).width + 16);
+    contentW = Math.max(contentW, renderer.measureText(String(tip.tag), { size: F.xs, weight: 'bold', font: UI_THEME.font }).width + 16);
   }
 
   const w = Math.min(maxWidth, Math.max(120, Math.ceil(contentW) + padding * 2));
@@ -135,7 +136,7 @@ export function drawTooltip(renderer, tip, viewport) {
 
   if (box.tag) {
     const tagY = cursorY + 4;
-    const tagW = renderer.measureText(box.tag, { size: 11, weight: 'bold', font: UI_THEME.font }).width + 12;
+    const tagW = renderer.measureText(box.tag, { size: F.xs, weight: 'bold', font: UI_THEME.font }).width + 12;
     renderer.rect({
       x: textX,
       y: tagY,
@@ -151,7 +152,7 @@ export function drawTooltip(renderer, tip, viewport) {
       x: textX + 6,
       y: tagY + 9,
       color: UI_THEME.textPrimary,
-      size: 11,
+      size: F.xs,
       weight: 'bold',
       baseline: 'middle',
       font: UI_THEME.font,

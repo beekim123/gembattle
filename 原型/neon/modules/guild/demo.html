@@ -9,7 +9,7 @@ import { buyGear, createGuildView, refreshBoard, submitAll, submitQuest, takeQue
 import { FAKE_GUILD_CONTENT as C, fakeSave } from './test/fake.js';
 const canvas = document.getElementById('c');
 const r = createRenderer(canvas, { width: 960, height: 540, dpr: Math.min(2, devicePixelRatio || 1) });
-let save = refreshBoard(fakeSave({ quests: { board: [], taken: [{ id: 'q3', progress: 2, done: true }], failed: [] } }), C);
+let save = refreshBoard(fakeSave({ quests: { board: [], taken: [{ id: 'q3', progress: 2, done: true }, { id: 'q1', progress: 3, done: true }, { id: 'q2', progress: 1 }], failed: [] } }), C);
 const P = { x: 392, y: 26, w: 544, h: 488 };
 const set = (out) => { save = refreshBoard(out.save, C); view.setState({ save, content: C }); };
 const view = createGuildView({ callbacks: {

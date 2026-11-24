@@ -43,7 +43,7 @@ export function createDepartView(options = {}) {
     });
 
     const st = loadout.stats;
-    txt(r, `主角：攻击 ${st.attack} · 增伤 +${Math.round(st.damageBonus * 100)}% · 暴击 ${Math.round(st.critRate * 100)}% ×${st.critDamage} · 心 ${loadout.maxHearts} · 每回合补到 ${loadout.drawTarget} 张${loadout.gearTraits?.length ? ` · ${loadout.gearTraits.map((t) => t.label).join('、')}` : ''}`, x0, y + 8, { size: F.xs, color: T.text2 });
+    txt(r, `主角：攻击 ${st.attack} · 增伤 +${Math.round(st.damageBonus * 100)}% · 暴击 ${Math.round(st.critRate * 100)}% ×${st.critDamage} · 心 ${loadout.maxHearts} · 每回合至少 ${loadout.drawTarget} 张${loadout.gearTraits?.length ? ` · ${loadout.gearTraits.map((t) => t.label).join('、')}` : ''}`, x0, y + 8, { size: F.xs, color: T.text2 });
 
     y += 32;
     sectionTitle(r, x0, y, '带的任务', save.quests.taken.length ? '' : '没接任务也能去，只拿打怪的金币');

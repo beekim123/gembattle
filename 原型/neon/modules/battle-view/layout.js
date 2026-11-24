@@ -17,14 +17,17 @@ export const REGIONS = Object.freeze({
   overhead: { gap: 12, barH: 6, toughH: 4, minW: 64, maxW: 112 },
   chain: { cx: 480, y: 254, h: 60, maxCard: 46, gap: 12, maxW: 576, dropTop: 150, dropBottom: 340 },
   // 打出去以后，链收到最左边竖成一列：施法的顺序表（用户 2026-11-23 定的，D1）
-  castList: { x: 18, top: 66, bottom: 416, cardW: 40, cardH: 46, gap: 6 },
+  castList: { x: 18, top: 72, bottom: 416, cardW: 40, cardH: 46, gap: 6 },
   // 集色环：左边让给顺序表，挪到左下牌堆旁边
   ring: { cx: 214, cy: 460, rad: 17, dot: 6 },
   preview: { x: 772, y: 254, w: 176, h: 74 },
   total: { cx: 480, cy: 288 },
   hero: { cx: 480, base: 388, size: 58 },
   allies: [{ cx: 392, base: 382, size: 46 }, { cx: 568, base: 382, size: 46 }, { cx: 316, base: 376, size: 44 }],
-  hand: { cx: 480, pivotY: 1100, radius: 650, cw: 78, ch: 108, stepDeg: 7, maxSpreadDeg: 36, crowd: 8, crowdScale: 0.86, zoneTop: 404 },
+  // 手牌左右只到 260~700：左边是集色环（到 231），右边是「自动排 / 全撤回」（从 704 起）。所以整道弧最多张开 30 度，7 张起缩小一点
+  hand: { cx: 480, pivotY: 1100, radius: 650, cw: 78, ch: 108, stepDeg: 7, maxSpreadDeg: 30, crowd: 6, crowdScale: 0.86, zoneTop: 404, instantTop: 426 },
+  // 拖「马上用」的牌：往上拖离手牌那道弧（过 instantTop、比按下时高 20）松手就用；这一块画虚线框提示
+  instantZone: { x: 236, y: 140, w: 488, h: 286 },
   pile: { x: 16, y: 436 },
   cast: { cx: 884, cy: 478, r: 42 },
   buttons: { auto: { x: 704, y: 434, w: 76, h: 26 }, clear: { x: 704, y: 466, w: 76, h: 26 }, back: { x: 884, y: 4, w: 40, h: 22 } },

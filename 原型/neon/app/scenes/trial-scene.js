@@ -15,7 +15,7 @@ import {
   GEM_CARD_DEFS,
 } from '../../modules/content/index.js';
 import { COLOR_META, SEVEN_COLORS, SCREEN } from '../../modules/shared/index.js';
-import { session } from '../session.js';
+import { formatPlayLog, session } from '../session.js';
 import { F, LANE, T, bold, buffIcon, fnCard, forest, gemCard, inRect, stackSprite, txt } from '../../modules/ui/index.js';
 
 const { w: W, h: H } = SCREEN;
@@ -59,6 +59,13 @@ export function createTrialScene(context) {
   let panelT = 0; // 板滑出来过了多久
   let albumTab = 'cards';
   let clock = 0;
+  let copiedAt = -99;
+
+  /** 试玩记录拷到剪贴板（浏览器不让拷就算了，__CODE00_APP__.getPlayLog() 也能拿到） */
+  function onCopyPlayLog(text) {
+    try { globalThis.navigator?.clipboard?.writeText(text); } catch { /* 拷不了就算了 */ }
+    return true;
+  }
   let toast = null; // { text, t }
   const pointer = { x: -1, y: -1 };
   let hot = null; // 鼠标下面那个东西的 id
@@ -171,7 +178,7 @@ export function createTrialScene(context) {
       const h = hot === b.id;
       r.rect({ x: b.x, y: b.y, w: b.w, h: b.h, radius: 8, fill: on ? '#1d2840' : '#11151d', stroke: on ? GOLD : (h ? '#5a6788' : '#2c3446'), lineWidth: on ? 1.5 : 1 });
       txt(r, enc.label, b.x + 12, b.y + b.h / 2, { size: F.s, weight: on ? 'bold' : 'normal', color: on ? CREAM : T.text });
-      if (!enc.core) txt(r, '拓展', b.x + b.w - 12, b.y + b.h / 2, { size: 11, align: 'right', color: T.text3 });
+      if (!enc.core) txt(r, '拓展', b.x + b.w - 12, b.y + b.h / 2, { size: F.xs, align: 'right', color: T.text3 });
       boxes.push({ ...b, info: `${enc.label}：${enc.summary}`, onClick: () => { encounterId = enc.id; } });
     });
 
@@ -251,11 +258,18 @@ export function createTrialScene(context) {
       boxes.push({ ...b, info: '点一下换', onClick: row.click });
     });
     const y = P.y + 96 + settingRows().length * 40 + 8;
-    const b = { id: 'stress', x: P.x + 16, y, w: P.w - 32, h: 34 };
+    const half = (P.w - 32 - 8) / 2;
+    const b = { id: 'stress', x: P.x + 16, y, w: half, h: 34, info: '满手 12 张，一下打出上万发，看飘字卡不卡' };
     if (hot === b.id) r.rect({ x: b.x, y: b.y, w: b.w, h: b.h, radius: 8, fill: '#151a25' });
-    txt(r, '万发飘字压测：满手 12 张，一下打出上万发', P.x + 28, y + 17, { size: F.s, color: T.text });
-    txt(r, '去试试 ›', P.x + P.w - 28, y + 17, { size: F.s, weight: 'bold', align: 'right', color: hot === b.id ? GOLD : '#d9b264' });
+    txt(r, '万发飘字压测', b.x + 12, y + 17, { size: F.s, color: T.text });
+    txt(r, '去试试 ›', b.x + b.w - 10, y + 17, { size: F.s, weight: 'bold', align: 'right', color: hot === b.id ? GOLD : '#d9b264' });
     boxes.push({ ...b, onClick: () => startBattle({ encounterId: 'dual_shield', drawTarget: 12, stressMode: true, seed: 'stress-ui-demo' }) });
+    // 试玩记录（设计稿 10.4）：最近几仗每回合想几秒、空过几回合、撤回几次，拷出来贴给做的人
+    const n = (session.playLog || []).length;
+    const c = { id: 'copylog', x: P.x + 16 + half + 8, y, w: half, h: 34, info: '最近几仗：每回合想了几秒、打了几张，撤回几次。点一下拷到剪贴板' };
+    if (hot === c.id) r.rect({ x: c.x, y: c.y, w: c.w, h: c.h, radius: 8, fill: '#151a25' });
+    txt(r, copiedAt > clock - 2 ? '拷好了' : `复制试玩记录（${n} 仗）`, c.x + 12, y + 17, { size: F.s, color: copiedAt > clock - 2 ? T.connect : T.text });
+    boxes.push({ ...c, onClick: () => { if (onCopyPlayLog(formatPlayLog(session.playLog || []))) copiedAt = clock; } });
     txt(r, '这些是测手感用的，正式版没有', P.x + 24, P.y + P.h - 26, { size: F.xs, color: T.text3 });
   }
 

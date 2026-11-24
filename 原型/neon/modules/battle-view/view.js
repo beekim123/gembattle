@@ -148,6 +148,27 @@ export function createBattleView(options = {}) {
     return lastBoxes;
   }
 
+  /** 拖着马上用的牌，现在松手算不算用：拖过 instantTop，而且比按下时高 20 以上 */
+  function instantReady(d, y) {
+    return y < R.hand.instantTop && y < d.startY - 20;
+  }
+
+  /** 拖马上用的牌时，战场中间画一圈虚线框「松手就用」；够了就亮 */
+  function drawInstantZone(r, ready) {
+    const Z = R.instantZone;
+    const col = ready ? '#8fe3ff' : '#4f6a7a';
+    const dash = [8, 6];
+    const lw = ready ? 2 : 1.5;
+    r.rect({ x: Z.x, y: Z.y, w: Z.w, h: Z.h, radius: 14, fill: '#8fe3ff', alpha: ready ? 0.08 : 0.03 });
+    r.line({ x1: Z.x, y1: Z.y, x2: Z.x + Z.w, y2: Z.y, color: col, lineWidth: lw, dash });
+    r.line({ x1: Z.x, y1: Z.y + Z.h, x2: Z.x + Z.w, y2: Z.y + Z.h, color: col, lineWidth: lw, dash });
+    r.line({ x1: Z.x, y1: Z.y, x2: Z.x, y2: Z.y + Z.h, color: col, lineWidth: lw, dash });
+    r.line({ x1: Z.x + Z.w, y1: Z.y, x2: Z.x + Z.w, y2: Z.y + Z.h, color: col, lineWidth: lw, dash });
+    bold(r, ready ? '松手就用' : '往上拖到框里，松手就用', Z.x + Z.w / 2, Z.y + 18, { size: F.s, color: col, align: 'center' });
+  }
+
+  let lateTip = null; // 画在最上面的说明框（集色环、预览算式）：{ x, y, lines, alignRight }
+
   function handAt(x, y) {
     const b = lastBoxes.hand;
     for (let i = b.length - 1; i >= 0; i--) if (hitRotated(b[i].slot, x, y)) return i; // 后画的在上面
@@ -211,8 +232,12 @@ export function createBattleView(options = {}) {
         const overMonster = bx.monsters.find((m) => inRect(m, x, y) && shownMonster(m.uid)?.alive);
         const inHandZone = y >= R.hand.zoneTop;
         if (d.from === 'hand') {
+          if (card?.usage === 'instant') {
+            // 马上用的牌：明显往上拖离手牌就用（第 3 轮审核 S4：原来要拖过 404 线，常常拖了一点又退回手里）
+            if (instantReady(d, y)) callbacks.onPlayInstant?.(d.uid);
+            return { cursor: 'default' };
+          }
           if (inHandZone || !card) return { cursor: 'default' }; // 放回手里：什么都不做
-          if (card.usage === 'instant') { callbacks.onPlayInstant?.(d.uid); return { cursor: 'default' }; }
           if (overMonster && overMonster.uid !== snapshot.selectedTargetUid) callbacks.onSelectTarget?.(overMonster.uid);
           const idx = overMonster ? snapshot.chain.length : chainInsertIndex(snapshot.chain.length, x);
           callbacks.onQueueCard?.(d.uid, idx);
@@ -321,8 +346,8 @@ export function createBattleView(options = {}) {
       const allyLook = `ally_${al.role || 'support'}`;
       if (act) for (let g = 1; g <= 3; g++) r.drawActor({ look: allyLook, x: P.cx + ox * (1 - g * 0.25), y: P.base + oy * (1 - g * 0.25), size: P.size / 0.85, t: clock, alpha: 0.18, shadow: false });
       r.drawActor({ look: allyLook, x: P.cx + ox, y: P.base + oy, size: P.size / 0.85, t: clock, state: act ? 'attack' : 'idle' });
-      r.circle({ x: P.cx, y: P.base + 10, r: 9, fill: '#0b0d12', stroke: col, lineWidth: 1.5 });
-      txt(r, (al.roleTag || al.label || '友').slice(0, 1), P.cx, P.base + 10, { size: 10, weight: 'bold', align: 'center', color: col });
+      r.circle({ x: P.cx, y: P.base + 10, r: 10, fill: '#0b0d12', stroke: col, lineWidth: 1.5 });
+      txt(r, (al.roleTag || al.label || '友').slice(0, 1), P.cx, P.base + 10, { size: F.xs, weight: 'bold', align: 'center', color: col });
       if (act) {
         const k = clamp((now - act.t) / 0.6, 0, 1);
         bold(r, act.label, P.cx + ox, P.base + oy - P.size - 10, { size: F.s, color: col, align: 'center', alpha: k < 0.7 ? 1 : (1 - k) / 0.3 });
@@ -379,10 +404,26 @@ export function createBattleView(options = {}) {
     if (options.outcomeMode !== 'run') smallButton(r, R.buttons.back.x, R.buttons.back.y, R.buttons.back.w, R.buttons.back.h, '≡');
 
     // 集色
-    colorRing(r, R.ring.cx, R.ring.cy, R.ring.rad, pb && pb.totalAt > 0 ? (snapshot.recordedColors || []) : (snap.recordedColors || []), snap.currentColor, R.ring.dot);
+    // 链尾现在是哪色：链里最后一张变成的颜色，没排就是上回合最后打的那色。白圈是它，绿圈接得上，金圈是补色
+    const tailColor = (!pb && snap.chain.length && preview?.steps?.length ? preview.steps[preview.steps.length - 1].resolvedColor : null) || snap.currentColor;
+    colorRing(r, R.ring.cx, R.ring.cy, R.ring.rad, pb && pb.totalAt > 0 ? (snapshot.recordedColors || []) : (snap.recordedColors || []), tailColor, R.ring.dot, pb ? null : tailColor);
+    // 鼠标放在集色环上：说明（画在最上面，不让手牌盖住）
+    const ringTip = !pb && Math.hypot(pointer.x - R.ring.cx, pointer.y - R.ring.cy) < R.ring.rad + R.ring.dot + 6;
+    if (ringTip) {
+      lateTip = { x: R.ring.cx - 20, y: R.ring.cy - 150, lines: [
+        `集色：集到 ${(snap.recordedColors || []).length}/6，集齐 6 色打彩虹`,
+        '白圈：链尾现在的颜色',
+        '绿圈：挨着的，接上倍率 ×2',
+        '金圈：补色，接上 ×2 还多打一轮白（合白）',
+        '别的颜色：色环上隔开了，接上去是断色',
+      ] };
+    } else lateTip = null;
 
-    // 预览
-    if (!casting && snap.chain.length && preview) drawPreview(r, snap);
+    // 预览；鼠标放上去看算式（5.3：「几颗宝石 × 倍率 = 几发」「每发 = 攻击 × ……」）
+    if (!casting && snap.chain.length && preview) {
+      drawPreview(r, snap);
+      if (inRect(R.preview, pointer.x, pointer.y) && preview.formulaLines?.length) lateTip = { x: R.preview.x + R.preview.w - 8, y: R.preview.y + R.preview.h + 6, lines: ['这条链怎么算', ...preview.formulaLines], alignRight: true };
+    }
 
     // 左下：牌堆
     const PL = R.pile;
@@ -443,6 +484,11 @@ export function createBattleView(options = {}) {
       });
     }
 
+    if (lateTip && !drag) {
+      const w = Math.max(...lateTip.lines.map((s) => r.measureText(s, { size: F.s }).width)) + 24;
+      hoverTip(r, lateTip.alignRight ? lateTip.x - w : lateTip.x, lateTip.y, lateTip.lines);
+    }
+
     // 拖着的牌画在最上面
     if (drag?.moved) {
       const card = [...snap.hand, ...snap.chain].find((c) => c.uid === drag.uid);
@@ -456,7 +502,7 @@ export function createBattleView(options = {}) {
           const s = cs[idx];
           if (s) r.rect({ x: s.cx - 2, y: s.y - 6, w: 4, h: s.h + 12, radius: 2, fill: T.connect, alpha: 0.5 + 0.4 * Math.sin(clock * 10) });
         }
-        if (inZone && card.usage === 'instant') bold(r, '松手就用', pointer.x, pointer.y - 72, { size: F.s, color: '#c8fbff', align: 'center' });
+        if (card.usage === 'instant' && drag.from === 'hand') drawInstantZone(r, instantReady(drag, pointer.y));
         drawCard(r, card, { x: pointer.x, y: pointer.y - 20, rot: 0, scale: 1.05 });
       }
     }
@@ -521,9 +567,9 @@ export function createBattleView(options = {}) {
     let ix = x + w;
     const icons = [...(m.shieldBroken ? [{ g: '破', c: T.breakCol }] : []), ...(m.activeTraits || []).map(() => ({ g: '特', c: '#c9b6f2' }))];
     icons.reverse().forEach((ic) => {
-      ix -= 15;
-      r.rect({ x: ix, y: iy - 7, w: 14, h: 14, radius: 3, fill: '#0b0d12', stroke: ic.c, lineWidth: 1 });
-      txt(r, ic.g, ix + 7, iy, { size: 10, weight: 'bold', align: 'center', color: ic.c });
+      ix -= 17;
+      r.rect({ x: ix, y: iy - 8, w: 16, h: 16, radius: 3, fill: '#0b0d12', stroke: ic.c, lineWidth: 1 });
+      txt(r, ic.g, ix + 8, iy, { size: F.xs, weight: 'bold', align: 'center', color: ic.c });
     });
     if (selected) r.polygon({ points: [{ x: sl.x - 6, y: iy - 20 }, { x: sl.x + 6, y: iy - 20 }, { x: sl.x, y: iy - 12 }], fill: T.select });
   }
@@ -570,8 +616,17 @@ export function createBattleView(options = {}) {
         const rel = c.relationToCurrent;
         gemCard(r, { x, y, w, h, color: c.color, gems: c.gems || [c.color], glow: rel === 'connect' ? 'connect' : rel === 'complement' ? 'complement' : null, dim: rel === 'break' && !slot.hovered });
       }
+      // 强化过的牌：右上角一个金色「+」（6.3；第 3 轮审核 S6：原来进了战斗就看不出哪张强化过）
+      if (c.enhanced) enhanceBadge(r, x + w - 21, y + 5);
     });
   }
+
+  function enhanceBadge(r, x, y, s = 16) {
+    r.rect({ x, y, w: s, h: s, radius: 4, fill: T.gold, stroke: '#0b0d12', lineWidth: 1.5 });
+    bold(r, '+', x + s / 2, y + s / 2, { size: s >= 16 ? F.s : F.xs, align: 'center', color: '#2a1e08' });
+  }
+
+  const ENHANCE_WORD = { pain: '疼：这张每发 +50%', more: '多：多算 1 颗宝石', shred: '破盾：每颗多削 1 格', record: '集色：顺带记旁边一色', number: '数 +1' };
 
   // 手牌头上：打下一张会怎样（照旧原型）
   const HAND_HINT = {
@@ -601,10 +656,16 @@ export function createBattleView(options = {}) {
       const b = bx.hand[i];
       const a = handPos(b);
       drawCard(r, b.card, { x: a.x, y: a.y, rot: a.rot, scale: a.w / R.hand.cw, hovered: b.slot.hovered });
-      const hint = !b.card.hidden && !drag && snapshot.phase === 'player_input' ? HAND_HINT[b.card.usage === 'instant' ? 'instant' : b.card.relationToCurrent] : null;
+      // 手牌多了（8 张起）头顶的字会挤在一起：只给鼠标放着的那张写，别的看牌框的颜色
+      const crowded = bx.hand.length > 7 && !b.slot.hovered;
+      let hint = !crowded && !b.card.hidden && !drag && snapshot.phase === 'player_input' ? HAND_HINT[b.card.usage === 'instant' ? 'instant' : b.card.relationToCurrent] : null;
+      // 鼠标放在断色的牌上，多说一句为什么（看左下集色环）
+      if (hint && b.slot.hovered && b.card.relationToCurrent === 'break') hint = ['断色：色环上没挨着', hint[1]];
+      // 鼠标放在强化过的牌上，写它强化的是哪样
+      if (hint && b.slot.hovered && b.card.enhanced && ENHANCE_WORD[b.card.enhanceDir]) hint = [`${hint[0]} · 强化过（${ENHANCE_WORD[b.card.enhanceDir]}）`, hint[1]];
       if (hint && a.wait <= 0) {
         const d = a.h / 2 + 10;
-        bold(r, hint[0], a.x + Math.sin(a.rot) * d, a.y - Math.cos(a.rot) * d, { size: 11, color: hint[1], align: 'center', alpha: b.card.relationToCurrent === 'break' ? 0.75 : 1 });
+        bold(r, hint[0], a.x + Math.sin(a.rot) * d, a.y - Math.cos(a.rot) * d, { size: F.xs, color: hint[1], align: 'center', alpha: b.card.relationToCurrent === 'break' ? 0.75 : 1 });
       }
     });
     if (hov >= 0 && !drag) {
@@ -627,12 +688,13 @@ export function createBattleView(options = {}) {
       const a = tween(sl.uid, { x: sl.cx, y: sl.cy, w: sl.w, h: sl.h, rot: 0 });
       const settled = Math.abs(a.x - sl.cx) < 3 && Math.abs(a.y - sl.cy) < 3;
       r.transform({ x: a.x, y: a.y, rotate: a.rot }, () => {
-        gemCard(r, { x: -a.w / 2, y: -a.h / 2, w: a.w, h: a.h, color: step?.resolvedColor || sl.card.color, gems: sl.card.gems || [sl.card.color], mult: settled ? mult : null, multSize: sl.w + R.chain.gap < 50 ? 10 : F.xs });
+        gemCard(r, { x: -a.w / 2, y: -a.h / 2, w: a.w, h: a.h, color: step?.resolvedColor || sl.card.color, gems: sl.card.gems || [sl.card.color], mult: settled ? mult : null, multSize: F.xs });
+        if (sl.card.enhanced) enhanceBadge(r, a.w / 2 - 13, -a.h / 2 + 1, 12);
       });
       if (!settled) return;
       if (i > 0 && step) chainJoint(r, sl.x - R.chain.gap / 2, sl.cy, step.relation === 'break' ? 'break' : step.relation);
       // 底下写这张打几发（照旧原型）
-      if (step?.hits) txt(r, `${step.hits} 发`, sl.cx, sl.y + sl.h + 9, { size: 11, align: 'center', color: T.text2 });
+      if (step?.hits) txt(r, `${step.hits} 发`, sl.cx, sl.y + sl.h + 9, { size: F.xs, align: 'center', color: T.text2 });
     });
   }
 
@@ -831,7 +893,7 @@ export function createBattleView(options = {}) {
       const a = clamp((playback.duration - now) / 0.3, 0, 1);
       r.withAlpha(a, () => {
         r.rect({ x: 400, y: 34, w: 160, h: 40, radius: 10, fill: '#3a2608', alpha: 0.88, stroke: '#8a6420', lineWidth: 1 });
-        txt(r, '这一下', 480, 44, { size: 10, align: 'center', color: '#e8c27a' });
+        txt(r, '这一下', 480, 44, { size: F.xs, align: 'center', color: '#e8c27a' });
         bold(r, String(Math.round(rollTotal)), 480, 61, { size: F.l, color: '#ffd98a', align: 'center' });
       });
     }

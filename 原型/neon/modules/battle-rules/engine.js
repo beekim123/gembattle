@@ -869,6 +869,8 @@ export function createBattle(startPacket, options = {}) {
           label: card.label,
           description: card.description,
           enhanced: card.enhanced,
+          // 强化的方向（6.3）：pain / more / shred / record，功能牌加数是 number；画面在牌角上标记号
+          enhanceDir: card.enhance?.dir ?? null,
           drawAfterPlay: card.drawAfterPlay,
         };
       }),

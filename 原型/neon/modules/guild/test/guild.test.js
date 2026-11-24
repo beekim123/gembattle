@@ -26,6 +26,12 @@ test('提交拿金币、算进升级；做够 3 个出升级任务，交了升 B
   assert.equal(s.rank, 'B');
 });
 
+test('升级任务死在林子里：只在「上次失败的」那栏，任务板上不再摆一份（第 3 轮审核 M3 4）', () => {
+  const s = refreshBoard(fakeSave({ rankDone: 3, quests: { board: [], taken: [], failed: ['qr'] } }), C);
+  assert.equal(s.quests.board.includes('qr'), false);
+  assert.deepEqual(s.quests.failed, ['qr']);
+});
+
 test('隐藏任务交了解锁加成；买装备扣钱、空着就穿上、钱不够买不了', () => {
   let s = fakeSave({ quests: { board: [], taken: [{ id: 'qh', progress: 1, done: true, hidden: true }], failed: [] } });
   s = submitQuest(s, 'qh', C).save;

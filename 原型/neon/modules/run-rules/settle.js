@@ -21,6 +21,8 @@ export function settleRun(save, ret, pack = {}) {
 
   // 任务：进度存进存档；做完了等着在工会提交；死了做完没交的算失败（8.2）
   const taken = next.quests.taken || [];
+  let doneCount = 0;
+  let failedCount = 0;
   for (const rq of ret.quests) {
     let q = taken.find((x) => x.id === rq.id);
     if (!q && rq.hidden && alive) {
@@ -32,15 +34,18 @@ export function settleRun(save, ret, pack = {}) {
     if (rq.failed) {
       q.failed = true;
       q.done = false;
-      lines.push('有任务做完了没带回来，算失败，留在任务板上');
+      failedCount++;
       continue;
     }
     q.progress = Math.max(q.progress || 0, rq.progress);
     if (rq.done && !q.done) {
       q.done = true;
-      lines.push('有任务做完了，去工会提交');
+      doneCount++;
     }
   }
+  // 一样的话合成一句（原来一个任务一句，三个任务就三行一样的）
+  if (doneCount) lines.push(`做完了 ${doneCount} 个任务，去工会提交`);
+  if (failedCount) lines.push(`${failedCount} 个做完的任务没带回来，算失败，在工会「上次失败的」那栏能再接`);
   // 失败的挪到「上次失败的」一栏，最多 3 个（8.2）
   const failed = taken.filter((q) => q.failed && !q.hidden);
   next.quests.taken = taken.filter((q) => !q.failed);
