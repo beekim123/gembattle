@@ -50,9 +50,10 @@ export const BUFF_DEFS = Object.freeze({
     id: 'buff_first_match_shred',
     slot: 5,
     lane: 'break',
-    label: '第一张对色多削盾',
-    description: '每条链里第一张对得上盾色的牌，每颗宝石多削 1 格',
-    effects: [{ timing: TIMINGS.BATTLE_START, action: ACTIONS.MODIFY_RULE, duration: ACTION_DURATIONS.THIS_BATTLE, params: { ruleKey: RULE_KEYS.firstMatchExtraShred, value: true } }],
+    // 加成调整（照倾向先做，等用户点头，记录/给用户挑-加成调整.md）：原来只算每条链第一张，假玩家量出来 +3%；每张都算 +8%
+    label: '对色的牌多削盾',
+    description: '每张对得上盾色的牌，每颗宝石多削 1 格',
+    effects: [{ timing: TIMINGS.BATTLE_START, action: ACTIONS.MODIFY_RULE, duration: ACTION_DURATIONS.THIS_BATTLE, params: { ruleKey: RULE_KEYS.allMatchExtraShred, value: true } }],
   }),
   buff_break_greedy: Object.freeze({
     id: 'buff_break_greedy',
@@ -116,9 +117,10 @@ export const BUFF_DEFS = Object.freeze({
     slot: 13,
     lane: 'rainbow',
     locked: true,
-    label: '彩虹再多打一遍',
-    description: '彩虹再打的两遍变成三遍',
-    effects: [{ timing: TIMINGS.BATTLE_START, action: ACTIONS.MODIFY_RULE, duration: ACTION_DURATIONS.THIS_BATTLE, params: { ruleKey: RULE_KEYS.rainbowExtraRepeat, value: true } }],
+    // 加成调整（照倾向先做，等用户点头，记录/给用户挑-加成调整.md）：原来「彩虹再打的两遍变三遍」，彩虹一仗才出半次，+2%；集 5 色就触发 +9%
+    label: '集 5 色就出彩虹',
+    description: '集到 5 色就触发彩虹（平时要 6 色）',
+    effects: [{ timing: TIMINGS.BATTLE_START, action: ACTIONS.MODIFY_RULE, duration: ACTION_DURATIONS.THIS_BATTLE, params: { ruleKey: RULE_KEYS.rainbowNeedsFewer, value: 1 } }],
   }),
 });
 

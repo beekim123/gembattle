@@ -71,7 +71,7 @@ export function computeChainRelation(cardOrColor, currentColor) {
  */
 export function advanceRecordedColors(recordedSet, resolvedColor, relation, rainbowAlreadyTriggered, keepRecordedOnReset = false) {
   // 第 5 个参数：老的写法是布尔（断色、补色都不清空）；加成用对象：
-  // { keepAll, keepOnComplement（合白不清空）, keepOnBreak（断色不清空）, rainbowKeepNeighbors（彩虹以后留这一色和两边）}
+  // { keepAll, keepOnComplement（合白不清空）, keepOnBreak（断色不清空）, rainbowKeepNeighbors（彩虹以后留这一色和两边）, rainbowNeed（集几色触发，默认 6）}
   const opt = typeof keepRecordedOnReset === 'object' && keepRecordedOnReset !== null ? keepRecordedOnReset : { keepAll: Boolean(keepRecordedOnReset) };
   const next = new Set(recordedSet);
 
@@ -84,7 +84,7 @@ export function advanceRecordedColors(recordedSet, resolvedColor, relation, rain
   }
 
   let triggeredRainbow = false;
-  if (!rainbowAlreadyTriggered && next.size >= COLOR_RING.length) {
+  if (!rainbowAlreadyTriggered && next.size >= (opt.rainbowNeed || COLOR_RING.length)) {
     triggeredRainbow = true;
     next.clear();
     if (isRingColor(resolvedColor)) {

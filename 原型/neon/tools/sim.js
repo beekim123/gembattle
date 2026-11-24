@@ -61,6 +61,32 @@ const BOTS = [
   },
 ];
 
+// 攒牌（留牌路子用）：下回合手里还能多，怪也不是下回合就出手，就一张不打攒着；到顶了或者怪要出手了，再排最长的链打
+BOTS.push({
+  id: 'hoard',
+  label: '攒满了再打',
+  playTurn(battle) {
+    playUsefulInstants(battle);
+    const snap = battle.getSnapshot();
+    const danger = snap.monsters.some((m) => m.alive !== false && m.countdown <= 1);
+    if (!danger && snap.player.nextTurnHand > snap.hand.length) return battle.commitChain();
+    battle.autoArrange('longest');
+    return battle.commitChain();
+  },
+});
+
+// 长链路子（不怕断）：先排最长的链，手里剩下的牌全接在后面，断了也打
+BOTS.push({
+  id: 'play_all',
+  label: '一张不留',
+  playTurn(battle) {
+    playUsefulInstants(battle);
+    battle.autoArrange('longest');
+    for (const c of battle.getSnapshot().hand) if (!c.hidden && c.usage === 'chain') battle.queueCard(c.uid);
+    return battle.commitChain();
+  },
+});
+
 function playUsefulInstants(battle) {
   let guard = 0;
   while (guard++ < 12) {
@@ -209,29 +235,33 @@ for (const enc of CORE_ENCOUNTERS) {
 }
 
 // 【六】第 3 轮第 3 块（设计稿 10.4 新合格线）：每个加成照它自己路子的排法、打它路子顺手的怪（设计稿 6.1），跟同一种排法、同一种怪什么都不带比
-// 排法：破盾 → 先破盾；彩虹 → 追彩虹；留牌 → 留 1 张；别的 → 最长链。目标：每回合伤害 +8%~+32%
-const LANE_BOT = { break: 'break_first', rainbow: 'rainbow', keep: 'keep_one' };
+// 排法：破盾 → 先破盾；彩虹 → 追彩虹；留牌 → 攒满了再打；长链 → 一张不留；合白 → 最长链。目标：每回合伤害 +8%~+32%
+const LANE_BOT = { break: 'break_first', rainbow: 'rainbow', keep: 'hoard', chain: 'play_all' };
 const LANE_FOES = {
   break: ['dual_shield'],
   white: ['pack_mixed', 'dual_shield', 'recorded_damage_down'],
   rainbow: ['pack_mixed', 'gatekeeper_layer2'],
   keep: ['gatekeeper_layer2'],
-  chain: CORE_ENCOUNTERS.map((e) => e.id), // 长链顺手的（遮手牌、挑色减半）原型没放进核心仗，五种都算
+  chain: ['halve_one_color'], // 长链顺手的：每回合挑一色减半的（遮手牌的原型没做）
 };
-const botFor = (b) => BOTS.find((x) => x.id === (LANE_BOT[b.lane] || 'longest'));
 console.log('\n\n【六】加成照自己路子的排法、打自己路子顺手的怪（29 宝石 + 4 张常用功能牌），跟同样打法什么都不带比；目标每回合伤害 +8%~+32%');
 {
   const base = {};
   const batch = (enc, bot, buffs) => runBatch({ encounterId: enc, bot, extraCards: DECK_LOADOUTS.starter_4_functions.extraCards, buffs, allies: [] });
-  for (const b of BUFF_LIST) {
-    const bot = botFor(b);
-    const foes = LANE_FOES[b.lane] || LANE_FOES.chain;
+  // 横跨两条路子的，两条都量，算好的那条
+  const gainIn = (b, lane) => {
+    const bot = BOTS.find((x) => x.id === (LANE_BOT[lane] || 'longest'));
+    const foes = LANE_FOES[lane] || LANE_FOES.chain;
     const ups = foes.map((enc) => {
       const k = `${enc}|${bot.id}`;
       base[k] ||= batch(enc, bot, []);
       return batch(enc, bot, [b.id]).avgTurnDmg / base[k].avgTurnDmg - 1;
     });
-    const up = Math.round((ups.reduce((x, y) => x + y, 0) / ups.length) * 100);
+    return { lane, bot, foes, up: Math.round((ups.reduce((x, y) => x + y, 0) / ups.length) * 100) };
+  };
+  for (const b of BUFF_LIST) {
+    const best = (b.lanes || [b.lane]).map((l) => gainIn(b, l)).sort((x, y) => y.up - x.up)[0];
+    const { bot, foes, up } = best;
     const ok = up >= 8 && up <= 32 ? '到了' : up < 8 ? '偏弱' : '偏强';
     console.log(`  ${b.label.padEnd(16, '　')} | ${bot.label.padEnd(7, '　')} | 打 ${foes.length === CORE_ENCOUNTERS.length ? '五种都算' : foes.join('、')} | 每回合伤害 ${up >= 0 ? '+' : ''}${up}% | ${ok}`);
   }

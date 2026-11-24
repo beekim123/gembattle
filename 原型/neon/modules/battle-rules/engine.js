@@ -118,6 +118,7 @@ export function createBattle(startPacket, options = {}) {
     keepOnComplement: ruleOn(RULE_KEYS.complementKeepsRecorded),
     rainbowKeepNeighbors: ruleOn(RULE_KEYS.rainbowKeepsNeighbors),
     keepOnBreak: ruleOn(RULE_KEYS.breakKeepsRecorded),
+    rainbowNeed: COLOR_RING.length - (ruleVal(RULE_KEYS.rainbowNeedsFewer) || 0),
   });
 
   // 战绩与试玩统计（10.3 + 10.4）
@@ -1443,10 +1444,11 @@ export function createBattle(startPacket, options = {}) {
             // 加成「每条链第一张对色的牌，每颗宝石多削 1 格」；强化「破盾：每颗多削 1 格」
             const matches = resolved.gems.some((g) => currentTarget.shields.some((sh) => sh.color === g && sh.current > 0));
             let perGem = 1 + (enhDir === 'shred' ? 1 : 0);
-            if (matches && ruleOn(RULE_KEYS.firstMatchExtraShred) && !firstMatchUsed) {
+            // 加成「每张对色的牌多削 1 格」（第 3 轮调整，等用户点头）；原来的「每条链第一张」留着
+            if (matches && (ruleOn(RULE_KEYS.allMatchExtraShred) || (ruleOn(RULE_KEYS.firstMatchExtraShred) && !firstMatchUsed))) {
               firstMatchUsed = true;
               perGem += 1;
-              emit(BATTLE_EVENT_TYPES.EFFECT_TRIGGERED, { source: '第一张对色多削 1 格', label: '多削 1 格' });
+              emit(BATTLE_EVENT_TYPES.EFFECT_TRIGGERED, { source: ruleOn(RULE_KEYS.allMatchExtraShred) ? '对色多削 1 格' : '第一张对色多削 1 格', label: '多削 1 格' });
             }
             for (const gem of resolved.gems) {
               for (const sh of currentTarget.shields) {
@@ -1517,7 +1519,7 @@ export function createBattle(startPacket, options = {}) {
     if (rainbowTriggered && getAliveMonsters().length > 0) {
       emit(BATTLE_EVENT_TYPES.RAINBOW_TRIGGER, {
         batches: rainbowBatches.length,
-        repeats: 2,
+        repeats: ruleOn(RULE_KEYS.rainbowExtraRepeat) ? 3 : 2,
       });
       const baseDmgMod = (1 + eff.damageBonus + eff.hitPercent) * (1 + (ruleVal(RULE_KEYS.rainbowHitBonus) || 0));
       for (const bt of rainbowBatches) {

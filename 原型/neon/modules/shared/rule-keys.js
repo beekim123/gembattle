@@ -8,6 +8,8 @@ export const RULE_KEY_LABELS = Object.freeze({
   complementKeepsRecorded: '合白不清空集到的颜色',
   rainbowKeepsNeighbors: '彩虹以后留下这一色和两边，一共 3 色',
   firstBreakStillDoubles: '每条链第一次断色，照样 ×2',
+  allMatchExtraShred: '每张对得上盾色的牌，每颗宝石多削 1 格',
+  rainbowNeedsFewer: '彩虹少集几色就触发（数）',
   firstMatchExtraShred: '每条链第一张对色的牌，每颗宝石多削 1 格',
   brokenMultiplier: '破盾以后受到的伤害倍数（数）',
   noBreakPush: '破盾不推倒计时',

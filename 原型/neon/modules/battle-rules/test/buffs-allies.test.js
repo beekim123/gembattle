@@ -180,3 +180,32 @@ test('拖拽用：插到链的第几个、链里换位子', () => {
   assert.ok(b.moveChainCard('c', 2));
   assert.deepEqual(b.getSnapshot().chain.map((c) => c.uid), ['a', 'b', 'c']);
 });
+
+test('对色的牌多削盾（加成调整）：每张对色的都多削 1 格，不只第一张', () => {
+  const deck = [makeGem('a', 'red', ['red']), makeGem('b', 'red', ['red'])];
+  const shredOf = (key) => {
+    const b = createBattle(makePacket({ deck: deck.map((c) => ({ ...c })), drawTarget: 2, monsters: [mon('m1', [{ color: 'red', max: 9 }])], buffs: [ruleBuff(key, key)] }));
+    b.queueCard('a');
+    b.queueCard('b');
+    const res = b.commitChain();
+    return res.events.filter((e) => e.type === BATTLE_EVENT_TYPES.SHIELD_SHRED).reduce((n, e) => n + e.payload.amount, 0);
+  };
+  assert.equal(shredOf('firstMatchExtraShred'), 3); // 第一张 2 格 + 第二张 1 格
+  assert.equal(shredOf('allMatchExtraShred'), 4); // 两张都 2 格
+});
+
+test('集 5 色就出彩虹（加成调整）：5 色就触发，平时还要 6 色', () => {
+  const five = new Set(['red', 'yellow', 'green', 'cyan']);
+  assert.equal(advanceRecordedColors(five, 'blue', CHAIN_RELATIONS.CONNECT, false, {}).triggeredRainbow, false);
+  assert.equal(advanceRecordedColors(five, 'blue', CHAIN_RELATIONS.CONNECT, false, { rainbowNeed: 5 }).triggeredRainbow, true);
+  const colors = ['red', 'yellow', 'green', 'cyan', 'blue'];
+  const b = createBattle(makePacket({
+    deck: colors.map((c, i) => makeGem(`k${i}`, c, { red: ['red'], yellow: ['red', 'green'], green: ['green'], cyan: ['green', 'blue'], blue: ['blue'] }[c])), drawTarget: 5, monsters: [mon('m1')],
+    buffs: [{ id: 'r5', label: '集 5 色就出彩虹', lane: 'rainbow', effects: [{ timing: TIMINGS.BATTLE_START, action: ACTIONS.MODIFY_RULE, duration: ACTION_DURATIONS.THIS_BATTLE, params: { ruleKey: 'rainbowNeedsFewer', value: 1 } }] }],
+  }));
+  colors.forEach((_, i) => b.queueCard(`k${i}`));
+  assert.equal(b.getPreview().willTriggerRainbow, true);
+  const res = b.commitChain();
+  assert.ok(res.events.some((e) => e.type === BATTLE_EVENT_TYPES.RAINBOW_TRIGGER));
+});
+
