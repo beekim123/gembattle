@@ -11,7 +11,7 @@ import {
   F, LANE, T, bold, buffIcon, chainJoint, colorRing, fnCard, gemCard, gemDot, hearts, rainbowText,
   ellipse, forest, inRect, smallButton, swatch, txt,
 } from '../ui/index.js';
-import { REGIONS, W, H, castListSlots, chainInsertIndex, chainSlots, fanSlots, hitRotated, monsterSlots } from './layout.js';
+import { REGIONS, W, H, castListSlots, chainSlots, fanSlots, hitRotated, monsterSlots } from './layout.js';
 import { buildPlayback } from './playback.js';
 
 const R = REGIONS;
@@ -41,8 +41,10 @@ const ALLY_COLORS = ['#9a78c2', '#86d6a6', '#86b4dc', '#e09a62'];
  * @param {boolean} [options.allowAutoArrange=true]
  * @param {'single'|'run'} [options.outcomeMode='single'] run：打完只有一个按钮，不能再打一次、不能半路走
  * @param {{win?: string, lose?: string}} [options.outcomeLabels] run 时那个按钮的字（默认「接着走」「看看这一趟」）
- * @param {object} [options.callbacks] onQueueCard(uid, index) / onUnqueueCard(uid) / onMoveChainCard(uid, index) / onPlayInstant(uid)
- *   / onSelectTarget(uid) / onCommitChain() / onAutoArrange(mode) / onClearChain() / onRetry() / onBack()
+ * @param {object} [options.callbacks] onQueueCard(uid, index) / onPlayInstant(uid)
+ *   / onSelectTarget(uid) / onCommitChain() / onAutoArrange(mode) / onUndoLast() / onClearChain() / onRetry() / onBack()
+ *   出牌照用户原型（2026-11-24 又说了一次）：只能从手里拖，拖进链只接在链尾；链里的牌不能再拖、不能改顺序，
+ *   放错了点「撤销上一步」（链尾那张回手里）或「撤销全部」。
  */
 export function createBattleView(options = {}) {
   const callbacks = options.callbacks || {};
@@ -59,7 +61,7 @@ export function createBattleView(options = {}) {
   const notes = []; // 不在播放里的小字（马上用的功能牌、开场的效果）
 
   const pointer = { x: -1, y: -1 };
-  let drag = null; // { uid, from: 'hand'|'chain', startX, startY, moved }
+  let drag = null; // { uid, from: 'hand', startX, startY, moved }：只有手牌能拖
   let hoverHand = -1;
   let hoverMonster = null;
   let hoverButton = null;
@@ -135,15 +137,15 @@ export function createBattleView(options = {}) {
     const handCards = snap.hand.filter((c) => !(draggingHand && c.uid === drag.uid));
     const fan = fanSlots(handCards.length, busy() || drag ? -1 : hoverHand);
     const hand = handCards.map((c, i) => ({ uid: c.uid, card: c, slot: fan[i], x: fan[i].x - fan[i].w / 2, y: fan[i].y - fan[i].h / 2, w: fan[i].w, h: fan[i].h }));
-    const draggingChain = drag && drag.moved && drag.from === 'chain';
-    const chainCards = snap.chain.filter((c) => !(draggingChain && c.uid === drag.uid));
-    const cs = chainSlots(chainCards.length);
-    const chain = chainCards.map((c, i) => ({ uid: c.uid, card: c, ...cs[i] }));
+    const cs = chainSlots(snap.chain.length);
+    const chain = snap.chain.map((c, i) => ({ uid: c.uid, card: c, ...cs[i] }));
+    const hasChain = snap.chain.length > 0;
     const C = R.cast;
     const buttons = [
       { id: 'cast', x: C.cx - C.r, y: C.cy - C.r, w: C.r * 2, h: C.r * 2 },
       ...(allowAutoArrange ? [{ id: 'auto', ...R.buttons.auto }] : []),
-      { id: 'clear', ...R.buttons.clear },
+      // 链里有牌才有这两个键（照用户原型）
+      ...(hasChain ? [{ id: 'undo', ...R.buttons.undo }, { id: 'clear', ...R.buttons.clear }] : []),
       ...(options.outcomeMode === 'run' ? [] : [{ id: 'back', ...R.buttons.back }]), // 走一趟里的仗不能半路走
     ];
     lastBoxes = { hand, chain, monsters, buttons };
@@ -219,8 +221,7 @@ export function createBattleView(options = {}) {
       if (!canAct) return { cursor: 'default' };
       const hi = handAt(x, y);
       if (hi >= 0) { drag = { uid: bx.hand[hi].uid, from: 'hand', startX: x, startY: y, moved: false }; return { cursor: 'grabbing' }; }
-      const ci = bx.chain.findIndex((c) => inRect(c, x, y));
-      if (ci >= 0) { drag = { uid: bx.chain[ci].uid, from: 'chain', startX: x, startY: y, moved: false }; return { cursor: 'grabbing' }; }
+      // 链里的牌不能拖：拖了会把排好的顺序弄乱（用户说过多次）
       return { cursor: btn ? 'pointer' : 'default' };
     }
 
@@ -230,31 +231,25 @@ export function createBattleView(options = {}) {
         drag = null;
         if (d.moved) anim.set(d.uid, { x: pointer.x, y: pointer.y - 20, w: R.hand.cw * 1.05, h: R.hand.ch * 1.05, rot: 0, seen: clock, wait: 0 });
         if (!d.moved || !canAct) return { cursor: 'default' };
-        const card = [...snapshot.hand, ...snapshot.chain].find((c) => c.uid === d.uid);
+        const card = snapshot.hand.find((c) => c.uid === d.uid);
         const overMonster = bx.monsters.find((m) => inRect(m, x, y) && shownMonster(m.uid)?.alive);
         const inHandZone = y >= R.hand.zoneTop;
-        if (d.from === 'hand') {
-          if (card?.usage === 'instant') {
-            // 马上用的牌：明显往上拖离手牌就用（第 3 轮审核 S4：原来要拖过 404 线，常常拖了一点又退回手里）
-            if (instantReady(d, y)) callbacks.onPlayInstant?.(d.uid);
-            return { cursor: 'default' };
-          }
-          if (inHandZone || !card) return { cursor: 'default' }; // 放回手里：什么都不做
-          if (overMonster && overMonster.uid !== snapshot.selectedTargetUid) callbacks.onSelectTarget?.(overMonster.uid);
-          const idx = overMonster ? snapshot.chain.length : chainInsertIndex(snapshot.chain.length, x);
-          callbacks.onQueueCard?.(d.uid, idx);
+        if (card?.usage === 'instant') {
+          // 马上用的牌：明显往上拖离手牌就用（第 3 轮审核 S4：原来要拖过 404 线，常常拖了一点又退回手里）
+          if (instantReady(d, y)) callbacks.onPlayInstant?.(d.uid);
           return { cursor: 'default' };
         }
-        // 从链里拖出来
-        if (inHandZone) { callbacks.onUnqueueCard?.(d.uid); return { cursor: 'default' }; }
-        const idx = chainInsertIndex(snapshot.chain.length - 1, x);
-        if (callbacks.onMoveChainCard) callbacks.onMoveChainCard(d.uid, idx);
+        if (inHandZone || !card) return { cursor: 'default' }; // 放回手里：什么都不做
+        if (overMonster && overMonster.uid !== snapshot.selectedTargetUid) callbacks.onSelectTarget?.(overMonster.uid);
+        // 拖到哪儿松手都接在链尾，不插到中间
+        callbacks.onQueueCard?.(d.uid, snapshot.chain.length);
         return { cursor: 'default' };
       }
       if (!canAct) return { cursor: 'default' };
       if (btn) {
         if (btn.id === 'cast') callbacks.onCommitChain?.();
         else if (btn.id === 'auto') callbacks.onAutoArrange?.('longest');
+        else if (btn.id === 'undo') callbacks.onUndoLast?.();
         else if (btn.id === 'clear') callbacks.onClearChain?.();
         else if (btn.id === 'back') callbacks.onBack?.();
         return { cursor: 'pointer' };
@@ -449,7 +444,10 @@ export function createBattleView(options = {}) {
 
     // 右下：键
     if (allowAutoArrange) smallButton(r, R.buttons.auto.x, R.buttons.auto.y, R.buttons.auto.w, R.buttons.auto.h, '自动排');
-    smallButton(r, R.buttons.clear.x, R.buttons.clear.y, R.buttons.clear.w, R.buttons.clear.h, '全撤回');
+    if (snap.chain.length > 0) {
+      smallButton(r, R.buttons.undo.x, R.buttons.undo.y, R.buttons.undo.w, R.buttons.undo.h, '撤销上一步');
+      smallButton(r, R.buttons.clear.x, R.buttons.clear.y, R.buttons.clear.w, R.buttons.clear.h, '撤销全部');
+    }
     const C = R.cast;
     const press = pb && now < 0.15 ? 3 : 0;
     r.circle({ x: C.cx, y: C.cy + 4, r: C.r, fill: '#0b2a6e' });
@@ -494,18 +492,17 @@ export function createBattleView(options = {}) {
 
     // 拖着的牌画在最上面
     if (drag?.moved) {
-      const card = [...snap.hand, ...snap.chain].find((c) => c.uid === drag.uid);
+      const card = snap.hand.find((c) => c.uid === drag.uid);
       if (card) {
         const inZone = pointer.y < R.hand.zoneTop;
         if (inZone && card.usage === 'chain') {
-          // 链里要插进去的位置：一条亮线
-          const n = snap.chain.length - (drag.from === 'chain' ? 1 : 0);
-          const idx = chainInsertIndex(n, pointer.x);
+          // 松手会接在链尾：链尾那个位子一条亮线
+          const n = snap.chain.length;
           const cs = chainSlots(n + 1);
-          const s = cs[idx];
+          const s = cs[n];
           if (s) r.rect({ x: s.cx - 2, y: s.y - 6, w: 4, h: s.h + 12, radius: 2, fill: T.connect, alpha: 0.5 + 0.4 * Math.sin(clock * 10) });
         }
-        if (card.usage === 'instant' && drag.from === 'hand') drawInstantZone(r, instantReady(drag, pointer.y));
+        if (card.usage === 'instant') drawInstantZone(r, instantReady(drag, pointer.y));
         drawCard(r, card, { x: pointer.x, y: pointer.y - 20, rot: 0, scale: 1.05 });
       }
     }

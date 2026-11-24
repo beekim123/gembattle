@@ -24,13 +24,14 @@ export const REGIONS = Object.freeze({
   total: { cx: 480, cy: 288 },
   hero: { cx: 480, base: 388, size: 58 },
   allies: [{ cx: 392, base: 382, size: 46 }, { cx: 568, base: 382, size: 46 }, { cx: 316, base: 376, size: 44 }],
-  // 手牌左右只到 260~700：左边是集色环（到 231），右边是「自动排 / 全撤回」（从 704 起）。所以整道弧最多张开 30 度，7 张起缩小一点
+  // 手牌左右只到 260~700：左边是集色环（到 231），右边是「撤销上一步 / 撤销全部」（从 704 起）。所以整道弧最多张开 30 度，7 张起缩小一点
   hand: { cx: 480, pivotY: 1100, radius: 650, cw: 78, ch: 108, stepDeg: 7, maxSpreadDeg: 30, crowd: 6, crowdScale: 0.86, zoneTop: 404, instantTop: 426 },
   // 拖「马上用」的牌：往上拖离手牌那道弧（过 instantTop、比按下时高 20）松手就用；这一块画虚线框提示
   instantZone: { x: 236, y: 140, w: 488, h: 286 },
   pile: { x: 16, y: 436 },
   cast: { cx: 884, cy: 478, r: 42 },
-  buttons: { auto: { x: 704, y: 434, w: 76, h: 26 }, clear: { x: 704, y: 466, w: 76, h: 26 }, back: { x: 884, y: 4, w: 40, h: 22 } },
+  // 撤销两个键链里有牌才出（照用户原型）；自动排只在外圈的试打台有
+  buttons: { auto: { x: 704, y: 402, w: 76, h: 26 }, undo: { x: 704, y: 434, w: 76, h: 26 }, clear: { x: 704, y: 466, w: 76, h: 26 }, back: { x: 884, y: 4, w: 40, h: 22 } },
 });
 
 export function monsterSlots(n) {
@@ -82,14 +83,6 @@ export function castListSlots(n) {
     const y = L.top + i * rowH;
     return { x: L.x, y, w, h, cx: L.x + w / 2, cy: y + h / 2 };
   });
-}
-
-/** 拖着一张牌松手时，插进链的第几个位子 */
-export function chainInsertIndex(n, x) {
-  const slots = chainSlots(n);
-  let idx = 0;
-  for (const s of slots) if (x > s.cx) idx++;
-  return idx;
 }
 
 /** 点是不是落在一张转过角度的手牌里 */

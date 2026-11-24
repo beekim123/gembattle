@@ -88,12 +88,6 @@ export function createBattleScene(context) {
         onQueueCard(uid, index) {
           if (battle.queueCard(uid, index)) syncView();
         },
-        onMoveChainCard(uid, index) {
-          if (battle.moveChainCard(uid, index)) syncView();
-        },
-        onUnqueueCard(uid) {
-          if (battle.unqueueCard(uid)) syncView();
-        },
         onUndoLast() {
           if (battle.undoLast()) syncView();
         },

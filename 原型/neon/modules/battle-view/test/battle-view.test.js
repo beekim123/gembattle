@@ -164,9 +164,9 @@ function makeView(actions) {
     allowAutoArrange: true,
     callbacks: {
       onQueueCard: (uid, index) => actions.push(['queue', uid, index]),
-      onMoveChainCard: (uid, index) => actions.push(['move', uid, index]),
       onPlayInstant: (uid) => actions.push(['instant', uid]),
-      onUnqueueCard: (uid) => actions.push(['unqueue', uid]),
+      onUndoLast: () => actions.push(['undo']),
+      onClearChain: () => actions.push(['clear']),
       onSelectTarget: (uid) => actions.push(['target', uid]),
       onCommitChain: () => actions.push(['commit']),
     },
@@ -210,7 +210,7 @@ test('出牌只认拖拽：点一下手牌什么都不做', () => {
   assert.deepEqual(actions, []);
 });
 
-test('拖进链、拖到马上用、拖回手里、链里换位子，都转成 callbacks', () => {
+test('出牌照用户原型：拖进链只接在链尾，链里的牌拖不动，放错了用「撤销上一步」「撤销全部」', () => {
   const actions = [];
   const view = makeView(actions);
   view.setState({ snapshot: makeFakeSnapshot(), preview: makePreview(), events: [] });
@@ -219,23 +219,38 @@ test('拖进链、拖到马上用、拖回手里、链里换位子，都转成 c
   const block = b.hand.find((h) => h.uid === 'h-block');
   const chain0 = b.chain[0];
 
-  // 拖到链的右边 → 插在最后
+  // 拖到链的右边、左边，都接在链尾
   dragTo(view, { x: cyan.cx, y: cyan.cy }, { x: chain0.cx + 80, y: chain0.cy });
-  // 拖到链的左边 → 插在最前
   dragTo(view, { x: cyan.cx, y: cyan.cy }, { x: chain0.cx - 80, y: chain0.cy });
   // 马上用的牌拖上去 → 直接用
   dragTo(view, { x: block.cx, y: block.cy }, { x: 480, y: 300 });
-  // 链里的牌拖回手里 → 撤回
+  // 链里的牌拖回手里、拖去别的位子 → 都不动
   dragTo(view, { x: chain0.cx, y: chain0.cy }, { x: 480, y: 500 });
+  dragTo(view, { x: chain0.cx, y: chain0.cy }, { x: chain0.cx, y: chain0.cy + 60 });
   // 拖了又放回手里 → 什么都不做
   dragTo(view, { x: cyan.cx, y: cyan.cy }, { x: cyan.cx + 20, y: cyan.cy - 10 });
+  // 撤销上一步、撤销全部
+  const tap = (id) => {
+    const btn = view.getLayoutBoxes().buttons.find((x) => x.id === id);
+    assert.ok(btn, `找不到 ${id}`);
+    view.onPointer({ type: 'down', x: btn.x + btn.w / 2, y: btn.y + btn.h / 2 });
+    view.onPointer({ type: 'up', x: btn.x + btn.w / 2, y: btn.y + btn.h / 2 });
+  };
+  tap('undo');
+  tap('clear');
 
   assert.deepEqual(actions, [
     ['queue', 'h-cyan', 1],
-    ['queue', 'h-cyan', 0],
+    ['queue', 'h-cyan', 1],
     ['instant', 'h-block'],
-    ['unqueue', 'c-yellow'],
+    ['undo'],
+    ['clear'],
   ]);
+
+  // 链里没牌：两个撤销键不出
+  view.setState({ snapshot: { ...makeFakeSnapshot(), chain: [] }, preview: makePreview(), events: [] });
+  const ids = view.getLayoutBoxes().buttons.map((x) => x.id);
+  assert.ok(!ids.includes('undo') && !ids.includes('clear'));
 });
 
 test('打出去以后按事件播一段，播完才能再动', () => {
