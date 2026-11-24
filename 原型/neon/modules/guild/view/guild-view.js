@@ -117,18 +117,23 @@ export function createGuildView(options = {}) {
     const w = P.w - 48;
     txt(r, '装备会磨损：每出一趟磨 1 点，磨到 0 就坏了。坏了能再买', x0, top + 4, { size: F.xs, color: T.text3 });
     let y = top + 16;
+    // B 级以后 12 件，行距收紧才放得下（板底 514）
+    const many = shopList(save, content).length > 9;
+    const rowH = many ? 24 : 27;
+    const step = many ? 26 : 30;
     for (const slot of ['weapon', 'armor', 'trinket']) {
       sectionTitle(r, x0, y + 6, SLOT_LABEL[slot]);
       y += 16;
       shopList(save, content).filter((g) => g.slot === slot).forEach((g) => {
         const have = save.gear.owned.filter((o) => o.id === g.id);
-        r.rect({ x: x0 - 8, y, w: w + 16, h: 27, radius: 8, fill: '#11151d', stroke: '#2c3446', lineWidth: 1 });
-        txt(r, g.label, x0, y + 13, { size: F.xs, weight: 'bold' });
-        txt(r, `${g.uses} 趟${have.length ? ` · 有 ${have.length} 件（还剩 ${have.map((o) => o.wear).join('、')} 趟）` : ''}`, x0 + w - 92, y + 13, { size: F.xs, color: have.length ? T.connect : T.text3, align: 'right' });
-        const b = { id: `buy-${g.id}`, x: x0 + w - 84, y: y + 3, w: 84, h: 21, onClick: () => cb.onBuy?.(g.id) };
+        const mid = y + rowH / 2;
+        r.rect({ x: x0 - 8, y, w: w + 16, h: rowH, radius: 8, fill: '#11151d', stroke: '#2c3446', lineWidth: 1 });
+        txt(r, g.label, x0, mid, { size: F.xs, weight: 'bold' });
+        txt(r, `${g.uses} 趟${have.length ? ` · 有 ${have.length} 件（还剩 ${have.map((o) => o.wear).join('、')} 趟）` : ''}`, x0 + w - 92, mid, { size: F.xs, color: have.length ? T.connect : T.text3, align: 'right' });
+        const b = { id: `buy-${g.id}`, x: x0 + w - 84, y: y + 2, w: 84, h: rowH - 4, onClick: () => cb.onBuy?.(g.id) };
         panelButton(r, b, `买 ${g.price}`, { hot: hot === b.id, disabled: save.gold < g.price, size: F.xs });
         if (save.gold >= g.price) boxes.push(b);
-        y += 30;
+        y += step;
       });
     }
   }

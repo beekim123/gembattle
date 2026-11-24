@@ -1,7 +1,7 @@
 // 3~4 个小事件（设计稿 7.1：二选一，有得有失；扣心最多扣到剩半颗）。
 // 只写功能，样子和说法以后跟用户定。定在设计稿 9.3（第 4 版）；当初的候选在 记录/给用户挑-阶段2到4.md E3。
 // effects 的 kind 由 run-rules 认：lose_hearts / gain_hearts / pay_gold / gain_gold / reward /
-// add_junk / enhance_random_gem / remove_random_function / add_random_function。
+// add_junk / remove_random_function / add_random_function。
 
 export const EVENT_DEFS = Object.freeze({
   ev_heart_for_buff: Object.freeze({
@@ -14,9 +14,10 @@ export const EVENT_DEFS = Object.freeze({
   }),
   ev_enhance_for_junk: Object.freeze({
     id: 'ev_enhance_for_junk',
-    label: '随机强化一张宝石牌，但牌组里塞进一张没用的牌',
+    // 第 6 版：原来随机强化一张宝石牌，常常强化到不想要的，选了必亏；改成自己挑
+    label: '自己挑一张牌强化，但牌组里塞进一张没用的牌',
     options: [
-      { label: '强化，收下没用的牌', effects: [{ kind: 'enhance_random_gem' }, { kind: 'add_junk' }] },
+      { label: '挑一张强化，收下没用的牌', effects: [{ kind: 'reward', reward: 'enhance' }, { kind: 'add_junk' }] },
       { label: '走开', effects: [] },
     ],
   }),

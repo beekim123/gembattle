@@ -32,7 +32,8 @@ export const FOREST = Object.freeze({
   hiddenQuestChance: 0.35,
   hiddenGold: [10, 20],
   rewards: Object.freeze({
-    stat: Object.freeze({ attack: 15, damageBonus: 0.15, critRate: 0.1, critDamage: 0.3 }),
+    // 值是数就加那一项；是对象就几项一起加（第 6 版：暴伤单加 +0.3 几乎没用，改成暴击率 +5% 带暴伤 +0.4）
+    stat: Object.freeze({ attack: 15, damageBonus: 0.15, critRate: 0.1, critDamage: Object.freeze({ critRate: 0.05, critDamage: 0.4 }) }),
     gold: [15, 25],
     heal: 1,
     drawPlusMax: 2,

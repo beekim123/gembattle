@@ -109,6 +109,7 @@ export function createBattle(startPacket, options = {}) {
   };
   // 阶段 2 加成用的回合状态
   let turnStartKeptCount = 0; // 回合开始摸牌前，手里留着几张
+  let turnStartShieldBreaks = 0; // 回合开始时一共破过几次盾（加成「破过盾，链尾补一轮白」看这回合破没破）
   let bonusDrawNextTurn = 0; // 下回合多几张（加成「一条链合白 2 次」）：先摸的、补到的、上限都多这几张
   let complementDrawUsedThisTurn = false;
   let complementsThisChain = 0;
@@ -351,7 +352,7 @@ export function createBattle(startPacket, options = {}) {
         sourceLabel,
       });
     },
-    /** 加成「破盾时全体吃一轮白」：红绿蓝各打「当时的倍率」发，白色伤害，不削盾 */
+    /** 加成「破过盾，链尾全体补一轮白」：红绿蓝各打「链尾倍率」发，白色伤害，不削盾 */
     dealWhiteRound(targetMode, sourceLabel) {
       const mult = activeChainMultRef ? activeChainMultRef.value : 1;
       const eff = getEffectiveStats();
@@ -728,6 +729,7 @@ export function createBattle(startPacket, options = {}) {
     turnRuleOverrides = {};
     turnStartRecordedCount = recordedColors.size;
     turnStartKeptCount = hand.length;
+    turnStartShieldBreaks = stats.shieldBreaks;
     complementDrawUsedThisTurn = false;
 
     // 取消上回合「本回合」挡与怪的回合临时标记
@@ -1502,6 +1504,11 @@ export function createBattle(startPacket, options = {}) {
         triggersComplementWhite: rel === CHAIN_RELATIONS.COMPLEMENT,
         triggersRainbow: adv.triggeredRainbow,
       });
+    }
+
+    // 加成「破过盾，链尾全体补一轮白」：这回合破过盾，按链尾的倍率补一轮（不削盾）
+    if (ruleOn(RULE_KEYS.breakWhiteAtChainEnd) && cardsToResolve.length > 0 && stats.shieldBreaks > turnStartShieldBreaks && getAliveMonsters().length > 0) {
+      actionCtx.dealWhiteRound('all', '破过盾，链尾补一轮白');
     }
 
     activeChainMultRef = null;

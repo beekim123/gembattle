@@ -8,7 +8,7 @@ import { forest } from '../ui/index.js';
 import { createAlbumView } from './index.js';
 const DATA = {
   cards: ['red', 'yellow', 'green', 'cyan', 'blue', 'purple', 'white'].map((c) => ({ id: c, label: c, kind: 'gem', color: c, gems: ['red'] })),
-  buffs: [{ id: 'b1', label: '破盾时全体吃一轮白', description: '……', lane: 'break' }, { id: 'b2', label: '彩虹再多打一遍', description: '……', lane: 'rainbow', locked: true }],
+  buffs: [{ id: 'b1', label: '破过盾，链尾全体补一轮白', description: '……', lane: 'break' }, { id: 'b2', label: '彩虹再多打一遍', description: '……', lane: 'rainbow', locked: true }],
   allies: [{ id: 'a', role: 'assassin', label: '补刀', roleTag: '刺', unlockRank: 'C', description: '刺客' }],
   monsters: [{ defId: 'm1', look: 'mon_dual_shield', label: '双色盾普通怪', info: '1 条血' }, { defId: 'm2', look: 'mon_gatekeeper', label: '看门的', info: '3 条血' }],
   gear: [{ id: 'f', label: '基础武器', grade: 'free' }],

@@ -11,6 +11,7 @@ export const RULE_KEY_LABELS = Object.freeze({
   firstMatchExtraShred: '每条链第一张对色的牌，每颗宝石多削 1 格',
   brokenMultiplier: '破盾以后受到的伤害倍数（数）',
   noBreakPush: '破盾不推倒计时',
+  breakWhiteAtChainEnd: '这回合破过盾，链打完时按链尾的倍率给所有怪补一轮白（不削盾）',
   complementExtraRound: '合白多打的那一轮再多打一轮',
   complementBonusDraw: '一条链里合白 2 次，下回合多 1 张（不到 N + 1 补到 N + 1）',
   breakKeepsRecorded: '断色不清空集到的颜色',

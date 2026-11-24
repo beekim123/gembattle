@@ -138,6 +138,11 @@ console.log('假玩家：先用马上用的牌，自动帮排·最长；奖励�
 report('免费基础装（攻 40）', { equipped: { weapon: null, armor: null, trinket: null } });
 report('C 级武器（攻 80）', { equipped: { weapon: 'gear_c_weapon_1', armor: null, trinket: null } });
 report('C 级全套（攻 80 + 心 +1 + 增伤 15%）', { equipped: { weapon: 'gear_c_weapon_1', armor: 'gear_c_armor_2', trinket: 'gear_c_trinket_1' } });
+// 第 6 版：三把 C 级武器要一把比一把强（85 ≤ 90 ≤ 95 金币）；B 级全套看第 2 层
+report('C 级武器 2（攻 75 + 暴击 15%）', { equipped: { weapon: 'gear_c_weapon_2', armor: null, trinket: null } });
+report('C 级武器 3（攻 75 + 破盾后暴击 35%）', { equipped: { weapon: 'gear_c_weapon_3', armor: null, trinket: null } });
+report('C 级武器 + 饰品 2（暴击 5% + 暴伤 0.4）', { equipped: { weapon: 'gear_c_weapon_1', armor: null, trinket: 'gear_c_trinket_2' } });
+report('B 级全套（攻 140 + 心 +1½ + 增伤 30%）', { equipped: { weapon: 'gear_b_weapon_1', armor: 'gear_b_armor_1', trinket: 'gear_b_trinket_1' } });
 report('C 级武器 + 刺客', { equipped: { weapon: 'gear_c_weapon_1', armor: null, trinket: null }, allies: ['ally_assassin_break'] });
 HUMAN = true;
 report('像真人（一半回合不排）· C 级武器', { equipped: { weapon: 'gear_c_weapon_1', armor: null, trinket: null } });

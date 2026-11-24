@@ -12,9 +12,10 @@ export const BUFF_DEFS = Object.freeze({
     slot: 1,
     lane: 'break',
     lanes: ['break', 'white'],
-    label: '破盾时全体吃一轮白',
-    description: '破盾时，对所有怪打一轮白色伤害：红、绿、蓝各打「当时的倍率」那么多发。不削盾',
-    effects: [{ timing: TIMINGS.ON_SHIELD_BREAK, action: ACTIONS.WHITE_ROUND, params: { target: 'all' } }],
+    // 第 6 版：原来破盾那一下就打，对色牌排在链头、倍率才 ×1、×2，几乎没用；改成链打完按链尾的倍率补
+    label: '破过盾，链尾全体补一轮白',
+    description: '这回合破过盾，链打完时按链尾的倍率，对所有怪补一轮白色伤害：红、绿、蓝各打「链尾倍率」那么多发。不削盾',
+    effects: [{ timing: TIMINGS.BATTLE_START, action: ACTIONS.MODIFY_RULE, duration: ACTION_DURATIONS.THIS_BATTLE, params: { ruleKey: RULE_KEYS.breakWhiteAtChainEnd, value: true } }],
   }),
   buff_complement_keep: Object.freeze({
     id: 'buff_complement_keep',
@@ -29,9 +30,13 @@ export const BUFF_DEFS = Object.freeze({
     id: 'buff_rainbow_keep3',
     slot: 3,
     lane: 'rainbow',
-    label: '彩虹以后留 3 色',
-    description: '触发彩虹以后，不从一色重新集：留下这一色和它两边，一共 3 色',
-    effects: [{ timing: TIMINGS.BATTLE_START, action: ACTIONS.MODIFY_RULE, duration: ACTION_DURATIONS.THIS_BATTLE, params: { ruleKey: RULE_KEYS.rainbowKeepsNeighbors, value: true } }],
+    // 第 6 版：普通仗两三回合打完，第一次彩虹都凑不齐；加了「开打先记上 2 色」
+    label: '开打先记 2 色，彩虹以后留 3 色',
+    description: '开打时先随机记上 2 色；触发彩虹以后，不从一色重新集：留下这一色和它两边，一共 3 色',
+    effects: [
+      { timing: TIMINGS.BATTLE_START, action: ACTIONS.RECORD_COLORS, params: { mode: 'random', count: 2 } },
+      { timing: TIMINGS.BATTLE_START, action: ACTIONS.MODIFY_RULE, duration: ACTION_DURATIONS.THIS_BATTLE, params: { ruleKey: RULE_KEYS.rainbowKeepsNeighbors, value: true } },
+    ],
   }),
   buff_first_break_doubles: Object.freeze({
     id: 'buff_first_break_doubles',

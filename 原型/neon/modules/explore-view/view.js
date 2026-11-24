@@ -419,7 +419,7 @@ export function createExploreView(options = {}) {
       r.rect({ x: b.cx - 72, y: py + 6, w: 32, h: 32, radius: 6, fill: col, alpha: 0.9 * a });
       txt(r, glyph, b.cx - 56, py + 22, { size: glyph.length > 1 ? F.s : F.l, weight: 'bold', align: 'center', color: '#0c0f16', alpha: a });
       // 属性出口：给哪样直接写进标题（原来写在右下角，跟「往里一层」撞成一团）
-      const statName = e.reward?.kind === 'stat' ? ({ attack: '攻击', damageBonus: '增伤', critRate: '暴击率', critDamage: '暴伤' })[e.reward.stat] : null;
+      const statName = e.reward?.kind === 'stat' ? ({ attack: '攻击', damageBonus: '增伤', critRate: '暴击率', critDamage: '暴击和暴伤' })[e.reward.stat] : null;
       const title = e.kind === 'return' ? '回去' : e.kind === 'gatekeeper' ? '看门的' : statName ? `${e.label} · ${statName}` : e.label;
       txt(r, title, b.cx - 34, py + 15, { size: F.s, weight: 'bold', alpha: a });
       const sub = e.kind === 'return' ? '带着东西回大厅'

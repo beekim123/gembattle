@@ -10,7 +10,7 @@ const gem = (uid, color, gems) => ({ uid, defId: `gem_${color}`, kind: 'gem', us
 const GEMS = { red: ['red'], yellow: ['red', 'green'], green: ['green'], cyan: ['green', 'blue'], blue: ['blue'], purple: ['red', 'blue'], white: ['red', 'green', 'blue'] };
 const g = (uid, color) => gem(uid, color, GEMS[color]);
 const rule = (ruleKey, value = true) => ({ id: ruleKey, label: ruleKey, lane: 'chain', description: '', effects: [{ timing: TIMINGS.BATTLE_START, action: ACTIONS.MODIFY_RULE, duration: ACTION_DURATIONS.THIS_BATTLE, params: { ruleKey, value } }] });
-const BREAK_WHITE = { id: 'buff_break_white', label: '破盾时全体吃一轮白', lane: 'break', effects: [{ timing: TIMINGS.ON_SHIELD_BREAK, action: ACTIONS.WHITE_ROUND, params: { target: 'all' } }] };
+const BREAK_WHITE = { id: 'buff_break_white', label: '破过盾，链尾全体补一轮白', lane: 'break', effects: [{ timing: TIMINGS.BATTLE_START, action: ACTIONS.MODIFY_RULE, duration: ACTION_DURATIONS.THIS_BATTLE, params: { ruleKey: RULE_KEYS.breakWhiteAtChainEnd, value: true } }] };
 const ASSASSIN = {
   id: 'ally_assassin_break', role: 'assassin', mode: 'trigger', label: '补刀', usesPerBattle: null,
   effects: [{ timing: TIMINGS.ON_SHIELD_BREAK, action: ACTIONS.DEAL_BONUS_DAMAGE, params: { target: 'event_monster', amount: 15, scale: 'attackRatio', canCrit: true } }],

@@ -247,7 +247,7 @@ export const DEFAULT_ACTION_TABLE = Object.freeze({
     label: '记颜色',
     description: '把当前色两边的颜色（或顺着未集色）记入集色栏',
     params: Object.freeze({
-      mode: Object.freeze({ type: 'string', required: true, description: 'neighbors / specific / sequential' }),
+      mode: Object.freeze({ type: 'string', required: true, description: 'neighbors / specific / sequential / random（随机挑没集到的）' }),
       count: Object.freeze({ type: 'number', required: false, description: '最多记几种颜色' }),
       color: Object.freeze({ type: 'string', required: false, description: '指定颜色（mode 为 specific 时）' }),
     }),
@@ -327,7 +327,7 @@ export const DEFAULT_ACTION_TABLE = Object.freeze({
   [ACTIONS.WHITE_ROUND]: Object.freeze({
     id: ACTIONS.WHITE_ROUND,
     label: '打一轮白',
-    description: '对目标打一轮白色伤害：红、绿、蓝各打「当时的倍率」那么多发，不削盾（阶段 1 加成「破盾时全体吃一轮白」用）',
+    description: '对目标打一轮白色伤害：红、绿、蓝各打「当时的倍率」那么多发，不削盾（加成「破过盾，链尾全体补一轮白」用，链打完时按链尾的倍率）',
     params: Object.freeze({
       target: Object.freeze({ type: 'string', required: false, description: 'all（默认）或 selected' }),
     }),

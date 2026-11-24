@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { SCHEMA_VERSION, validateBattleStartPacket } from '../../shared/index.js';
-import { createRun, settleRun } from '../index.js';
+import { createRun, settleRun, statRewardText } from '../index.js';
 
 // 假内容包：只够跑通规则
 const gem = { defId: 'g_red', kind: 'gem', usage: 'chain', color: 'red', gems: ['red'], label: '红', description: '', effects: [] };
@@ -155,3 +155,44 @@ test('结算：活着带回全部金币、做完的任务等着提交、装备�
   assert.ok(lines.some((l) => l.includes('磨坏')));
   assert.equal(save.gold, 50, '不改传进来的存档');
 });
+
+test('事件 2（第 6 版）：自己挑一张牌强化，再塞一张没用的牌；没用的牌不在挑的里面', () => {
+  const ev2 = { id: 'ev2', label: '挑一张强化', options: [{ label: '挑一张强化，收下没用的牌', effects: [{ kind: 'reward', reward: 'enhance' }, { kind: 'add_junk' }] }, { label: '走开', effects: [] }] };
+  const run = createRun(depart({ seed: 'ev' }), { ...PACK, events: { ev2 }, eventList: [{ id: 'ev2' }], zones: { forest: { ...PACK.zones.forest, hiddenChance: 0, smallEventChance: 1 } } });
+  const deckBefore = run.getState().player.deck.length;
+  run.takeHidden();
+  run.choose('o0');
+  const p = run.getState().pending;
+  assert.equal(p.type, 'enhance');
+  assert.equal(p.step, 'card');
+  const deck = run.getState().player.deck;
+  assert.equal(deck.length, deckBefore + 1);
+  const junkUid = deck.find((c) => c.defId === 'junk').uid;
+  assert.ok(!p.options.includes(junkUid));
+  run.choose(p.options[0]);
+  run.choose(run.getState().pending.dirs[0]);
+  assert.ok(run.getState().player.deck.find((c) => c.uid === p.options[0]).enhanced);
+});
+
+test('属性奖励能几项一起加（第 6 版：暴击率 +5% 带暴伤 +0.4）', () => {
+  assert.equal(statRewardText({ critRate: 0.05, critDamage: 0.4 }), '暴击率 +5%，暴伤 +0.4');
+  assert.equal(statRewardText({ attack: 15 }), '攻击 +15');
+  const pack = { ...PACK, zones: { forest: { ...PACK.zones.forest, rewards: { ...PACK.zones.forest.rewards, stat: { critDamage: { critRate: 0.05, critDamage: 0.4 } } } } } };
+  // 换几个种子找一个属性出口，走进去打赢，属性两项都加上
+  for (let i = 0; i < 40; i++) {
+    const run = createRun(depart({ seed: `stat-${i}` }), pack);
+    run.finishBattle(win());
+    drain(run);
+    const ex = run.getState().clearing.exits.find((e) => e.reward?.kind === 'stat');
+    if (!ex) continue;
+    run.chooseExit(ex.id);
+    if (run.getState().clearing.needsFight) run.finishBattle(win());
+    drain(run);
+    const st = run.getState().player.stats;
+    assert.equal(st.critRate, 0.15);
+    assert.equal(st.critDamage, 1.9);
+    return;
+  }
+  assert.fail('40 个种子都没出属性出口');
+});
+

@@ -5,6 +5,7 @@ export {
   REWARD_KINDS,
   REWARD_LABELS,
   STAT_LABELS,
+  statRewardText,
   ENHANCE_DIRS,
   CLEARING_KINDS,
   createRun,

@@ -24,7 +24,15 @@ const ruleBuff = (id, ruleKey) => ({
   id, label: id, lane: 'chain', description: '',
   effects: [{ timing: TIMINGS.BATTLE_START, action: ACTIONS.MODIFY_RULE, duration: ACTION_DURATIONS.THIS_BATTLE, params: { ruleKey, value: true } }],
 });
-const BREAK_WHITE = { id: 'buff_break_white', label: '破盾时全体吃一轮白', lane: 'break', effects: [{ timing: TIMINGS.ON_SHIELD_BREAK, action: ACTIONS.WHITE_ROUND, params: { target: 'all' } }] };
+const BREAK_WHITE = ruleBuff('buff_break_white', 'breakWhiteAtChainEnd');
+const WHITE_LABEL = '破过盾，链尾补一轮白';
+const RAINBOW_KEEP3 = {
+  id: 'buff_rainbow_keep3', label: '开打先记 2 色，彩虹以后留 3 色', lane: 'rainbow',
+  effects: [
+    { timing: TIMINGS.BATTLE_START, action: ACTIONS.RECORD_COLORS, params: { mode: 'random', count: 2 } },
+    { timing: TIMINGS.BATTLE_START, action: ACTIONS.MODIFY_RULE, duration: ACTION_DURATIONS.THIS_BATTLE, params: { ruleKey: 'rainbowKeepsNeighbors', value: true } },
+  ],
+};
 const ASSASSIN = {
   id: 'ally_assassin_break', role: 'assassin', mode: 'trigger', label: '补刀', usesPerBattle: null,
   effects: [{ timing: TIMINGS.ON_SHIELD_BREAK, action: ACTIONS.DEAL_BONUS_DAMAGE, params: { target: 'event_monster', amount: 15, scale: 'attackRatio', canCrit: true } }],
@@ -100,25 +108,47 @@ test('彩虹以后留 3 色：留下这一色和它两边', () => {
   assert.equal(old.nextRecorded.size, 3);
 });
 
-test('破盾时全体吃一轮白：两只怪都挨，按当时倍率打发数，不削盾', () => {
-  const deck = [makeGem('a', 'red', ['red'])];
+test('开打先记 2 色：开打就集了 2 种色环上的颜色', () => {
+  const b = createBattle(makePacket({ deck: [makeGem('a', 'red', ['red'])], drawTarget: 1, monsters: [mon('m1', [])], buffs: [RAINBOW_KEEP3] }));
+  const rec = b.getSnapshot().recordedColors;
+  assert.equal(rec.length, 2);
+  assert.ok(rec.every((c) => COLOR_RING.includes(c)));
+});
+
+test('破过盾，链尾全体补一轮白：两只怪都挨，按链尾的倍率打发数，不削盾', () => {
+  // 红破盾时倍率 ×1，接上黄以后链尾 ×2：照链尾算，红绿蓝各 2 发
+  const deck = [makeGem('a', 'red', ['red']), makeGem('b', 'yellow', ['red', 'green'])];
   const b = createBattle(makePacket({
-    deck, drawTarget: 1,
+    deck, drawTarget: 2,
     monsters: [mon('m1', [{ color: 'red', max: 1 }]), mon('m2', [{ color: 'blue', max: 2 }])],
     buffs: [BREAK_WHITE],
   }));
   b.queueCard('a');
+  b.queueCard('b');
+  const mult = b.getPreview().finalMultiplier;
+  assert.equal(mult, 2);
   const res = b.commitChain();
   assert.equal(validateBattleEvents(res.events).ok, true, validateBattleEvents(res.events).errors.join('\n'));
-  const white = res.events.filter((e) => e.type === BATTLE_EVENT_TYPES.DAMAGE_PACKET && e.payload.sourceLabel === '破盾时全体吃一轮白');
-  const targets = new Set(white.map((e) => e.payload.targetUid));
-  assert.deepEqual([...targets].sort(), ['m1', 'm2']);
+  const white = res.events.filter((e) => e.type === BATTLE_EVENT_TYPES.DAMAGE_PACKET && e.payload.sourceLabel === WHITE_LABEL);
+  assert.deepEqual([...new Set(white.map((e) => e.payload.targetUid))].sort(), ['m1', 'm2']);
   assert.ok(white.every((e) => e.payload.isWhite));
   // 第二只的蓝盾不被这一轮白削
   assert.equal(res.snapshot.monsters[1].shields[0].current, 2);
-  // 红宝石 75（破盾前 ×0.75）+ 第一只吃 3 发白 ×1.5 = 450
-  const m1 = res.events.filter((e) => e.type === BATTLE_EVENT_TYPES.DAMAGE_PACKET && e.payload.targetUid === 'm1').reduce((s, e) => s + e.payload.damage, 0);
-  assert.equal(m1, 75 + 450);
+  // 第一只破了盾 ×1.5：3 色 × 2 发 × 100 × 1.5 = 900；第二只没破 ×0.75：450
+  const sum = (uid) => white.filter((e) => e.payload.targetUid === uid).reduce((s, e) => s + e.payload.damage, 0);
+  assert.equal(sum('m1'), 900);
+  assert.equal(sum('m2'), 450);
+});
+
+test('破过盾，链尾全体补一轮白：这回合没破盾就不补', () => {
+  const b = createBattle(makePacket({
+    deck: [makeGem('a', 'red', ['red'])], drawTarget: 1,
+    monsters: [mon('m1', [{ color: 'blue', max: 2 }])],
+    buffs: [BREAK_WHITE],
+  }));
+  b.queueCard('a');
+  const res = b.commitChain();
+  assert.equal(res.events.filter((e) => e.type === BATTLE_EVENT_TYPES.DAMAGE_PACKET && e.payload.sourceLabel === WHITE_LABEL).length, 0);
 });
 
 test('刺客补刀：破盾那一下先报队友出手，再补一刀给破盾的那只', () => {

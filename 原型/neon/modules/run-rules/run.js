@@ -23,6 +23,11 @@ export const REWARD_LABELS = Object.freeze({
   return: '回去',
 });
 export const STAT_LABELS = Object.freeze({ attack: '攻击', damageBonus: '增伤', critRate: '暴击率', critDamage: '暴伤' });
+
+/** 属性奖励写成字：{ critRate: 0.05, critDamage: 0.4 } → 「暴击率 +5%，暴伤 +0.4」 */
+export function statRewardText(parts) {
+  return Object.entries(parts).map(([k, n]) => `${STAT_LABELS[k]} ${k === 'attack' || k === 'critDamage' ? `+${n}` : `+${Math.round(n * 100)}%`}`).join('，');
+}
 export const ENHANCE_DIRS = Object.freeze({
   pain: '疼：这张每发 +50%',
   more: '多：多算 1 颗宝石来打发',
@@ -387,7 +392,7 @@ export function createRun(depart, pack) {
     for (const ef of o.effects) {
       if (ef.kind === 'pay_gold' && gold.risky + gold.safe < ef.value) return false;
       if (ef.kind === 'remove_random_function' && removableCards().filter((c) => c.kind === 'function').length === 0) return false;
-      if (ef.kind === 'enhance_random_gem' && player.deck.filter((c) => c.kind === 'gem' && !c.enhanced).length === 0) return false;
+      if (ef.kind === 'reward' && ef.reward === 'enhance' && player.deck.every((c) => c.enhanced)) return false;
     }
     return true;
   }
@@ -478,9 +483,9 @@ export function createRun(depart, pack) {
         break;
       case 'stat': {
         const v = zone.rewards.stat[reward.stat];
-        player.stats[reward.stat] = Math.round((player.stats[reward.stat] + v) * 1000) / 1000;
-        const shown = reward.stat === 'attack' ? `+${v}` : reward.stat === 'critDamage' ? `+${v}` : `+${Math.round(v * 100)}%`;
-        queue({ type: 'notice', text: `${STAT_LABELS[reward.stat]} ${shown}`, icon: 'stat' });
+        const parts = typeof v === 'number' ? { [reward.stat]: v } : v; // 对象就几项一起加
+        for (const [k, n] of Object.entries(parts)) player.stats[k] = Math.round((player.stats[k] + n) * 1000) / 1000;
+        queue({ type: 'notice', text: statRewardText(parts), icon: 'stat' });
         break;
       }
       case 'draw_plus':
@@ -520,16 +525,6 @@ export function createRun(depart, pack) {
           const junk = makeCard(pack.cardDefs[pack.junkCardId], nextUid('card'));
           player.deck.push(junk);
           notes.push(`牌组里多了一张「${junk.label}」`);
-          break;
-        }
-        case 'enhance_random_gem': {
-          const gems = player.deck.filter((c) => c.kind === 'gem' && !c.enhanced);
-          if (gems.length) {
-            const card = rng.pick(gems);
-            const dir = rng.pick(Object.keys(ENHANCE_DIRS));
-            enhanceCard(card, dir);
-            notes.push(`「${card.label}」强化了：${ENHANCE_DIRS[dir]}`);
-          }
           break;
         }
         case 'remove_random_function': {

@@ -68,6 +68,13 @@ export const ACTION_HANDLERS = Object.freeze({
   },
 
   [ACTIONS.RECORD_COLORS](ctx, params) {
+    if (params.mode === 'random') {
+      // 随机挑几种还没集到的色（加成「开打先记上 2 色」用）
+      const left = COLOR_RING.filter((c) => !ctx.getRecordedColors().has(c));
+      const added = ctx.rng.shuffle(left).slice(0, params.count ?? 2);
+      if (added.length > 0) ctx.recordColorsDirectly(added);
+      return;
+    }
     const added = pickColorsToRecord(
       ctx.getRecordedColors(),
       ctx.getCurrentColor(),
