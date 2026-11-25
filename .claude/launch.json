@@ -1,0 +1,39 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "neon",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "原型/neon/tools/serve.js",
+        "--port",
+        "8123"
+      ],
+      "port": 8123
+    },
+    {
+      "name": "workshop",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8127",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "美术/像素堆叠生物工坊"
+      ],
+      "port": 8127
+    },
+    {
+      "name": "v2",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "原型/v2/tools/serve.js",
+        "--port",
+        "8200"
+      ],
+      "port": 8200
+    }
+  ]
+}
