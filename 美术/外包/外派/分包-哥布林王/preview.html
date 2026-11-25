@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>外包独立预览台 · 哥布林王</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #10151c; color: #e8edf5; font: 13px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+  .wrap { display: flex; width: 100%; height: 100%; }
+  .stage { position: relative; flex: 1; background: #0c1118; cursor: grab; }
+  .stage:active { cursor: grabbing; }
+  #view { width: 100%; height: 100%; display: block; }
+  .hud { position: absolute; left: 14px; top: 12px; padding: 6px 10px; border-radius: 8px; background: rgba(10,14,22,0.72); border: 1px solid rgba(255,255,255,0.12); font-variant-numeric: tabular-nums; pointer-events: none; }
+  .warn { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); padding: 8px 14px; border-radius: 8px; background: rgba(168,54,42,0.88); color: #fff; font-weight: 600; display: none; }
+  .side { width: 280px; background: #151b26; border-left: 1px solid rgba(255,255,255,0.09); padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+  h2 { font-size: 15px; font-weight: 700; color: #f6f8fc; }
+  .sec-t { font-size: 12px; color: #9aa7bd; margin-bottom: 6px; font-weight: 600; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  button, select { background: #202938; color: #e8edf5; border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; padding: 7px 9px; font-size: 12px; cursor: pointer; text-align: left; }
+  button:hover, select:hover { background: #2a364a; }
+  button.on { background: #365d8c; border-color: #6eb0ff; color: #fff; font-weight: 600; }
+  button.skill { border-color: rgba(235,168,68,0.5); }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .skin-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .tip { font-size: 11px; color: #8794ab; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <main class="stage" id="stage">
+    <canvas id="view"></canvas>
+    <div class="hud" id="hud">初始化中...</div>
+    <div class="warn" id="warn"></div>
+  </main>
+  <aside class="side">
+    <div>
+      <h2 id="title">哥布林王 · 预览验收台</h2>
+      <div class="tip" style="margin-top:4px">拖动旋转视角 · 滚轮缩放 · Q/E 转 45° · C 换色</div>
+    </div>
+    <div>
+      <div class="sec-t">生境地台</div>
+      <select id="habSel" style="width:100%"></select>
+    </div>
+    <div>
+      <div class="sec-t">动作与 4 大技能（点击播放）</div>
+      <div class="grid" id="actBox"></div>
+    </div>
+    <div>
+      <div class="sec-t">一键换色皮肤（SKINS）</div>
+      <div class="row" id="skinBox"></div>
+    </div>
+    <div>
+      <div class="sec-t">视图控制</div>
+      <div class="row">
+        <button id="btnSpin">自动旋转</button>
+        <button id="btnReset">回正视角</button>
+        <button id="btnMode">模式：游戏缓存</button>
+      </div>
+    </div>
+    <div class="tip" id="metaBox"></div>
+  </aside>
+</div>
+
+<!-- 本包自带工坊内核（严禁修改） -->
+<script src="./core/math.js"></script>
+<script src="./core/voxel.js"></script>
+<script src="./core/solvers.js"></script>
+<script src="./core/behaviors.js"></script>
+<script src="./core/renderer.js"></script>
+<script src="./core/registry.js"></script>
+<script src="./core/habitats.js"></script>
+
+<!-- 交付物脚本：外包方写入 ./bundle/boss_goblin_king.js -->
+<script src="./bundle/boss_goblin_king.js" onerror="window.__MISSING_BOSS__=true"></script>
+<script>
+(function () {
+  const PW = window.PixelWorkshop;
+  const { HABITAT_DEFS, buildHabitatPlatform } = PW.Habitats;
+  const { makeCanvas, StackRenderer } = PW.Renderer;
+  const cv = document.getElementById('view');
+  const stage = document.getElementById('stage');
+  const hud = document.getElementById('hud');
+  const warn = document.getElementById('warn');
+  const habSel = document.getElementById('habSel');
+  const actBox = document.getElementById('actBox');
+  const skinBox = document.getElementById('skinBox');
+  const metaBox = document.getElementById('metaBox');
+
+  const renderer = new StackRenderer(cv);
+  const habList = ['forest', 'ruins', 'desert', 'iceSea', 'volcano', 'swamp'];
+  for (const id of habList) {
+    const h = HABITAT_DEFS.find(x => x.id === id);
+    if (!h) continue;
+    const opt = document.createElement('option');
+    opt.value = h.id;
+    opt.textContent = `${h.code} · ${h.name}`;
+    habSel.appendChild(opt);
+  }
+  let habId = 'forest';
+  habSel.value = habId;
+
+  const def = PW.Assets.byId['boss_goblin_king'] || PW.Assets.list[0];
+  if (!def) {
+    warn.style.display = 'block';
+    warn.textContent = '尚未检测到 ./bundle/boss_goblin_king.js，请先将外包交付文件放入 bundle/ 后刷新预览。';
+    hud.textContent = '等待交付物：./bundle/boss_goblin_king.js';
+    const platform = buildHabitatPlatform(habId, makeCanvas, 200);
+    renderer.fit(platform.def);
+    renderer.renderScene(platform, [], 0);
+    return;
+  }
+
+  document.getElementById('title').textContent = `${def.name || def.id}（${def.id}）`;
+  const t0 = performance.now();
+  const inst = PW.Assets.spawn(def, { seed: 42 });
+  const initMs = performance.now() - t0;
+  inst.def = def;
+  inst.scaleMul = 1;
+  inst.action = (def.actions && def.actions[0] && def.actions[0].id) || 'patrol';
+  inst.actionTime = 0;
+
+  const params = Object.assign({ gaitFreq: 1, tailFlex: 1, spring: 1, speed: 1, scale: 1 }, def.defaultParams || {});
+  const partCount = inst.parts ? Object.keys(inst.parts).length : 0;
+  metaBox.textContent = `初始化耗时：${initMs.toFixed(1)}ms · 部件资产：${partCount} 个 · 动作数：${(def.actions || []).length} · 皮肤数：${(def.skins || []).length}`;
+
+  function renderActions() {
+    actBox.innerHTML = '';
+    for (const a of (def.actions || [])) {
+      const b = document.createElement('button');
+      b.textContent = a.name || a.id;
+      if (a.id.startsWith('skill_') || a.id === 'stagger') b.classList.add('skill');
+      if (inst.action === a.id) b.classList.add('on');
+      b.onclick = () => { inst.action = a.id; inst.actionTime = 0; renderActions(); };
+      actBox.appendChild(b);
+    }
+  }
+  function renderSkins() {
+    skinBox.innerHTML = '';
+    const skins = def.skins || [];
+    skins.forEach((s, i) => {
+      const b = document.createElement('button');
+      b.innerHTML = `<span class="skin-dot" style="background:${s.dot || '#999'}"></span>${s.name || s.id}`;
+      if ((inst.curSkin || 0) === i) b.classList.add('on');
+      b.onclick = () => { if (inst.applySkin) inst.applySkin(i); renderSkins(); };
+      skinBox.appendChild(b);
+    });
+  }
+  renderActions();
+  renderSkins();
+
+  let autoSpin = false;
+  habSel.onchange = () => { habId = habSel.value; renderer.fit(buildHabitatPlatform(habId, makeCanvas, 200).def); };
+  document.getElementById('btnSpin').onclick = (e) => { autoSpin = !autoSpin; e.target.classList.toggle('on', autoSpin); };
+  document.getElementById('btnReset').onclick = () => { renderer.th = 0.56; renderer.zoom = 0; renderer.fit(buildHabitatPlatform(habId, makeCanvas, 200).def); };
+  document.getElementById('btnMode').onclick = (e) => {
+    renderer.modeIdx = (renderer.modeIdx + 1) % renderer.MODES.length;
+    e.target.textContent = `模式：${renderer.MODE_LABELS[renderer.getRenderMode()]}`;
+    renderer.fit(buildHabitatPlatform(habId, makeCanvas, 200).def);
+  };
+
+  let drag = null;
+  stage.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, th: renderer.th }; });
+  window.addEventListener('pointermove', (e) => { if (drag) renderer.th = drag.th + (e.clientX - drag.x) * 0.008; });
+  window.addEventListener('pointerup', () => { drag = null; });
+  stage.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    renderer.zoom = Math.max(-3, Math.min(6, renderer.zoom + (e.deltaY < 0 ? 1 : -1)));
+    renderer.fit(buildHabitatPlatform(habId, makeCanvas, 200).def);
+  }, { passive: false });
+  window.addEventListener('keydown', (e) => {
+    const k = e.key.toLowerCase();
+    if (k === 'q') renderer.th -= Math.PI / 4;
+    if (k === 'e') renderer.th += Math.PI / 4;
+    if (k === 'c' && def.skins && def.skins.length && inst.applySkin) {
+      inst.applySkin(((inst.curSkin || 0) + 1) % def.skins.length);
+      renderSkins();
+    }
+  });
+  window.addEventListener('resize', () => renderer.fit(buildHabitatPlatform(habId, makeCanvas, 200).def));
+
+  renderer.fit(buildHabitatPlatform(habId, makeCanvas, 200).def);
+  let last = performance.now(), animTime = 0, fpsAcc = 0, fpsFrames = 0, fpsShow = 60, drawMs = 0;
+
+  function tick(now) {
+    const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
+    last = now;
+    animTime += dt;
+    if (autoSpin) renderer.th += dt * 0.55;
+
+    const platform = buildHabitatPlatform(habId, makeCanvas, 200);
+    const curAct = (def.actions || []).find(a => a.id === inst.action);
+    inst.actionTime += dt;
+    if (curAct && !curAct.loop && curAct.duration && inst.actionTime >= curAct.duration) {
+      inst.action = (def.actions[0] && def.actions[0].id) || 'patrol';
+      inst.actionTime = 0;
+      renderActions();
+    }
+
+    const eco = {
+      patrol: inst.action === 'patrol',
+      action: inst.action,
+      actionTime: inst.actionTime,
+      homeX: 0, homeY: 0, radius: 68, others: []
+    };
+    inst.update(dt, animTime, params, platform.def, renderer.vfx, eco);
+    if (typeof renderer.vfx.update === 'function') renderer.vfx.update(dt, platform.def);
+
+    const r0 = performance.now();
+    renderer.renderScene(platform, [inst], animTime);
+    drawMs = performance.now() - r0;
+
+    fpsAcc += dt; fpsFrames++;
+    if (fpsAcc >= 0.4) { fpsShow = Math.round(fpsFrames / fpsAcc); fpsAcc = 0; fpsFrames = 0; }
+    hud.textContent = `${fpsShow} fps · 渲染 ${drawMs.toFixed(2)}ms · 动作：${curAct ? curAct.name : inst.action} (${inst.actionTime.toFixed(1)}s)`;
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

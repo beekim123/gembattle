@@ -1,0 +1,286 @@
+{
+  "id": "boss_weaver_spider",
+  "code": "B01",
+  "name": "织茧棘蛛母",
+  "category": "creature",
+  "role": "chapter_boss",
+  "defaultHabitat": "ruins",
+  "compatibleHabitats": [
+    "ruins",
+    "cave",
+    "forest",
+    "volcano",
+    "swamp",
+    "iceSea"
+  ],
+  "paletteCount": 30,
+  "glowKeys": [
+    "emissiveMid",
+    "emissiveHot",
+    "emissiveCore"
+  ],
+  "gait": {
+    "type": "octopod_alternating",
+    "groupA": [
+      "L1",
+      "R2",
+      "L3",
+      "R4"
+    ],
+    "groupB": [
+      "R1",
+      "L2",
+      "R3",
+      "L4"
+    ],
+    "dutyFactor": 0.56,
+    "stepHeight": 4.0,
+    "ikSolver": "PW.Solvers.solveIK2D"
+  },
+  "parts": [
+    {
+      "partKey": "cephalothorax",
+      "w": 22,
+      "d": 20,
+      "h": 14,
+      "bias": 0.3,
+      "note": "玄青头胸重甲 + 0.6俯视零遮挡6颗赤红复眼"
+    },
+    {
+      "partKey": "abdomen",
+      "w": 28,
+      "d": 30,
+      "h": 22,
+      "bias": 0.15,
+      "note": "高耸巨型猩红棘纹腹囊 + 3对对称背棘 + 腹侧丝腺亮核"
+    },
+    {
+      "partKey": "abdomenPulse",
+      "w": 28,
+      "d": 30,
+      "h": 22,
+      "bias": 0.15,
+      "note": "技能蓄力脉冲态腹囊（与常态共享几何，点亮背脊与侧腺亮脉）"
+    },
+    {
+      "partKey": "spinneret",
+      "w": 10,
+      "d": 10,
+      "h": 8,
+      "bias": 0.05,
+      "note": "尾端三瓣纺丝器，织网与甩茧时张开微颤"
+    },
+    {
+      "partKey": "fangL",
+      "w": 8,
+      "d": 12,
+      "h": 8,
+      "bias": 0.55,
+      "note": "左侧偏心枢轴锁死大毒螯（枢轴位于螯根）"
+    },
+    {
+      "partKey": "fangR",
+      "w": 8,
+      "d": 12,
+      "h": 8,
+      "bias": 0.55,
+      "note": "右侧偏心枢轴锁死大毒螯（枢轴位于螯根）"
+    },
+    {
+      "partKey": "palp",
+      "w": 5,
+      "d": 10,
+      "h": 5,
+      "bias": 0.4,
+      "note": "前探短须肢（左右共享对称体素）"
+    },
+    {
+      "partKey": "legFemur",
+      "w": 7,
+      "d": 14,
+      "h": 9,
+      "bias": -0.1,
+      "note": "8足共用基股节，髋部深嵌头胸侧壁并带2颗背刺"
+    },
+    {
+      "partKey": "legTibia",
+      "w": 7,
+      "d": 13,
+      "h": 13,
+      "bias": 0.2,
+      "note": "8足共用胫节，高拱尖刺膝盖勾勒荆棘折角，踝环与跗爪高重叠"
+    },
+    {
+      "partKey": "legTarsus",
+      "w": 5,
+      "d": 11,
+      "h": 11,
+      "bias": -0.25,
+      "note": "8足共用锐利弯跗爪，底端精准钉地 z=0"
+    },
+    {
+      "partKey": "eggSac",
+      "w": 11,
+      "d": 11,
+      "h": 11,
+      "bias": 0.35,
+      "symDeg": 90,
+      "note": "技能3甩出的白丝缠纹立体丝茧球"
+    },
+    {
+      "partKey": "spiderling",
+      "w": 12,
+      "d": 13,
+      "h": 8,
+      "bias": 0.2,
+      "note": "技能3破茧钻出的3只复用立体小蛛"
+    },
+    {
+      "partKey": "venomOrb",
+      "w": 8,
+      "d": 8,
+      "h": 8,
+      "bias": 0.6,
+      "symDeg": 90,
+      "note": "技能4连射的8枚高抛物线半透毒囊弹"
+    }
+  ],
+  "skins": [
+    {
+      "id": "crimson_bark",
+      "name": "玄甲赤纹",
+      "mainColor": "#242a38",
+      "accentColor": "#d9323a",
+      "fxColor": "#ff6e40",
+      "habitatHint": "苔藓古石遗迹"
+    },
+    {
+      "id": "jade_moss",
+      "name": "苔绿毒棘",
+      "mainColor": "#1c2e24",
+      "accentColor": "#47c956",
+      "fxColor": "#8cff4a",
+      "habitatHint": "林地落果 / 沼泽泥潭"
+    },
+    {
+      "id": "frost_chitin",
+      "name": "霜白冰螯",
+      "mainColor": "#2c445c",
+      "accentColor": "#d6f2ff",
+      "fxColor": "#5ce6ff",
+      "habitatHint": "极地冰缝"
+    },
+    {
+      "id": "molten_plate",
+      "name": "熔岩赤甲",
+      "mainColor": "#231f24",
+      "accentColor": "#f07428",
+      "fxColor": "#ffb838",
+      "habitatHint": "熔岩火山口"
+    }
+  ],
+  "actions": [
+    {
+      "id": "patrol",
+      "name": "八足巡游",
+      "loop": true,
+      "duration": null,
+      "combatRole": "常态移动与压迫巡弋，八足四相交替迈步并带落地轻尘"
+    },
+    {
+      "id": "idle",
+      "name": "原地警戒",
+      "loop": true,
+      "duration": null,
+      "combatRole": "回合待机警戒态，八足钉地、躯干微位移呼吸、须肢交替探路与毒螯周期咔嗒"
+    },
+    {
+      "id": "stagger",
+      "name": "破盾硬直",
+      "loop": false,
+      "duration": 1.5,
+      "combatRole": "护盾击破或大招被打断后触发：后挫下沉 2.5 格、八足外撇发软、头胸晃动冒晕眩粒"
+    },
+    {
+      "id": "skill_web_snare",
+      "name": "织网缚阵",
+      "loop": false,
+      "duration": 2.6,
+      "segments": [
+        "0.0s~0.6s 压低重心蓄丝与丝腺脉冲",
+        "0.6s~1.7s 扇形 -35°~+35° 喷出 5 道白丝粒子束并铺设放射状蛛网贴地痕迹",
+        "1.7s~2.6s 前对长腿高抬拍地定网并平滑回正"
+      ],
+      "combatMechanic": "往玩家弃牌堆塞入 2 张「缠丝废牌」，或锁定手牌中 1 张宝石牌 1 回合"
+    },
+    {
+      "id": "skill_fang_lunge",
+      "name": "毒螯扑杀",
+      "loop": false,
+      "duration": 2.2,
+      "segments": [
+        "0.0s~0.65s 后缩立身、扬起前两对长腿与张满双毒螯渗毒粒",
+        "0.65s~1.25s 向前急扑 +14 格、落地双螯交剪劈斩并沿螯尖挂点喷出扇形斩击粒子",
+        "1.25s~2.2s 八足碎步快速后撤归位"
+      ],
+      "combatMechanic": "重击扣主角 1 颗心；若处于未破盾态，下轮倒计时额外 -1"
+    },
+    {
+      "id": "skill_brood_burst",
+      "name": "裂茧群涌",
+      "loop": false,
+      "duration": 3.0,
+      "segments": [
+        "0.0s~0.8s 腹囊高频剧颤与纺丝器大幅张开",
+        "0.8s~1.45s 先后甩出 2 枚立体 eggSac 丝茧球画抛物线砸地轻弹",
+        "1.45s~2.6s 丝茧炸开白丝碎粒，钻出 3 只复用 spiderling 小蛛四散冲锋巡游",
+        "2.6s~3.0s 小蛛散成尘粒收束离场、母蛛回稳"
+      ],
+      "combatMechanic": "场上召唤 2 只低血小蛛协助攻击，迫使玩家在单点破盾与全体清场间做抉择"
+    },
+    {
+      "id": "skill_venom_barrage",
+      "name": "棘背毒雨",
+      "loop": false,
+      "duration": 3.4,
+      "segments": [
+        "0.0s~1.0s 八腿扎地撑高躯干 +3.2 格，棘背与丝腺三连亮脉冲蓄力吸纳毒粒",
+        "1.0s~2.3s 每隔 0.14s 从腹背棘缝高抛连射 8 枚立体 venomOrb 毒囊弹",
+        "2.3s~3.0s 毒囊依次砸地爆裂毒雾喷泉并留下腐蚀洼痕与涟漪",
+        "3.0s~3.4s 躯干泄力回稳"
+      ],
+      "combatMechanic": "蓄力 2 回合的终极大招（亮出红+绿双色护盾 5+5 格）；倒计时归零前击破双色盾立即打断并触发 stagger"
+    }
+  ],
+  "vfxSockets": [
+    {
+      "id": "fangTipL",
+      "source": "FK 正向运动学实时解算左毒螯尖端",
+      "usedBy": [
+        "skill_fang_lunge"
+      ]
+    },
+    {
+      "id": "fangTipR",
+      "source": "FK 正向运动学实时解算右毒螯尖端",
+      "usedBy": [
+        "skill_fang_lunge"
+      ]
+    },
+    {
+      "id": "spinneret",
+      "source": "腹囊后尾三瓣纺丝器中心挂点",
+      "usedBy": [
+        "skill_web_snare",
+        "skill_brood_burst"
+      ]
+    },
+    {
+      "id": "abdomenCrown",
+      "source": "巨型棘纹腹囊背冠与棘缝发射区",
+      "usedBy": [
+        "skill_venom_barrage"
+      ]
+    }
+  ]
+}

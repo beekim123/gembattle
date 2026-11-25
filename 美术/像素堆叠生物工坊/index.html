@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>像素堆叠工坊</title>
+<link rel="stylesheet" href="app/style.css">
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- 顶栏 -->
+  <header class="topbar">
+    <div class="brand">像素堆叠工坊<small>怪物 · NPC · 建筑 · 场景环境</small></div>
+    <div class="spacer"></div>
+    <a class="btn sm" href="ecology.html" title="异世界生态：生态地图、每个生境的食物网、每只生物的设计">生态总览</a>
+  </header>
+
+  <!-- 左：资产库（制作清单 + 全品类模板分类 / 筛选 / 时间排序） -->
+  <aside class="lib panel">
+    <div class="lib-head">
+      <div class="cat-tabs" id="catTabs"></div>
+      <input type="search" id="libSearch" placeholder="搜编号、名称、类型(M07)、原型、生境…">
+      <div class="lib-row">
+        <div class="seg" id="libGroupBy" title="分类方式">
+          <button data-g="type" class="on">按类型</button>
+          <button data-g="habitat">按生境</button>
+          <button data-g="flat">不分组</button>
+        </div>
+        <span class="chip" id="libCount">-</span>
+      </div>
+      <div class="lib-row">
+        <div class="seg seg-xs" id="libFilter" title="状态筛选">
+          <button data-f="all" class="on">全部</button>
+          <button data-f="made">已做</button>
+          <button data-f="done">精制</button>
+          <button data-f="draft">初版</button>
+          <button data-f="todo">待做</button>
+        </div>
+      </div>
+      <div class="lib-row lib-selects">
+        <select id="libTypeFilter" title="按具体模板类型筛选"></select>
+        <select id="libSort" title="排序方式（含时间正序/倒序）">
+          <option value="default">默认序</option>
+          <option value="updated-desc">修改 ↓ 新</option>
+          <option value="updated-asc">修改 ↑ 旧</option>
+          <option value="created-desc">创建 ↓ 新</option>
+          <option value="created-asc">创建 ↑ 旧</option>
+        </select>
+        <button class="btn sm" id="btnStageFiltered" title="把当前筛出的已做资产一起放上台对比">上台</button>
+      </div>
+    </div>
+    <div class="lib-list" id="libList"></div>
+    <div class="lib-foot" id="libFoot">清单来自 文档/生物图鉴与逐只精制规划.md + 全品类模板规划与参考.md</div>
+  </aside>
+
+  <!-- 中：预览台 -->
+  <main class="stage" id="stage">
+    <canvas id="view"></canvas>
+    <div class="stage-top">
+      <div class="float">
+        <select id="habSelect" title="生境地台"></select>
+        <div class="sep"></div>
+        <label class="hint" title="点单只怪时自动换到它的生境"><input type="checkbox" id="autoHab" checked> 跟着怪换生境</label>
+      </div>
+      <div class="float">
+        <span class="chip" id="stageCount">同屏 1</span>
+        <button class="btn sm" id="btnSolo" title="只留当前焦点">只留焦点</button>
+        <button class="btn sm" id="btnNatives" title="放入这个生境的原住民">本生境</button>
+        <button class="btn sm" id="btnAllMade" title="已做的全部放上来（快捷键 A）">全部 (A)</button>
+        <div class="sep"></div>
+        <span class="hint">压测</span>
+        <button class="btn sm" data-crowd="12">×12</button>
+        <button class="btn sm" data-crowd="24">×24</button>
+        <button class="btn sm" data-crowd="36">×36</button>
+      </div>
+    </div>
+    <div class="perf-hud" id="perfHud" data-mode="mini"></div>
+    <div class="banner" id="banner"></div>
+    <div class="stage-bar">
+      <div class="float">
+        <div class="seg" id="modeSeg" title="渲染方式（M）">
+          <button data-mode="cached" class="on">游戏缓存</button>
+          <button data-mode="crisp">高清逐层</button>
+          <button data-mode="retro">复古低分</button>
+        </div>
+        <div class="sep"></div>
+        <button class="btn sm on" id="btnOutline">描边</button>
+        <button class="btn sm" id="btnSpin">自动转</button>
+        <button class="btn sm" id="btnResetView">回正</button>
+        <div class="sep"></div>
+        <button class="btn sm" id="btnZoomOut" title="缩小（滚轮）">－</button>
+        <span class="hint" id="zoomLabel">×4</span>
+        <button class="btn sm" id="btnZoomIn" title="放大（滚轮）">＋</button>
+        <div class="sep"></div>
+        <span class="hint"><b>拖动</b>转视角 · <b>Q/E</b> 转 45° · <b>S</b> 巡游/待机 · <b>C</b> 换色 · <b>P</b> 性能浮层</span>
+      </div>
+    </div>
+    <button class="edge-toggle l" id="toggleLib" title="收起/展开资产库">‹</button>
+    <button class="edge-toggle r" id="toggleInsp" title="收起/展开右栏">›</button>
+  </main>
+
+  <!-- 右：属性 · 展示 · 性能 -->
+  <aside class="inspector panel">
+    <div class="insp-body">
+      <section class="sec" id="secFocus"></section>
+      <section class="sec" id="secActions"></section>
+      <section class="sec" id="secSkin"></section>
+      <section class="sec" id="secParams">
+        <div class="sec-t">调参（全局）<button class="btn sm" id="btnResetParams">恢复默认</button></div>
+        <div class="slider"><span>步频/拍频</span><input type="range" id="slGaitFreq" min="0.4" max="2.2" step="0.05"><span class="v" id="vGaitFreq"></span></div>
+        <div class="slider"><span>尾巴柔韧</span><input type="range" id="slTailFlex" min="0.3" max="2.0" step="0.05"><span class="v" id="vTailFlex"></span></div>
+        <div class="slider"><span>弹簧弹性</span><input type="range" id="slSpring" min="0.4" max="2.2" step="0.05"><span class="v" id="vSpring"></span></div>
+        <div class="slider"><span>移动速度</span><input type="range" id="slSpeed" min="0.3" max="2.2" step="0.05"><span class="v" id="vSpeed"></span></div>
+        <div class="slider"><span>体型倍率</span><input type="range" id="slScale" min="0.65" max="1.45" step="0.05"><span class="v" id="vScale"></span></div>
+      </section>
+      <section class="sec" id="secExport">
+        <div class="sec-t">导出</div>
+        <div class="row">
+          <button class="btn sm" id="btnExportJson">骨架清单 JSON</button>
+          <button class="btn sm" id="btnExportPng">主部件切片 PNG</button>
+        </div>
+      </section>
+      <section class="sec" id="secPerf">
+        <div class="sec-t">压测 <span class="key">实时数字在画面左上角（P）</span></div>
+        <div class="row">
+          <button class="btn sm primary" id="btnBench">跑一轮压测</button>
+          <label class="hint">贴图预算
+            <select id="atlasBudget">
+              <option value="16">16MB</option>
+              <option value="24">24MB</option>
+              <option value="28" selected>28MB</option>
+              <option value="32">32MB</option>
+            </select>
+          </label>
+        </div>
+        <div id="benchOut"></div>
+      </section>
+    </div>
+  </aside>
+</div>
+
+<!-- 第一层：共用内核 -->
+<script src="core/math.js"></script>
+<script src="core/voxel.js"></script>
+<script src="core/solvers.js"></script>
+<script src="core/behaviors.js"></script>
+<script src="core/renderer.js"></script>
+<script src="core/registry.js"></script>
+
+<!-- 场景环境（生境地台） -->
+<script src="scenes/habitats.js"></script>
+<script src="scenes/scene_tavern_bar.js"></script>
+<script src="scenes/scene_tavern_hearth_board.js"></script>
+<script src="scenes/scene_forest_tree.js"></script>
+<script src="scenes/scene_rock_hollow.js"></script>
+<script src="scenes/scene_t09_fallen_fruit_log.js"></script>
+<script src="scenes/scene_campfire.js"></script>
+<script src="scenes/scene_crates_sign.js"></script>
+<script src="scenes/scene_t05_ice_ridge.js"></script>
+<script src="scenes/scene_t05_ice_floe_hole.js"></script>
+<script src="scenes/scene_t06_sea_stack.js"></script>
+<script src="scenes/scene_t06_floating_kelp.js"></script>
+<script src="scenes/scene_t01_fluff_cloud.js"></script>
+<script src="scenes/scene_t01_sky_pillar.js"></script>
+<script src="scenes/scene_t02_thunder_spire.js"></script>
+<script src="scenes/scene_t02_charged_cairn.js"></script>
+<script src="scenes/scene_t07_coral_colony.js"></script>
+<script src="scenes/scene_t07_giant_clam_reef.js"></script>
+<script src="scenes/scene_t08_tidepool_rock.js"></script>
+<script src="scenes/scene_t08_mangrove_stump.js"></script>
+<script src="scenes/scene_flora_cluster.js"></script>
+<script src="scenes/scene_t10_giant_bud.js"></script>
+<script src="scenes/scene_t11_canopy_bough.js"></script>
+<script src="scenes/scene_t11_epiphyte_nest.js"></script>
+<script src="scenes/scene_t03_lotus_reed.js"></script>
+<script src="scenes/scene_t03_warm_vent_rock.js"></script>
+<script src="scenes/scene_t04_cobble_crevice.js"></script>
+<script src="scenes/scene_t04_driftwood_weir.js"></script>
+<script src="scenes/scene_t17_swamp_cypress.js"></script>
+<script src="scenes/scene_t18_magma_vent.js"></script>
+<script src="scenes/scene_t21_travertine_pool.js"></script>
+<script src="scenes/scene_t21_mineral_chimney.js"></script>
+<script src="scenes/scene_t15_stalagmite_shroom.js"></script>
+<script src="scenes/scene_t15_cave_rib_crystal.js"></script>
+<script src="scenes/scene_t16_moss_obelisk.js"></script>
+<script src="scenes/scene_t12_bamboo_clump.js"></script>
+<script src="scenes/scene_t12_bamboo_stone_shrine.js"></script>
+<script src="scenes/scene_t19_rib_arch.js"></script>
+<script src="scenes/scene_t19_skull_fungus.js"></script>
+
+<!-- 怪物：一只一个脚本，新做的往下加一行 -->
+<script src="creatures/water3_ten_tail.js"></script>
+<script src="creatures/sky2_red_sac.js"></script>
+<script src="creatures/earth1_belly_maw.js"></script>
+<script src="creatures/snake.js"></script>
+<script src="creatures/siren.js"></script>
+<script src="creatures/feilong.js"></script>
+<script src="creatures/goblin.js"></script>
+<script src="creatures/murloc.js"></script>
+<script src="creatures/fairy.js"></script>
+<script src="creatures/bat.js"></script>
+<script src="creatures/slime.js"></script>
+<script src="creatures/sky1_danghu.js"></script>
+<script src="creatures/sand4_karkadann.js"></script>
+<script src="creatures/cave4_tupilak.js"></script>
+<script src="creatures/earth3_zheng.js"></script>
+<script src="creatures/sea1_akhlut.js"></script>
+<script src="creatures/water1_ahuizotl.js"></script>
+<script src="creatures/marsh1_camahueto.js"></script>
+<script src="creatures/tree4_basan.js"></script>
+<script src="creatures/tree3_leshy.js"></script>
+<script src="creatures/special9_long.js"></script>
+<script src="creatures/sea2_qalupalik.js"></script>
+<script src="creatures/cave3_kui.js"></script>
+<script src="creatures/sea4_wenyao.js"></script>
+<script src="creatures/special11_octo.js"></script>
+<script src="creatures/special10_golem.js"></script>
+<script src="creatures/tree2_waqwaq.js"></script>
+<script src="creatures/special12_rider.js"></script>
+<script src="creatures/sea3_hafgufa.js"></script>
+<script src="creatures/sand1_worm.js"></script>
+<script src="creatures/sand6_mirage_pool.js"></script>
+<script src="creatures/water4_eco_turtle.js"></script>
+<script src="creatures/earth8_host_bloom.js"></script>
+<script src="creatures/fire1_slab_shedder.js"></script>
+<script src="creatures/tree1_hanging_sac.js"></script>
+<script src="creatures/cave5_mycelium_web.js"></script>
+<script src="creatures/sand7_salt_slug.js"></script>
+<script src="creatures/marsh6_stilt_walker.js"></script>
+<script src="creatures/earth6_long_arm.js"></script>
+<script src="creatures/earth5_rib_crawler.js"></script>
+<script src="creatures/marsh4_tri_neck.js"></script>
+<script src="creatures/sky5_grass_glider.js"></script>
+<script src="creatures/ruins1_grid_armor.js"></script>
+<script src="creatures/fire2_lava_roller.js"></script>
+<script src="creatures/sand8_hammer_claw.js"></script>
+<script src="creatures/sand2_bulgasari.js"></script>
+<script src="creatures/sand3_fei.js"></script>
+<script src="creatures/sand5_ammit.js"></script>
+<script src="creatures/marsh2_huashe.js"></script>
+<script src="creatures/sky3_impundulu.js"></script>
+<script src="creatures/marsh3_peuchen.js"></script>
+<script src="creatures/water5_fin_fish.js"></script>
+<script src="creatures/sky4_bakunawa.js"></script>
+<script src="creatures/water2_jingwei.js"></script>
+<script src="creatures/earth9_bone_shears.js"></script>
+<script src="creatures/marsh5_thermal_swarm.js"></script>
+<script src="creatures/sky6_cloud_snare.js"></script>
+<script src="creatures/sky8_bolt_licker.js"></script>
+<script src="creatures/tree6_ratchet_bamboo.js"></script>
+<script src="creatures/earth2_barometz.js"></script>
+<script src="creatures/earth4_shadhavar.js"></script>
+<script src="creatures/sky7_sheet_stack.js"></script>
+<script src="creatures/sea7_raft_stack.js"></script>
+<script src="creatures/earth7_petal_elytra.js"></script>
+<script src="creatures/sea6_vortex_water.js"></script>
+<script src="creatures/tree5_bamboo_launcher.js"></script>
+<script src="creatures/ruins2_flip_slab.js"></script>
+<script src="creatures/sea5_puzzle_swarm.js"></script>
+<script src="creatures/earth10_bark_cleaner.js"></script>
+<script src="creatures/water7_tether_rider.js"></script>
+<script src="creatures/cave1_tatzelwurm.js"></script>
+<script src="creatures/cave2_cuelebre.js"></script>
+<script src="creatures/sea8_ice_tentacles.js"></script>
+
+<!-- NPC：npc/ 目录，一个一行（写法见 npc/README.md） -->
+<script src="npc/npc_expedition_guide.js"></script>
+<script src="npc/npc_warrior.js"></script>
+<script src="npc/npc_support.js"></script>
+<script src="npc/npc_mage.js"></script>
+<script src="npc/npc_tavern_keeper.js"></script>
+<script src="npc/npc_vanguard.js"></script>
+<script src="npc/npc_rogue.js"></script>
+<script src="npc/npc_tavern_bard.js"></script>
+<script src="npc/npc_tavern_veteran.js"></script>
+<script src="npc/npc_guild_clerk.js"></script>
+<script src="npc/npc_gear_smith.js"></script>
+<script src="npc/npc_album_scholar.js"></script>
+
+<!-- 建筑：buildings/ 目录，一个一行（写法见 buildings/README.md） -->
+<script src="buildings/building_guild.js"></script>
+<script src="buildings/building_camp_tent.js"></script>
+<script src="buildings/building_stone_gate.js"></script>
+<script src="buildings/building_ruin_arch.js"></script>
+
+<!-- 工坊界面 -->
+<script src="app/catalog.js"></script>
+<script src="tools/bench.js"></script>
+<script src="app/perf-hud.js"></script>
+<script src="app/app.js"></script>
+</body>
+</html>

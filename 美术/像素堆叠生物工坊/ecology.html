@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>异世界生态 · 像素堆叠工坊</title>
+<link rel="stylesheet" href="app/ecology.css">
+</head>
+<body>
+<header class="eco-top">
+  <a class="back-btn" href="index.html">← 回工坊</a>
+  <nav class="crumb" id="crumb" aria-label="导航路径"></nav>
+  <div class="spacer"></div>
+  <div class="search-box">
+    <input type="search" id="q" placeholder="搜编号、生物、生境…" autocomplete="off">
+    <div class="search-drop" id="searchDrop"></div>
+  </div>
+  <div class="status-legend" id="statusLegend"></div>
+  <button class="ghost-btn" id="btnRef" title="打开速查表（完整数据见 文档/生态设计-对应关系.md）">速查表</button>
+</header>
+
+<main class="eco-main" id="ecoMain">
+  <!-- 视图一：世界平面地图（首页） -->
+  <section class="view-panel" id="viewMap">
+    <div class="map-canvas-shell">
+      <div class="map-svg-box" id="mapSvgBox"></div>
+      <div class="map-hover-bar" id="mapHoverBar">
+        <div class="mhb-empty">将鼠标停在任意生境区域，看住在这里的生物；点击进入实时生态舞台。</div>
+      </div>
+      <div class="map-flow-legend" id="mapFlowLegend"></div>
+      <div class="map-flow-tip" id="mapFlowTip"></div>
+    </div>
+  </section>
+
+  <!-- 视图二：生境生态舞台 -->
+  <section class="view-panel" id="viewHab" hidden>
+    <div class="hab-bar" id="habBar"></div>
+    <div class="hab-workspace" id="habWorkspace">
+      <div class="stage-host" id="habStageHost">
+        <!-- 唯一的共享舞台壳将被动态挂到这里 -->
+        <button class="side-toggle" id="toggleHabSide" title="收起 / 展开右侧食物链栏">›</button>
+      </div>
+      <aside class="chain-panel" id="chainPanel"></aside>
+    </div>
+  </section>
+
+  <!-- 视图三：单只生物百科（大舞台为主，右侧精简窄栏可一键收起） -->
+  <section class="view-panel" id="viewBio" hidden>
+    <div class="bio-workspace" id="bioWorkspace">
+      <div class="stage-host bio-stage-host" id="bioStageHost">
+        <a class="bio-float-back" id="bioFloatBack" href="#map">← 回生境</a>
+        <a class="bio-side-nav prev" id="bioPrev" href="#map" title="上一只（←）">‹</a>
+        <a class="bio-side-nav next" id="bioNext" href="#map" title="下一只（→）">›</a>
+        <div class="bio-skin-float" id="bioSkinFloat"></div>
+        <button class="side-toggle" id="toggleBioSide" title="收起 / 展开右侧百科栏">›</button>
+      </div>
+      <article class="bio-card" id="bioCard"></article>
+    </div>
+  </section>
+</main>
+
+<!-- 全页唯一的像素堆叠渲染器挂载壳（在生境与百科之间复用，离开即停） -->
+<div class="shared-stage" id="sharedStage" hidden>
+  <canvas id="stageCanvas"></canvas>
+  <canvas id="stageOverlay"></canvas>
+  <div class="stage-badge" id="stageBadge"></div>
+  <div class="stage-perf" id="stagePerf"></div>
+  <div class="stage-controls" id="stageControls">
+    <button class="sc-btn on" id="scWeb" title="开关舞台上的食物链与共生箭头">关系线</button>
+    <button class="sc-btn on" id="scTags" title="显示台上生物编号牌">编号牌</button>
+    <span class="sc-sep"></span>
+    <button class="sc-btn on" id="scPatrol" title="切换自由巡游 / 原地待机（S）">巡游</button>
+    <button class="sc-btn" id="scSpin" title="自动转视角">自动转</button>
+    <button class="sc-btn on" id="scOutline" title="开关整体描边">描边</button>
+    <span class="sc-sep"></span>
+    <button class="sc-btn" id="scZoomOut" title="缩小">－</button>
+    <span class="sc-zoom" id="scZoomLbl">×4</span>
+    <button class="sc-btn" id="scZoomIn" title="放大">＋</button>
+    <button class="sc-btn" id="scReset" title="重置视角">回正</button>
+  </div>
+</div>
+
+<!-- 不显眼的速查抽屉（完整表格已在 文档/生态设计-对应关系.md） -->
+<div class="ref-scrim" id="refScrim"></div>
+<aside class="ref-drawer" id="refDrawer">
+  <div class="ref-head">
+    <b>数据速查</b>
+    <span class="muted">完整对照见 <code>文档/生态设计-对应关系.md</code></span>
+    <button class="ref-close" id="refClose" title="关闭">×</button>
+  </div>
+  <div class="ref-tabs" id="refTabs">
+    <button data-rt="niche" class="on">生态位 × 生境</button>
+    <button data-rt="tpl">模板 M01~M38</button>
+    <button data-rt="flows">生境连接</button>
+  </div>
+  <div class="ref-body" id="refBody"></div>
+</aside>
+
+<!-- 共用内核（与工坊完全一致，不改原行为） -->
+<script src="core/math.js"></script>
+<script src="core/voxel.js"></script>
+<script src="core/solvers.js"></script>
+<script src="core/behaviors.js"></script>
+<script src="core/renderer.js"></script>
+<script src="core/registry.js"></script>
+
+<!-- 全部 21 种生境地台 -->
+<script src="scenes/habitats.js"></script>
+
+<!-- 全部已做真模型（以后新增模型加一行即自动替换占位） -->
+<script src="creatures/water3_ten_tail.js"></script>
+<script src="creatures/sky2_red_sac.js"></script>
+<script src="creatures/earth1_belly_maw.js"></script>
+<script src="creatures/snake.js"></script>
+<script src="creatures/siren.js"></script>
+<script src="creatures/feilong.js"></script>
+<script src="creatures/goblin.js"></script>
+<script src="creatures/murloc.js"></script>
+<script src="creatures/fairy.js"></script>
+<script src="creatures/bat.js"></script>
+<script src="creatures/slime.js"></script>
+<script src="creatures/sky1_danghu.js"></script>
+<script src="creatures/sand4_karkadann.js"></script>
+<script src="creatures/cave4_tupilak.js"></script>
+<script src="creatures/earth3_zheng.js"></script>
+<script src="creatures/sea1_akhlut.js"></script>
+<script src="creatures/water1_ahuizotl.js"></script>
+<script src="creatures/marsh1_camahueto.js"></script>
+<script src="creatures/tree4_basan.js"></script>
+<script src="creatures/tree3_leshy.js"></script>
+<script src="creatures/special9_long.js"></script>
+<script src="creatures/sea2_qalupalik.js"></script>
+<script src="creatures/cave3_kui.js"></script>
+<script src="creatures/sea4_wenyao.js"></script>
+<script src="creatures/special11_octo.js"></script>
+<script src="creatures/special10_golem.js"></script>
+<script src="creatures/tree2_waqwaq.js"></script>
+<script src="creatures/special12_rider.js"></script>
+<script src="creatures/sea3_hafgufa.js"></script>
+<script src="creatures/sand1_worm.js"></script>
+<script src="creatures/sand6_mirage_pool.js"></script>
+<script src="creatures/water4_eco_turtle.js"></script>
+<script src="creatures/earth8_host_bloom.js"></script>
+<script src="creatures/fire1_slab_shedder.js"></script>
+<script src="creatures/tree1_hanging_sac.js"></script>
+<script src="creatures/cave5_mycelium_web.js"></script>
+<script src="creatures/sand7_salt_slug.js"></script>
+<script src="creatures/marsh6_stilt_walker.js"></script>
+<script src="creatures/earth6_long_arm.js"></script>
+<script src="creatures/earth5_rib_crawler.js"></script>
+<script src="creatures/marsh4_tri_neck.js"></script>
+<script src="creatures/sky5_grass_glider.js"></script>
+<script src="creatures/ruins1_grid_armor.js"></script>
+<script src="creatures/fire2_lava_roller.js"></script>
+<script src="creatures/sand8_hammer_claw.js"></script>
+<script src="creatures/sky3_impundulu.js"></script>
+<script src="creatures/marsh3_peuchen.js"></script>
+<script src="creatures/water5_fin_fish.js"></script>
+<script src="creatures/sky4_bakunawa.js"></script>
+<script src="creatures/water2_jingwei.js"></script>
+<script src="creatures/earth9_bone_shears.js"></script>
+<script src="creatures/marsh5_thermal_swarm.js"></script>
+<script src="creatures/earth2_barometz.js"></script>
+<script src="creatures/earth4_shadhavar.js"></script>
+<script src="creatures/sky6_cloud_snare.js"></script>
+<script src="creatures/sky8_bolt_licker.js"></script>
+<script src="creatures/tree6_ratchet_bamboo.js"></script>
+<script src="creatures/earth10_bark_cleaner.js"></script>
+<script src="creatures/water7_tether_rider.js"></script>
+<script src="creatures/sky7_sheet_stack.js"></script>
+<script src="creatures/sea7_raft_stack.js"></script>
+<script src="creatures/earth7_petal_elytra.js"></script>
+<script src="creatures/ruins2_flip_slab.js"></script>
+<script src="creatures/sea6_vortex_water.js"></script>
+<script src="creatures/sea5_puzzle_swarm.js"></script>
+<script src="creatures/tree5_bamboo_launcher.js"></script>
+<script src="creatures/sand2_bulgasari.js"></script>
+<script src="creatures/sand3_fei.js"></script>
+<script src="creatures/sand5_ammit.js"></script>
+<script src="creatures/marsh2_huashe.js"></script>
+<script src="creatures/cave1_tatzelwurm.js"></script>
+<script src="creatures/cave2_cuelebre.js"></script>
+<script src="creatures/sea8_ice_tentacles.js"></script>
+
+<!-- 唯一设计数据源 + 平面地图布局 + 占位体素 + 可视化交互 -->
+<script src="文档/生态设计数据.js"></script>
+<script src="文档/生态地图布局.js"></script>
+<script src="app/eco-placeholder.js"></script>
+<script src="app/ecology.js"></script>
+</body>
+</html>
