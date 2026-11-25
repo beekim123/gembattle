@@ -8,15 +8,17 @@
   html, body { margin: 0; height: 100%; background: #0b110c; overflow: hidden; }
   #stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
   canvas { display: block; touch-action: none; user-select: none; -webkit-user-select: none; cursor: default; background: #000; }
+  #perf { position: fixed; left: 8px; top: 8px; margin: 0; padding: 6px 10px; color: #b8ffb8; background: rgba(0,0,0,0.72); font: 13px/1.45 monospace; white-space: pre; pointer-events: none; border-radius: 4px; z-index: 9; }
   #err { position: fixed; left: 8px; bottom: 8px; color: #ff9a8a; font: 14px/1.4 sans-serif; white-space: pre-wrap; max-width: 90vw; }
 </style>
 </head>
 <body>
 <div id="stage"><canvas id="game"></canvas></div>
 <div id="err"></div>
+<pre id="perf" hidden></pre>
 
-<!-- 工坊像素堆叠美术（第 3 步）：方案 4.2 清单的 31 个脚本，只读引用，一个字不改。
-     开发时 /art/ 由 tools/serve.js 映射到工坊目录；导出时 tools/export-web.js 把用到的抽进 art/ 并改写路径。
+<!-- 游戏实装美术库（美术/游戏实装美术库/）：方案 4.2 清单的 31 个资产脚本，只读引用，一个字不改。
+     开发时 /art/ 由 tools/serve.js 映射到实装库目录；导出时 tools/export-web.js 把用到的抽进 art/ 并改写路径。
      加载失败或网址带 ?art=blocks 时，画面自动退回色块。 -->
 <!-- 工坊内核（6） -->
 <script src="../art/core/math.js"></script>
@@ -55,6 +57,10 @@
 <script src="../art/buildings/building_ruin_arch.js"></script>
 <script src="../art/buildings/building_camp_tent.js"></script>
 <script src="../art/buildings/building_stone_gate.js"></script>
+
+<!-- 界面与特效包（实装库 art-packs/）：UI-04 旋转像素地面与 3D 特效，挂到 window.Code00ArtPacks.groundVfx。
+     没加载上或网址带 ?art=blocks 时，渲染层用内置兜底地面和特效。 -->
+<script src="../art/art-packs/pack_ground_vfx.js"></script>
 
 <script type="module" src="./main.js"></script>
 </body>

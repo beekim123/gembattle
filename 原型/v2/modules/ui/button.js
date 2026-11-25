@@ -8,6 +8,6 @@ export class Button {
     ctx.fillStyle = !this.enabled ? 'rgba(40,46,40,0.55)' : this.accent ? (this.hover ? '#e8b92c' : '#c99a1c') : (this.hover ? 'rgba(90,110,90,0.95)' : 'rgba(46,62,48,0.92)');
     ctx.fill();
     ctx.lineWidth = 1.5; ctx.strokeStyle = this.enabled ? (this.accent ? '#ffe9a0' : 'rgba(255,255,255,0.45)') : 'rgba(255,255,255,0.12)'; ctx.stroke();
-    text(ctx, this.label, this.x + this.w / 2, this.y + this.h / 2 + 1, { size: 14, align: 'center', color: this.enabled ? '#fff' : 'rgba(255,255,255,0.4)', outline: null });
+    text(ctx, this.label, this.x + this.w / 2, this.y + this.h / 2 + 1, { size: this.size || 14, align: 'center', color: this.enabled ? '#fff' : 'rgba(255,255,255,0.4)', outline: null });
   }
 }

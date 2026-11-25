@@ -8,10 +8,10 @@ export function drawColorRing(ctx, cx, cy, R, collected, cursor, t) {
   ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 2; ctx.stroke();
   for (let i = 0; i < 6; i++) {
     const [x, y] = pos(i), on = (collected >> i) & 1;
+    if (on) { ctx.beginPath(); ctx.arc(x, y, 13, 0, Math.PI * 2); ctx.globalAlpha = 0.28; ctx.fillStyle = WHEEL_HEX[i]; ctx.fill(); ctx.globalAlpha = 1; }   // 已集的色：外面垫一圈淡色
     ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2);
-    if (on) { ctx.shadowColor = WHEEL_HEX[i]; ctx.shadowBlur = 10; ctx.fillStyle = WHEEL_HEX[i]; }
-    else ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.fill(); ctx.shadowBlur = 0;
+    ctx.fillStyle = on ? WHEEL_HEX[i] : 'rgba(0,0,0,0.4)';
+    ctx.fill();
     ctx.lineWidth = 2; ctx.strokeStyle = on ? '#fff' : WHEEL_DARK[i]; ctx.stroke();
   }
   ctx.beginPath(); ctx.arc(cx, cy, 8, 0, Math.PI * 2);

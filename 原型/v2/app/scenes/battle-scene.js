@@ -10,7 +10,10 @@ import {
 import { COLOR_NAMES, CHANNELS, relationOf, REL_TEXT, CONFIG, countBits } from '../../modules/shared/index.js';
 import { audio } from '../../modules/audio/index.js';
 import { recorder } from '../record.js';
-import { drawActor, ACTOR_SIZE, ENEMY_SCALE, createEnv, poseOf, POSE_DURATIONS, POSE_PROFILES } from '../../modules/render/index.js';
+import {
+  drawActor, ACTOR_SIZE, ENEMY_SCALE, createEnv, poseOf, POSE_PROFILES, ATTACK_T, artMode, flushWorld, drawRing, anchorAt, worldOf,
+  setView, vfx3d, camera, ViewInput, BATTLE_TH0, heightToWorld, actDuration,
+} from '../../modules/render/index.js';
 import {
   text, panel, wrap, roundRect, drawCard, CARD_W, CARD_H, drawCardBack, drawHpBar, drawShield, drawCountdown, drawHearts,
   drawColorRing, Button, Floaters, handPos, cardHitTest, WHEEL_HEX, GEM_HEX, ART_HEX, REL_HEX, font, GOLD, drawAttackFx, ATTACK_FX_DUR,
@@ -18,6 +21,18 @@ import {
 
 const SLOT_S = 0.72;
 const ENEMY_FEET_Y = 205, HERO = { x: 480, y: 308 };
+// 首领个子大（约主角的 1.8 倍），脚底放低一点，头才不顶到顶栏
+const FEET_OVERRIDE = { tree3_leshy: 236 };
+const VIEW_ORIGIN = [480, 256];                    // 世界原点（也是转镜头的中心）落在布局的哪里：怪和主角的正中间
+const TOP_SAFE = 58;                               // 怪头顶的名字行不许压到顶栏：y 至少 58
+// 8 只怪的原生出手动作里，打到主角身上的那一下是第几秒（美术库里写死的时间轴）；特殊技的结算统一取 0.6 秒
+const HIT_T = { slime_jelly: 0.56, earth2_barometz: 0.48, goblin_scout: 0.5, fairy_meadow: 0.55, earth6_long_arm: 0.58, earth3_zheng: 0.5, earth1_belly_maw: 0.53, tree3_leshy: 0.65 };
+const SPECIAL_T = 0.6;
+const FX3_DUR = 1.0;                               // 3D 出手特效的总时长（秒），从出手动作开始算
+const clamp01 = k => Math.max(0, Math.min(1, k));
+const hitTime = look => (artMode() === 'workshop' ? (HIT_T[look] ?? 0.5) : ATTACK_T.strike);
+// 哪些怪的特殊技在「没出手的那个回合」播：花甸灵精每回合换抵制色，摇果长臂猿的集色威压，千丈古树精从第 2 条血起遮牌
+const specialOnTick = (look, view) => look === 'fairy_meadow' || look === 'earth6_long_arm' || (look === 'tree3_leshy' && view && view.bar >= 1);
 const enemyScale = look => ENEMY_SCALE[look] || 1.4;
 const LINE_HEX = { shield: '#8ff0ff', white: '#ffffff', rainbow: '#ffb0f0', hold: '#ffd24a', chain: '#9aff9a' };
 const attackText = (h, note = '') => (h >= 1 ? `扣 ${h} 心` : '扣半心') + note;
@@ -35,6 +50,8 @@ export class BattleScene {
     this.hero = { lunge: 0, hurt: 0, ward: 0, castT: -1, yaw: Math.PI };
     this.sparks = [];
     this.fx = [];                                  // 怪出手的技能特效
+    this.fx3 = [];                                 // 3D 特效（波纹、怪出手）：{ type, kind, t, dur, ... }
+    this.viewIn = new ViewInput();                 // 拖动转镜头
     this.anim = []; this.heroAnim = { pulse: -1, hurt: -1 };   // 战斗姿态各自的计时（秒，-1 = 没在放）
     this.rainbowGlow = 0; this.waveRing = 0;
     this.buttons = {
@@ -43,7 +60,10 @@ export class BattleScene {
       cast: new Button('cast', '施法（空格）', 0, 0, 124, 28),
       deck: new Button('deck', '查看牌组', 842, 1, 64, 24),
       restart: new Button('restart', '重开', 910, 1, 44, 24),
+      home: new Button('home', '回正 R', 628, 2, 52, 24),
+      unlock: new Button('unlock', '解锁 360°', 684, 2, 68, 24),
     };
+    this.buttons.home.size = this.buttons.unlock.size = 13;
     this.buttons.cast.accent = true;
     // 三个按钮横排居中：退回一张 | 清空 | 施法
     this.buttons.undo.x = 324; this.buttons.clear.x = 432; this.buttons.cast.x = 512;
@@ -66,6 +86,8 @@ export class BattleScene {
     const def = defIn || BATTLES[this.run.battleIndex];
     this.def = def;
     this.b = bIn || createBattle(this.run, def);
+    setView({ mode: 'battle', th0: BATTLE_TH0, origin: VIEW_ORIGIN, parallax: true });      // 微斜机位，± 45° 里能转
+    this.viewIn.cancel();
     this.env = createEnv(def.biome, this.run.seed + this.run.battleIndex * 7);
     // 背景音乐：强敌和首领战用紧张鼓点，别的战斗用轻快节拍；环境音跟生态走
     this.bossHot = false;
@@ -75,8 +97,8 @@ export class BattleScene {
     this.play = null; this.vis = null; this.drag = null; this.overlay = null;
     this.hidden = new Set(); this.cardPos.clear();
     this.hurt = this.b.enemies.map(() => ({ shake: 0, flash: 0 }));
-    this.anim = this.b.enemies.map(() => ({ attack: -1, hurt: -1, dead: -1 }));
-    this.heroAnim = { pulse: -1, hurt: -1 }; this.fx.length = 0;
+    this.anim = this.b.enemies.map(() => ({ attack: -1, hurt: -1, dead: -1, stagger: -1, special: false }));
+    this.heroAnim = { pulse: -1, hurt: -1 }; this.fx.length = 0; this.fx3.length = 0;
     this.atk = this.b.enemies.map(() => 0);
     this.fade = this.b.enemies.map(() => 1);
     this.floaters.items.length = 0; this.bolts.length = 0; this.banners.length = 0; this.sparks.length = 0;
@@ -92,6 +114,16 @@ export class BattleScene {
   }
   view(i) { return this.vis ? this.vis.enemies[i] : enemyView(this.b.enemies[i]); }
   heartsNow() { return this.vis ? this.vis.hearts : this.b.player.hearts; }
+
+  // ---------- 镜头下的位置 ----------
+  // 怪和主角站在布局点（th = 0 时的位置）上；转镜头以后他们在屏幕上的位置、血条和飘字挂的位置都从这里取
+  enemyFeet(i) { return FEET_OVERRIDE[this.b.enemies[i].look] ?? ENEMY_FEET_Y; }
+  eAt(i, h = 0) { const a = anchorAt(this.enemyX(i), this.enemyFeet(i), h); return { x: a[0], y: a[1] }; }
+  hAt(h = 0) { const a = anchorAt(HERO.x, HERO.y, h); return { x: a[0], y: a[1] }; }
+  enemyWorld(i) { return worldOf(this.enemyX(i), this.enemyFeet(i)); }
+  heroWorld() { return worldOf(HERO.x, HERO.y); }
+  enemyMid(i) { const e = this.b.enemies[i]; return Math.min(36, (ACTOR_SIZE[e.look]?.h || 60) * enemyScale(e.look) * 0.5); }   // 怪身子中段的高度（布局单位）
+  fieldCenter() { const [x, y] = worldOf(480, 256); return [x, y, 6]; }
 
   // ---------- 摆位 ----------
   slotCount() { return Math.max(handCap(this.b), this.b.deck.chain.length + (this.drag && !isInstant(this.dragCard()) ? 1 : 0)); }
@@ -148,14 +180,19 @@ export class BattleScene {
     this.hero.castT = this.play ? this.hero.castT + dt : -1;
     const adv = (o, key, limit) => { if (o[key] >= 0) { o[key] += dt; if (limit && o[key] > limit) o[key] = -1; } };
     this.anim.forEach((a, i) => {
-      adv(a, 'attack', POSE_DURATIONS.attack); adv(a, 'hurt', POSE_DURATIONS.hurt);
+      const look = this.b.enemies[i].look;
+      adv(a, 'attack', (actDuration(look, a.special ? 'battle_special' : 'battle_attack') ?? 0.85) + 0.05);
+      adv(a, 'stagger', (actDuration(look, 'battle_stagger') ?? 0.85) + 0.05);
+      adv(a, 'hurt', (actDuration(look, 'battle_hurt') ?? 0.4) + 0.05);
       if (!this.view(i).alive && a.dead < 0) a.dead = 0; else if (a.dead >= 0) a.dead = Math.min(5, a.dead + dt);
     });
     // 首领打到第 3 条血：背景音乐提速，叠一层高频紧迫节拍
     if (this.node?.type === 'boss' && !this.bossHot && this.b.enemies.some(e => enemyView(e).bar >= 2)) { this.bossHot = true; audio.intensity(1); }
-    adv(this.heroAnim, 'pulse', POSE_DURATIONS.pulse); adv(this.heroAnim, 'hurt', POSE_DURATIONS.hurt);
+    adv(this.heroAnim, 'pulse', 0.3); adv(this.heroAnim, 'hurt', 0.4);
     for (const f of this.fx) f.t += dt;
     this.fx = this.fx.filter(f => f.t < ATTACK_FX_DUR);
+    for (const f of this.fx3) f.t += dt;
+    this.fx3 = this.fx3.filter(f => f.t < f.dur);
     const tx = this.b.enemies[this.b.target] ? this.enemyX(this.b.target) : 480;
     this.hero.yaw += (Math.PI + Math.max(-0.45, Math.min(0.45, (tx - 480) * 0.0016)) - this.hero.yaw) * (1 - Math.exp(-dt * 5));
     for (const s of this.sparks) { s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; s.vy += s.g * dt; s.rot += s.vr * dt; }
@@ -179,6 +216,9 @@ export class BattleScene {
     B.cast.enabled = !this.play && this.b.phase === 'player';
     B.cast.label = ch ? '施法（空格）' : '过回合（空格）';
     B.deck.enabled = true; B.restart.enabled = true;
+    B.home.enabled = B.unlock.enabled = camera.canRotate;   // 色块模式镜头不转，两个钮不出现
+    B.unlock.label = camera.unlocked ? '锁回 ± 45°' : '解锁 360°';
+    B.unlock.accent = camera.unlocked;
   }
 
   // ---------- 施法与回放 ----------
@@ -223,15 +263,21 @@ export class BattleScene {
           T += 0.22; break;
         }
         case 'shave': {
-          const e = ev; this.at(T, () => { this.vis.enemies[e.enemy] = e.view; this.floaters.add({ x: this.enemyX(e.enemy), y: ENEMY_FEET_Y - 70, text: '盾 −' + e.cells.reduce((a, c) => a + c, 0), color: '#8ff0ff', size: 14, life: 0.8 }); });
+          const e = ev; this.at(T, () => { this.vis.enemies[e.enemy] = e.view; this.floaters.add({ ...this.eAt(e.enemy, 70), text: '盾 −' + e.cells.reduce((a, c) => a + c, 0), color: '#8ff0ff', size: 14, life: 0.8 }); });
           T += 0.06; break;
         }
         case 'break': {
-          const e = ev; this.at(T, () => { this.vis.enemies[e.enemy] = e.view; this.banner('破盾！', '#8ff0ff', this.enemyX(e.enemy), ENEMY_FEET_Y - 90, 26); this.hurt[e.enemy].flash = 1; this.shatter(this.enemyX(e.enemy), ENEMY_FEET_Y - 52); audio.sfx('break'); });
+          const e = ev; this.at(T, () => {
+            this.vis.enemies[e.enemy] = e.view; const top = this.eAt(e.enemy, 90), mid = this.eAt(e.enemy, 52);
+            this.banner('破盾！', '#8ff0ff', top.x, top.y, 26); this.hurt[e.enemy].flash = 1; this.anim[e.enemy].stagger = 0;     // 破盾：硬直
+            this.shatter(mid.x, mid.y); audio.sfx('break');
+            const [wx, wy] = this.enemyWorld(e.enemy);
+            this.fx3.push({ type: 'wave', kind: 'shield_shatter', t: 0, dur: 0.8, center: [wx, wy, heightToWorld(this.enemyMid(e.enemy))] });
+          });
           T += 0.3; break;
         }
         case 'resisted': {
-          const e = ev; this.at(T, () => this.floaters.add({ x: this.enemyX(e.enemy), y: 150, text: '抵制·减半', color: '#ffb0a0', size: 14, life: 0.9 }));
+          const e = ev; this.at(T, () => this.floaters.add({ ...this.eAt(e.enemy, 55), text: '抵制·减半', color: '#ffb0a0', size: 14, life: 0.9 }));
           break;
         }
         case 'hit': {
@@ -241,15 +287,15 @@ export class BattleScene {
           T += many ? 0.1 : 0.2; break;
         }
         case 'wave': {
-          const e = ev; this.at(T, () => { this.waveRing = 1; this.banner('补色合白：全体', '#ffffff', 480, 262); audio.sfx('white'); });
+          const e = ev; this.at(T, () => { this.waveRing = 1; this.fx3.push({ type: 'wave', kind: 'white_wave', t: 0, dur: 0.9, center: this.fieldCenter() }); this.banner('补色合白：全体', '#ffffff', 480, 262); audio.sfx('white'); });
           T += 0.3; break;
         }
         case 'tide': {
-          this.at(T, () => { this.waveRing = 1; this.banner('碎甲白潮：全体再来一轮', '#8ff0ff', 480, 262, 24); audio.sfx('white'); });
+          this.at(T, () => { this.waveRing = 1; this.fx3.push({ type: 'wave', kind: 'white_wave', t: 0, dur: 0.9, center: this.fieldCenter() }); this.banner('碎甲白潮：全体再来一轮', '#8ff0ff', 480, 262, 24); audio.sfx('white'); });
           T += 0.4; break;
         }
         case 'rainbow': {
-          this.at(T, () => { this.rainbowGlow = 1.6; this.banner('集齐六色：彩虹，全体再打两遍', '#ffd0ff', 480, 262, 26); audio.sfx('rainbow'); });
+          this.at(T, () => { this.rainbowGlow = 1.6; this.fx3.push({ type: 'wave', kind: 'rainbow_burst', t: 0, dur: 1.2, center: this.fieldCenter() }); this.banner('集齐六色：彩虹，全体再打两遍', '#ffd0ff', 480, 262, 26); audio.sfx('rainbow'); });
           T += 0.5; break;
         }
         case 'kill': {
@@ -257,7 +303,7 @@ export class BattleScene {
           T += 0.25; break;
         }
         case 'bar': {
-          const e = ev; this.at(T + 0.15, () => { this.vis.enemies[e.enemy] = e.view; this.floaters.add({ x: this.enemyX(e.enemy), y: 140, text: '下一条血', color: '#ffb0a0', size: 14 }); });
+          const e = ev; this.at(T + 0.15, () => { this.vis.enemies[e.enemy] = e.view; this.floaters.add({ ...this.eAt(e.enemy, 65), text: '下一条血', color: '#ffb0a0', size: 14 }); });
           T += 0.2; break;
         }
         case 'levelup': {
@@ -265,26 +311,40 @@ export class BattleScene {
           T += 0.2; break;
         }
         case 'tick': {
-          const e = ev; this.at(T, () => { this.vis.enemies[e.enemy] = e.view; });
-          T += 0.05; break;
+          // 没出手的回合：有特殊技的怪在这里放特殊技（换抵制色、集色威压、林雾遮牌）
+          const e = ev, look = b.enemies[e.enemy].look;
+          const sp = artMode() === 'workshop' && actDuration(look, 'battle_special') != null && specialOnTick(look, e.view);
+          this.at(T, () => { this.vis.enemies[e.enemy] = e.view; if (sp) { const a = this.anim[e.enemy]; a.attack = 0; a.special = true; } });
+          T += sp ? 0.25 : 0.05; break;
         }
         case 'attack': {
-          const e = ev;
-          this.at(T, () => { this.anim[e.enemy].attack = 0; });                   // 蓄势
-          T += 0.3;
-          this.at(T, () => {                                                         // 出手
+          const e = ev, look = b.enemies[e.enemy].look;
+          const special = artMode() === 'workshop' && !!e.junk && actDuration(look, 'battle_special') != null;   // 塞废牌的那一下用特殊技
+          this.at(T, () => {                                                         // 出手动作开始（工坊模型：原生回合制动作）
+            const a = this.anim[e.enemy]; a.attack = 0; a.special = special;
+            const kind = ATTACK_FX[look];
+            if (kind && !special) {
+              const [ex, ey] = this.enemyWorld(e.enemy), [hx, hy] = this.heroWorld();
+              this.fx3.push({ type: 'atk', kind, t: 0, dur: FX3_DUR, from: [ex, ey, heightToWorld(this.enemyMid(e.enemy))], to: [hx, hy, heightToWorld(30)] });
+            }
+          });
+          T += special ? SPECIAL_T : hitTime(look);
+          this.at(T, () => {                                                         // 打到的那一下
             this.vis.enemies[e.enemy] = e.view; this.vis.hearts = e.heartsAfter;
             this.atk[e.enemy] = 1;
-            const kind = ATTACK_FX[b.enemies[e.enemy].look];
-            if (kind) this.fx.push({ kind, t: 0, from: { x: this.enemyX(e.enemy), y: ENEMY_FEET_Y - 40 }, to: { x: HERO.x, y: HERO.y - 30 } });
+            const kind = ATTACK_FX[look];
+            if (kind) this.fx.push({ kind, t: 0, from: this.eAt(e.enemy, 40), to: this.hAt(30) });
             audio.sfx(e.blocked ? 'cut' : 'hurt');
+            const hh = this.hAt(90);
             if (e.blocked) {
               this.vis.ward = e.ward; this.hero.ward = 1;
-              this.floaters.add({ x: HERO.x, y: HERO.y - 90, text: '护壁挡下了', color: '#8ff0ff', size: 22, life: 1.3 });
+              this.floaters.add({ x: hh.x, y: hh.y, text: '护壁挡下了', color: '#8ff0ff', size: 22, life: 1.3 });
+              const [hx, hy] = this.heroWorld();
+              this.fx3.push({ type: 'wave', kind: 'ward_block', t: 0, dur: 0.8, center: [hx, hy, heightToWorld(30)] });
             } else {
               this.hero.hurt = 1; this.heroAnim.hurt = 0;
-              this.floaters.add({ x: HERO.x, y: HERO.y - 90, text: attackText(e.hearts), color: '#ff6a78', size: 22, life: 1.3 });
-              if (e.junk) this.floaters.add({ x: HERO.x, y: HERO.y - 66, delay: 0.25, text: '弃牌堆里多了一张缠藤废牌', color: '#b8d890', size: 14, life: 1.6 });
+              this.floaters.add({ x: hh.x, y: hh.y, text: attackText(e.hearts), color: '#ff6a78', size: 22, life: 1.3 });
+              if (e.junk) this.floaters.add({ x: hh.x, y: hh.y + 24, delay: 0.25, text: '弃牌堆里多了一张缠藤废牌', color: '#b8d890', size: 14, life: 1.6 });
             }
           });
           T += 0.5; break;
@@ -319,24 +379,30 @@ export class BattleScene {
   spawnBolt(e) {
     const to = this.enemyX(e.enemy);
     const n = e.art === 'white' || e.art === 'rainbow' ? 1 : Math.min(5, Math.max(1, Math.round(Math.log2(e.shots + 1))));
-    for (let i = 0; i < n; i++) this.bolts.push({ t: -i * 0.03, dur: 0.18, from: { x: HERO.x + 22, y: HERO.y - 62 }, to: { x: to + (i - (n - 1) / 2) * 7, y: ENEMY_FEET_Y - 30 }, color: ART_HEX[e.art], big: e.art === 'rainbow' });
+    const [hx, hy] = this.heroWorld(), [ex, ey] = this.enemyWorld(e.enemy), zt = heightToWorld(this.enemyMid(e.enemy));
+    for (let i = 0; i < n; i++) {
+      const off = (i - (n - 1) / 2) * 7;                          // 一排弹丸互相错开几个布局单位
+      this.bolts.push({
+        t: -i * 0.03, dur: 0.18, color: ART_HEX[e.art], art: e.art, big: e.art === 'rainbow',
+        from3: [hx + 9, hy, heightToWorld(62)], to3: [ex + off / 2.5, ey, zt],                          // 3D：UI-04 的弹道
+        from2: [HERO.x + 22, HERO.y, 62], to2: [to + off, this.enemyFeet(e.enemy), 30],                              // 兜底：2D 小圆点
+      });
+    }
   }
   impact(e) {
-    const x = this.enemyX(e.enemy);
+    const p = this.eAt(e.enemy, 52), x = p.x;
     this.vis.enemies[e.enemy] = e.view;
     this.hurt[e.enemy].shake = 0.7; this.hurt[e.enemy].flash = 1; this.anim[e.enemy].hurt = 0;
     const col = ART_HEX[e.art] || '#fff';
-    const y0 = ENEMY_FEET_Y - 52;
+    const y0 = p.y;
     this.burst(x, y0, col, e.art === 'white' || e.art === 'rainbow' ? 7 : 4);
     audio.sfx('hit', e.shots);
     if (e.shots <= 4 && e.shots > 0) {
       // 发数少：一发一个数
-      let k = 0;
       const crits = e.crits;
       for (let s = 0; s < e.shots; s++) {
         const isCrit = s < crits;
         this.floaters.add({ x: x + (s - (e.shots - 1) / 2) * 24, y: y0 - s * 3, delay: s * 0.05, text: isCrit ? e.perCrit : e.perShot, color: isCrit ? '#ffe35a' : col, size: isCrit ? 24 : 18 });
-        k++;
       }
     } else if (e.shots > 4) {
       this.floaters.add({ x: x + (Math.random() - 0.5) * 30, y: y0, text: e.total, color: col, size: Math.min(34, 20 + Math.log10(Math.max(10, e.total)) * 4), life: 1.3 });
@@ -366,17 +432,20 @@ export class BattleScene {
     }
     return -1;
   }
+  // 点选范围跟着镜头走：脚底和头顶都用当前镜头下的屏幕位置算
   hitEnemy(x, y) {
     for (let i = 0; i < this.b.enemies.length; i++) {
       const v = this.view(i); if (!v.alive) continue;
       const sz = ACTOR_SIZE[this.b.enemies[i].look] || { w: 50, h: 60 }, sc = enemyScale(this.b.enemies[i].look);
-      const ex = this.enemyX(i);
-      if (Math.abs(x - ex) <= sz.w * sc / 2 + 6 && y >= ENEMY_FEET_Y - sz.h * sc - 6 && y <= ENEMY_FEET_Y + 14) return i;
+      const foot = this.eAt(i, 0), head = this.eAt(i, sz.h * sc);
+      if (Math.abs(x - foot.x) <= sz.w * sc / 2 + 6 && y >= head.y - 6 && y <= foot.y + 14) return i;
     }
     return -1;
   }
   pointerMove(x, y) {
     this.mx = x; this.my = y;
+    if (this.viewIn.active) { this.viewIn.move(x); camera.setParallax(0); return; }                  // 正在转镜头
+    camera.setParallax(this.drag || this.play ? 0 : (x - 480) / 480);                                 // 没拖牌时叠一点鼠标视差
     for (const bt of [...Object.values(this.buttons), ...this.overlayButtons]) bt.hover = bt.enabled && bt.hit(x, y);
     this.hoverSeal = (this.sealHits || []).find(h => x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h)?.id || null;
     if (this.drag) { this.drag.x = x - this.drag.gx; this.drag.y = y - this.drag.gy; return; }
@@ -385,7 +454,7 @@ export class BattleScene {
     this.hoverHand = hi >= 0 ? this.b.deck.hand[hi].uid : null;
     this.hoverEnemy = this.hitEnemy(x, y);
   }
-  pointerDown(x, y) {
+  pointerDown(x, y, btn = 0) {
     this.pointerMove(x, y);
     if (this.overlay) {
       for (const bt of this.overlayButtons) if (bt.hit(x, y)) return this.onButton(bt.id);
@@ -393,7 +462,8 @@ export class BattleScene {
       return;
     }
     for (const bt of Object.values(this.buttons)) if (bt.enabled && bt.hit(x, y)) return this.onButton(bt.id);
-    if (this.play) return;
+    if (btn === 2) { this.viewIn.down(x, 2); return; }                           // 右键随便拖：转镜头
+    if (this.play) { this.viewIn.down(x, 0); return; }
     const hi = this.hitHand(x, y);
     if (hi >= 0) {
       const c = this.b.deck.hand[hi], p = this.cardPos.get(c.uid);
@@ -402,14 +472,17 @@ export class BattleScene {
       return;
     }
     const ei = this.hitEnemy(x, y);
-    if (ei >= 0) { setTarget(this.b, ei); this.refresh(); return; }
+    if (ei >= 0) { setTarget(this.b, ei); this.refresh(); this.viewIn.down(x, 0); return; }
     // 点到链里的牌：提醒不能拖
     const zone = this.dropZone();
     if (this.b.deck.chain.length && y >= zone.y && y <= zone.y + 90 && x >= zone.x && x <= zone.x + zone.w) {
       this.toast = { str: '链里的牌不能拖动、不能改顺序：放错了点「退回一张」或「清空」', t: 2.4 };
+      return;
     }
+    this.viewIn.down(x, 0);                                                      // 左键拖空白地面：转镜头
   }
   pointerUp(x, y) {
+    if (this.viewIn.active) { this.viewIn.up(); return; }
     if (!this.drag) return;
     const d = this.drag; this.drag = null;
     const zone = this.dropZone();
@@ -435,11 +508,16 @@ export class BattleScene {
     for (const ev of r.events) {
       if (ev.type === 'instant') this.banner(ARCANA[ev.id].name, '#ffe9a0', 480, 300, 24);
       else if (ev.type === 'junkDrop') this.floaters.add({ x: 480, y: 330, text: '丢掉了一张废牌', color: '#b8d890', size: 14, life: 1.2 });
-      else if (ev.type === 'ward') this.floaters.add({ x: HERO.x, y: HERO.y - 90, text: `护壁 ×${ev.ward}`, color: '#8ff0ff', size: 18, life: 1.4 });
-      else if (ev.type === 'surge') this.floaters.add({ x: HERO.x, y: HERO.y - 90, text: '本回合每发 +50%', color: '#ffb04a', size: 18, life: 1.4 });
+      else if (ev.type === 'ward') this.floaters.add({ ...this.hAt(90), text: `护壁 ×${ev.ward}`, color: '#8ff0ff', size: 18, life: 1.4 });
+      else if (ev.type === 'surge') this.floaters.add({ ...this.hAt(90), text: '本回合每发 +50%', color: '#ffb04a', size: 18, life: 1.4 });
       else if (ev.type === 'light') this.floaters.add({ x: 68, y: 76, text: '点亮 ' + ev.colors.map(k => COLOR_NAMES[k]).join('、'), color: '#ffe9a0', size: 14, life: 1.4 });
-      else if (ev.type === 'shave') { this.hurt[ev.enemy].flash = 0.8; this.floaters.add({ x: this.enemyX(ev.enemy), y: ENEMY_FEET_Y - 70, text: '盾 −' + ev.cells.reduce((a, k) => a + k, 0), color: '#8ff0ff', size: 14, life: 0.9 }); }
-      else if (ev.type === 'break') { this.banner('破盾！', '#8ff0ff', this.enemyX(ev.enemy), ENEMY_FEET_Y - 90, 26); this.shatter(this.enemyX(ev.enemy), ENEMY_FEET_Y - 52); }
+      else if (ev.type === 'shave') { this.hurt[ev.enemy].flash = 0.8; this.floaters.add({ ...this.eAt(ev.enemy, 70), text: '盾 −' + ev.cells.reduce((a, k) => a + k, 0), color: '#8ff0ff', size: 14, life: 0.9 }); }
+      else if (ev.type === 'break') {
+        const top = this.eAt(ev.enemy, 90), mid = this.eAt(ev.enemy, 52);
+        this.banner('破盾！', '#8ff0ff', top.x, top.y, 26); this.shatter(mid.x, mid.y); this.anim[ev.enemy].stagger = 0;
+        const [wx, wy] = this.enemyWorld(ev.enemy);
+        this.fx3.push({ type: 'wave', kind: 'shield_shatter', t: 0, dur: 0.8, center: [wx, wy, heightToWorld(this.enemyMid(ev.enemy))] });
+      }
     }
     this.refresh();
   }
@@ -459,8 +537,11 @@ export class BattleScene {
       else this.startBattle();
     }
     else if (id === 'close') this.overlay = null;
+    else if (id === 'home') camera.recenter();
+    else if (id === 'unlock') camera.setUnlocked(!camera.unlocked);
   }
   key(k) {
+    if (!this.overlay && this.viewIn.key(k)) return;                             // Q / E 转镜头，R 回正
     if (k === ' ' || k === 'Enter') { if (this.overlay?.kind === 'win') this.onButton('next'); else this.doCast(); }
     else if (k === 'Backspace' || k === 'z') { if (!this.play && undoLast(this.b)) { audio.sfx('card'); recorder.undo(); this.refresh(); } }
     else if (k === 'Escape') { if (this.overlay?.kind === 'deck') this.overlay = null; else if (!this.play && undoAll(this.b)) { audio.sfx('card'); recorder.undo(); this.refresh(); } }
@@ -468,11 +549,15 @@ export class BattleScene {
 
   // ---------- 绘制 ----------
   draw(ctx) {
-    const b = this.b, t = this.t;
+    // 先把世界排好队一次画完（地面、摆件、怪、主角、3D 特效），再在上面画 2D 界面
     this.env.draw(ctx);
+    this.queueEnemies(ctx);
+    this.queueHero(ctx);
+    this.queueFx3d();
+    flushWorld(ctx);
     this.drawTopBar(ctx);
-    this.drawEnemies(ctx);
-    this.drawHero(ctx);
+    this.drawEnemyUi(ctx);
+    this.drawHeroUi(ctx);
     this.drawSidePanels(ctx);
     this.drawChainArea(ctx);
     this.drawBolts(ctx);
@@ -494,45 +579,68 @@ export class BattleScene {
     drawHearts(ctx, 20, 14, this.heartsNow(), b.player.maxHearts, 8);
     text(ctx, trip ? this.def.title : `${this.def.title}／共 ${BATTLES.length} 战`, 108, 14, { size: 14 });
     // 生态名右边的说明栏里已经写了，这里不重复，给右上角的音乐 / 音效按钮腾地方
-    text(ctx, `第 ${b.turn} 回合`, 262, 14, { size: 13, color: '#cfd8dc' });
-    if (trip) text(ctx, `金币 ${this.run.gold}`, 334, 14, { size: 13, color: GOLD });
-    text(ctx, `N = ${b.player.handBase}`, 398, 14, { size: 13, color: '#cfd8dc' });
+    text(ctx, `第 ${b.turn} 回合`, 250, 14, { size: 13, color: '#cfd8dc' });
+    if (trip) text(ctx, `金币 ${this.run.gold}`, 312, 14, { size: 13, color: GOLD });
+    text(ctx, `N = ${b.player.handBase}`, 372, 14, { size: 13, color: '#cfd8dc' });
     // 抽牌堆各色剩余
-    text(ctx, '抽牌堆', 444, 14, { size: 12, color: '#cfd8dc' });
+    text(ctx, '牌堆', 416, 14, { size: 12, color: '#cfd8dc' });
     const cnt = [0, 0, 0, 0, 0, 0, 0];
     let extra = 0;
     b.deck.draw.forEach(c => { if (c.color >= 0 && !c.arcana) cnt[c.color]++; else extra++; });
     for (let i = 0; i < 7; i++) {
-      const x = 488 + i * 33;
-      roundRect(ctx, x, 5, 18, 18, 4); ctx.fillStyle = WHEEL_HEX[i]; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1.5; ctx.stroke();
-      text(ctx, String(cnt[i]), x + 21, 14, { size: 12, align: 'left' });
+      const x = 446 + i * 25;
+      roundRect(ctx, x, 6, 16, 16, 4); ctx.fillStyle = WHEEL_HEX[i]; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1.5; ctx.stroke();
+      text(ctx, String(cnt[i]), x + 18, 14, { size: 11, align: 'left' });
     }
-    if (extra) text(ctx, `+${extra}`, 722, 14, { size: 12, align: 'left', color: '#ffe9a0' });
-    this.buttons.deck.draw(ctx); this.buttons.restart.draw(ctx);
+    if (extra) text(ctx, `+${extra}`, 622, 14, { size: 11, align: 'left', color: '#ffe9a0' });
+    for (const k of ['home', 'unlock', 'deck', 'restart']) if (camera.canRotate || (k !== 'home' && k !== 'unlock')) this.buttons[k].draw(ctx);
   }
 
-  drawEnemies(ctx) {
-    const b = this.b, t = this.t;
+  // 排进世界队列：选中环、怪。怪的出手、硬直、受击是美术库里的原生回合制动作，这里只告诉它现在该放哪个、放到第几秒。
+  enemyAct(look, an) {
+    const dur = (act, d) => actDuration(look, act) ?? d;
+    if (an.attack >= 0 && an.attack < dur(an.special ? 'battle_special' : 'battle_attack', 0.85)) return [an.special ? 'battle_special' : 'battle_attack', an.attack];
+    if (an.stagger >= 0 && an.stagger < dur('battle_stagger', 0.85)) return ['battle_stagger', an.stagger];
+    if (an.hurt >= 0 && an.hurt < dur('battle_hurt', 0.35)) return ['battle_hurt', an.hurt];
+    return ['idle', undefined];
+  }
+  queueEnemies(ctx) {
+    const b = this.b, t = this.t, work = artMode() === 'workshop';
+    const [hx, hy] = this.heroWorld();
     b.enemies.forEach((e, i) => {
       const v = this.view(i), fade = this.fade[i];
       if (fade <= 0.01) return;
       const x = this.enemyX(i), h = this.hurt[i];
       const sc = enemyScale(e.look);
       const sz = ACTOR_SIZE[e.look] || { w: 50, h: 60 };
-      // 选中环
+      // 选中环：世界地面上的一个圆（色块模式画 2D 的）
       if (i === b.target && v.alive) {
-        ctx.save(); ctx.strokeStyle = GOLD; ctx.lineWidth = 3; ctx.globalAlpha = 0.7 + 0.3 * Math.sin(t * 5);
-        ctx.beginPath(); ctx.ellipse(x, ENEMY_FEET_Y + 2, sz.w * sc * 0.62, 11, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+        const alpha = 0.7 + 0.3 * Math.sin(t * 5), r = sz.w * sc * 0.62;
+        if (!drawRing(x, this.enemyFeet(i) + 2, r, { color: GOLD, alpha, width: 3 })) {
+          const f = this.eAt(i, 0);
+          ctx.save(); ctx.strokeStyle = GOLD; ctx.lineWidth = 3; ctx.globalAlpha = alpha;
+          ctx.beginPath(); ctx.ellipse(f.x, f.y + 2, r, 11, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+        }
       }
       const n = b.enemies.length, yaw = n > 1 ? (i < (n - 1) / 2 ? -0.4 : i > (n - 1) / 2 ? 0.4 : 0) : 0;   // 两只并排时各自微微转向中间
       const an = this.anim[i];
-      drawActor(ctx, e.look, x, ENEMY_FEET_Y, {
-        t, scale: sc, flash: h.flash, alpha: fade, dx: Math.sin(this.t * 60) * 5 * h.shake, dy: 22 * this.atk[i], seed: i * 1.7, slot: 'e' + i, yaw,
-        pose: poseOf(e.look, an), act: an.attack >= 0 && POSE_PROFILES[e.look]?.native ? POSE_PROFILES[e.look].native : 'idle',
+      const native = work && actDuration(e.look, 'battle_attack') != null;
+      const [act, actT] = native ? this.enemyAct(e.look, an) : [an.attack >= 0 && POSE_PROFILES[e.look]?.native ? POSE_PROFILES[e.look].native : 'idle', undefined];
+      drawActor(ctx, e.look, x, this.enemyFeet(i), {
+        t, scale: sc, flash: h.flash, alpha: fade, dx: Math.sin(this.t * 60) * 5 * h.shake, dy: work ? 0 : 22 * this.atk[i], seed: i * 1.7, slot: 'e' + i, yaw,
+        pose: poseOf(e.look, native ? { dead: an.dead } : an), act, actT, target: [hx, hy, 14],
       });
-      if (!v.alive) return;
-      const topY = ENEMY_FEET_Y - sz.h * sc;
-      const hpY = topY - 20;
+    });
+  }
+  // 怪头顶：一根血条、一根盾条、名字和倒计时；位置跟着镜头走，名字行不压到顶栏
+  drawEnemyUi(ctx) {
+    const b = this.b, t = this.t;
+    b.enemies.forEach((e, i) => {
+      const v = this.view(i), fade = this.fade[i];
+      if (fade <= 0.01 || !v.alive) return;
+      const sc = enemyScale(e.look), sz = ACTOR_SIZE[e.look] || { w: 50, h: 60 };
+      const head = this.eAt(i, sz.h * sc), x = head.x;
+      const hpY = Math.max(head.y - 20, TOP_SAFE + 30);
       drawHpBar(ctx, x, hpY, 92, v.hp, v.maxHp, v.bar, v.barsTotal);
       drawShield(ctx, x, hpY + 14, v.shield, v.shieldMax, v.broken);
       drawCountdown(ctx, x - 46, hpY - 30, v.countdown, t);
@@ -540,38 +648,42 @@ export class BattleScene {
       const ah = v.attackHearts ?? e.attackHearts;
       ctx.font = font(14, 600);
       text(ctx, attackText(ah, e.attackNote), x - 30 + ctx.measureText(e.name).width + 8, hpY - 30, { size: 13, align: 'left', color: ah >= 1 ? '#ff9a8a' : '#ffe0a0' });
+      const foot = this.eAt(i, 0), rx0 = foot.x + sz.w * sc / 2;
       if (e.trait === 'resist' && b.resist) {
-        const rx = x + sz.w * sc / 2 + 14;
-        text(ctx, '本回合抵制', rx, ENEMY_FEET_Y - 78, { size: 12, align: 'left', color: '#d8d8c8' });
-        text(ctx, `${COLOR_NAMES[b.resist.now]}（伤减半、不削盾）`, rx, ENEMY_FEET_Y - 62, { size: 13, align: 'left', color: WHEEL_HEX[b.resist.now], weight: 800 });
-        text(ctx, `下回合抵制：${COLOR_NAMES[b.resist.next]}`, rx, ENEMY_FEET_Y - 44, { size: 12, align: 'left', color: '#d8d8c8' });
+        const rx = rx0 + 14;
+        text(ctx, '本回合抵制', rx, foot.y - 73, { size: 12, align: 'left', color: '#d8d8c8' });
+        text(ctx, `${COLOR_NAMES[b.resist.now]}（伤减半、不削盾）`, rx, foot.y - 57, { size: 13, align: 'left', color: WHEEL_HEX[b.resist.now], weight: 800 });
+        text(ctx, `下回合抵制：${COLOR_NAMES[b.resist.next]}`, rx, foot.y - 39, { size: 12, align: 'left', color: '#d8d8c8' });
       }
       if (e.trait === 'gibbon') {
-        const rx = x + sz.w * sc / 2 + 12, n = countBits(this.vis ? this.vis.ring.collected : this.prev.endCollected), ok = n >= CONFIG.gibbonNeed;
-        text(ctx, `集色 ${n}/${CONFIG.gibbonNeed}`, rx, ENEMY_FEET_Y - 70, { size: 13, align: 'left', color: ok ? '#9aff9a' : '#ffb0a0', weight: 800 });
-        text(ctx, ok ? '已满，伤害正常' : '没满：受伤减半', rx, ENEMY_FEET_Y - 52, { size: 12, align: 'left', color: '#d8d8c8' });
+        const rx = rx0 + 12, n = countBits(this.vis ? this.vis.ring.collected : this.prev.endCollected), ok = n >= CONFIG.gibbonNeed;
+        text(ctx, `集色 ${n}/${CONFIG.gibbonNeed}`, rx, foot.y - 65, { size: 13, align: 'left', color: ok ? '#9aff9a' : '#ffb0a0', weight: 800 });
+        text(ctx, ok ? '已满，伤害正常' : '没满：受伤减半', rx, foot.y - 47, { size: 12, align: 'left', color: '#d8d8c8' });
       }
       if (e.trait === 'canopy' && v.bar >= 1) {
-        const rx = x + sz.w * sc / 2 + 10;
-        text(ctx, '每回合遮住 1 张手牌', rx, ENEMY_FEET_Y - 70, { size: 12, align: 'left', color: '#ffd0a0', weight: 800 });
-        text(ctx, '（只标「已遮蔽」）', rx, ENEMY_FEET_Y - 52, { size: 12, align: 'left', color: '#d8d8c8' });
+        const rx = rx0 + 10;
+        text(ctx, '每回合遮住 1 张手牌', rx, foot.y - 65, { size: 12, align: 'left', color: '#ffd0a0', weight: 800 });
+        text(ctx, '（只标「已遮蔽」）', rx, foot.y - 47, { size: 12, align: 'left', color: '#d8d8c8' });
       }
     });
   }
 
-  drawHero(ctx) {
-    const h = this.hero, b = this.b;
-    const ward = this.vis ? this.vis.ward : b.ward;
-    const ct = h.castT, casting = ct >= 0;
+  queueHero(ctx) {
+    const h = this.hero, ct = h.castT, casting = ct >= 0;
     drawActor(ctx, HERO_LOOK, HERO.x, HERO.y, {
       t: this.t, scale: 1.05, dy: -12 * h.lunge, dx: Math.sin(this.t * 70) * 4 * h.hurt, flash: h.hurt * 0.7,
       slot: 'battle', yaw: h.yaw, act: casting ? 'cast' : 'idle', actT: casting ? (ct < 1.7 ? ct : 0.65 + ((ct - 1.7) % 1.0)) : undefined,
       pose: poseOf(HERO_LOOK, this.heroAnim),
     });
+  }
+  drawHeroUi(ctx) {
+    const h = this.hero, b = this.b;
+    const ward = this.vis ? this.vis.ward : b.ward;
     if (ward > 0 || h.ward > 0) {                         // 护壁：罩在主角身上的一层半透明壳
+      const c = this.hAt(40);
       ctx.save(); ctx.globalAlpha = (ward > 0 ? 0.5 : 0.5 * h.ward) + 0.1 * Math.sin(this.t * 4);
       ctx.strokeStyle = '#8ff0ff'; ctx.lineWidth = 3; ctx.fillStyle = 'rgba(140,240,255,0.15)';
-      ctx.beginPath(); ctx.ellipse(HERO.x + 4, HERO.y - 40, 36, 52, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore();
+      ctx.beginPath(); ctx.ellipse(c.x + 4, c.y, 36, 52, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore();
     }
     // 主角身边的状态说明
     const lines = [];
@@ -579,7 +691,19 @@ export class BattleScene {
     if (b.buff.surge > 0) lines.push([`魔力沸腾：每发 +${50 * b.buff.surge}%`, '#ffb04a']);
     if (b.startMult > 1 && !this.vis) lines.push([`蓄锋待发：链倍率 ×${b.startMult} 起步`, '#ffd24a']);
     if (b.capExtra > 0) lines.push([`手牌上限 +${b.capExtra}`, '#b0e0ff']);
-    lines.forEach(([str, col], k) => text(ctx, str, HERO.x + 46, HERO.y - 62 + k * 16, { size: 12, align: 'left', color: col, weight: 800 }));
+    const hp = this.hAt(62);
+    lines.forEach(([str, col], k) => text(ctx, str, hp.x + 46, hp.y + k * 16, { size: 12, align: 'left', color: col, weight: 800 }));
+  }
+
+  // 3D 技能特效排进世界：施法弹道、波纹、怪出手。没有 UI-04 包时由 drawBolts 画 2D 兜底。
+  queueFx3d() {
+    if (!vfx3d.available()) return;
+    for (const f of this.fx3) {
+      const k = clamp01(f.t / f.dur);
+      if (f.type === 'wave') vfx3d.wave(f.kind, f.center, k);
+      else if (f.type === 'atk') vfx3d.attack(f.kind, k, f.from, f.to);
+    }
+    for (const bo of this.bolts) if (bo.t >= 0) vfx3d.bolt({ from: bo.from3, to: bo.to3, k: bo.t / bo.dur, art: bo.art, big: bo.big });
   }
 
   drawSidePanels(ctx) {
@@ -698,15 +822,24 @@ export class BattleScene {
     }
   }
 
+  // 2D 部分：碎屑（始终画）；弹道、怪出手、白波纹的 2D 兜底只在没有 UI-04 包时画
   drawBolts(ctx) {
-    for (const bo of this.bolts) {
-      if (bo.t < 0) continue;
-      const k = bo.t / bo.dur, x = bo.from.x + (bo.to.x - bo.from.x) * k, y = bo.from.y + (bo.to.y - bo.from.y) * k;
-      ctx.save(); ctx.shadowColor = bo.color; ctx.shadowBlur = 14; ctx.fillStyle = bo.color;
-      for (let s = 0; s < 4; s++) { const kk = Math.max(0, k - s * 0.06); ctx.globalAlpha = 1 - s * 0.22; ctx.beginPath(); ctx.arc(bo.from.x + (bo.to.x - bo.from.x) * kk, bo.from.y + (bo.to.y - bo.from.y) * kk, (bo.big ? 7 : 4.5) - s, 0, 6.3); ctx.fill(); }
-      ctx.restore();
+    const flat = !vfx3d.available();
+    if (flat) {
+      for (const bo of this.bolts) {
+        if (bo.t < 0) continue;
+        const k = bo.t / bo.dur, f = anchorAt(...bo.from2), to = anchorAt(...bo.to2);
+        const lerp = (a, c, q) => a + (c - a) * q;
+        ctx.save(); ctx.fillStyle = bo.color;
+        for (let s = 0; s < 4; s++) {
+          const kk = Math.max(0, k - s * 0.06), r = (bo.big ? 7 : 4.5) - s;
+          ctx.globalAlpha = 1 - s * 0.22; ctx.beginPath(); ctx.arc(lerp(f[0], to[0], kk), lerp(f[1], to[1], kk), r, 0, 6.3); ctx.fill();
+          ctx.globalAlpha = (1 - s * 0.22) * 0.25; ctx.beginPath(); ctx.arc(lerp(f[0], to[0], kk), lerp(f[1], to[1], kk), r + 4, 0, 6.3); ctx.fill();      // 外圈再淡淡画一层，当作亮边
+        }
+        ctx.restore();
+      }
+      for (const f of this.fx) drawAttackFx(ctx, f.kind, f.t, f.from, f.to);
     }
-    for (const f of this.fx) drawAttackFx(ctx, f.kind, f.t, f.from, f.to);
     for (const sp of this.sparks) {
       const k = sp.t / sp.life;
       ctx.save(); ctx.globalAlpha = 1 - k * k; ctx.fillStyle = sp.color; ctx.translate(sp.x, sp.y); ctx.rotate(sp.rot);
@@ -714,10 +847,10 @@ export class BattleScene {
       else ctx.fillRect(-sp.size / 2, -sp.size / 2, sp.size, sp.size);
       ctx.restore();
     }
-    if (this.waveRing > 0) {
-      const k = 1 - this.waveRing;
+    if (flat && this.waveRing > 0) {
+      const k = 1 - this.waveRing, cy = anchorAt(480, 256, 0)[1] - 56;
       ctx.save(); ctx.globalAlpha = this.waveRing * 0.8; ctx.strokeStyle = '#fff'; ctx.lineWidth = 6;
-      ctx.beginPath(); ctx.ellipse(480, 200, 60 + k * 420, 20 + k * 80, 0, 0, 6.3); ctx.stroke(); ctx.restore();
+      ctx.beginPath(); ctx.ellipse(480, cy, 60 + k * 420, 20 + k * 80, 0, 0, 6.3); ctx.stroke(); ctx.restore();
     }
   }
   drawBanners(ctx) {

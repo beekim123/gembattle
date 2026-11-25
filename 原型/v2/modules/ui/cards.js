@@ -14,11 +14,14 @@ export function drawCard(ctx, card, o = {}) {
   const w = CARD_W, h = CARD_H, x = -w / 2, y = -h / 2;
   const col = card.color;
   ctx.save();
-  if (o.lit) { ctx.shadowColor = '#fff6c0'; ctx.shadowBlur = 18; }
+  if (o.lit) {                                            // 施法时亮起：外面垫两圈淡色，不用实时模糊
+    roundRect(ctx, x - 6, y - 6, w + 12, h + 12, 12); ctx.fillStyle = 'rgba(255,246,192,0.22)'; ctx.fill();
+    roundRect(ctx, x - 3, y - 3, w + 6, h + 6, 10); ctx.fillStyle = 'rgba(255,246,192,0.32)'; ctx.fill();
+  }
   roundRect(ctx, x, y, w, h, 7);
   if (o.masked) {
     const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#4a4f60'); g.addColorStop(1, '#2a2e3a');
-    ctx.fillStyle = g; ctx.fill(); ctx.shadowBlur = 0;
+    ctx.fillStyle = g; ctx.fill();
     ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(10,14,10,0.75)'; ctx.stroke();
     ctx.restore();
     ctx.save();
@@ -33,7 +36,6 @@ export function drawCard(ctx, card, o = {}) {
   else if (instant) { g.addColorStop(0, '#6a5ab8'); g.addColorStop(1, '#3a2f78'); }
   else { g.addColorStop(0, WHEEL_HEX[col]); g.addColorStop(1, col === 6 ? '#d8d2c0' : WHEEL_DARK[col]); }
   ctx.fillStyle = g; ctx.fill();
-  ctx.shadowBlur = 0;
   ctx.lineWidth = 2; ctx.strokeStyle = arc ? '#ffd24a' : 'rgba(10,14,10,0.75)'; ctx.stroke();
 
   if (junk) {
@@ -77,7 +79,7 @@ export function drawCard(ctx, card, o = {}) {
     roundRect(ctx, x - 2, y - 2, w + 4, h + 4, 9);
     ctx.lineWidth = 4; ctx.strokeStyle = REL_HEX[o.frame];
     if (o.frame === 'break') ctx.setLineDash([6, 4]);
-    ctx.shadowColor = REL_HEX[o.frame]; ctx.shadowBlur = o.frame === 'break' ? 0 : 12;
+    else { ctx.save(); ctx.globalAlpha = 0.3; ctx.lineWidth = 9; ctx.stroke(); ctx.restore(); }          // 外圈淡淡加宽一层，当作亮边
     ctx.stroke();
   }
   ctx.restore();

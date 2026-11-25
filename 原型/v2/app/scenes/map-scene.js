@@ -5,7 +5,7 @@ import {
   childrenOf, parentsOf, reachableFrom, ancestorsOf, nextNodes, nodeOf, nodeInfo, TYPE_NAME,
 } from '../../modules/run-rules/index.js';
 import { SEALS, LINES, LOOT, BIOMES, HERO_LOOK } from '../../modules/content/index.js';
-import { drawActor, createEnv } from '../../modules/render/index.js';
+import { drawActorNow, createEnv, setView, flushWorld } from '../../modules/render/index.js';
 import { audio } from '../../modules/audio/index.js';
 import {
   text, panel, wrap, roundRect, drawHearts, Button, GOLD, NODE_STYLE, drawNodeIcon, drawLootBadge, LOOT_HEX,
@@ -41,6 +41,7 @@ export class MapScene {
   }
   show(trip, hooks) {
     this.trip = trip; this.hooks = hooks; this.hover = null; this.overlay = null;
+    setView({ mode: 'fixed', origin: [480, 300] });                       // 路线图不转镜头
     this.env = createEnv('forest', trip.seed + 5, { props: false });     // 路线图背景只要地面和微粒，不摆像素摆件
     this.sealHits = [];
     this.press = null;
@@ -135,7 +136,7 @@ export class MapScene {
   // ---------- 绘制 ----------
   draw(ctx) {
     const trip = this.trip, map = trip.map, st = this.states();
-    this.env.draw(ctx);
+    this.env.draw(ctx); flushWorld(ctx);
     ctx.fillStyle = 'rgba(6,12,8,0.62)'; ctx.fillRect(0, 0, 960, 540);       // 压暗，路线图才是主体
     // 长图：只在顶栏下面的窗口里画，跟着镜头上下走
     ctx.save();
@@ -216,8 +217,8 @@ export class MapScene {
       if (kind === 'dim') { ctx.globalAlpha = 0.3; ctx.strokeStyle = '#8a9a90'; ctx.lineWidth = 2; ctx.setLineDash([3, 6]); strokeBez(ctx, p); }
       else if (kind === 'future') {
         ctx.globalAlpha = E.hl ? 1 : 0.6; ctx.strokeStyle = E.hl ? '#fff2b0' : '#e6efe8'; ctx.lineWidth = E.hl ? 4 : 2.2; ctx.setLineDash(E.hl ? [] : [7, 6]);
-        if (E.hl) { ctx.shadowColor = '#ffe27a'; ctx.shadowBlur = 8; }
-        strokeBez(ctx, p); ctx.shadowBlur = 0;
+        if (E.hl) { const w = ctx.lineWidth, a = ctx.globalAlpha; ctx.lineWidth = w + 6; ctx.globalAlpha = a * 0.28; ctx.strokeStyle = '#ffe27a'; strokeBez(ctx, p); ctx.lineWidth = w; ctx.globalAlpha = a; ctx.strokeStyle = '#fff2b0'; }   // 亮起的路径：先垫一条淡宽线
+        strokeBez(ctx, p);
       } else if (kind === 'avail') {
         ctx.globalAlpha = 1; ctx.strokeStyle = '#ffd24a'; ctx.lineWidth = 3.4; ctx.setLineDash([9, 7]); ctx.lineDashOffset = -t * 36;
         strokeBez(ctx, p); ctx.lineDashOffset = 0; ctx.setLineDash([]);
@@ -227,7 +228,8 @@ export class MapScene {
           ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-4, -5); ctx.lineTo(-1, 0); ctx.lineTo(-4, 5); ctx.closePath(); ctx.fill(); ctx.restore();
         }
       } else if (kind === 'walked') {
-        ctx.globalAlpha = 1; ctx.strokeStyle = '#f2b93a'; ctx.lineWidth = 5.5; ctx.setLineDash([]); ctx.shadowColor = '#ffd24a'; ctx.shadowBlur = 6; strokeBez(ctx, p); ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1; ctx.strokeStyle = '#f2b93a'; ctx.setLineDash([]);
+        ctx.lineWidth = 10; ctx.globalAlpha = 0.28; strokeBez(ctx, p); ctx.lineWidth = 5.5; ctx.globalAlpha = 1; strokeBez(ctx, p);                 // 走过的路：先垫一条淡宽线
       }
       ctx.setLineDash([]); ctx.globalAlpha = 1;
     }
@@ -238,7 +240,7 @@ export class MapScene {
     const [x, y] = this.startXY();
     ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(x, y + 6, 22, 7, 0, 0, Math.PI * 2); ctx.fill();
     if (!this.trip.pos) {
-      drawActor(ctx, HERO_LOOK, x, y + 8, { t: this.t, scale: 0.55 });
+      drawActorNow(ctx, HERO_LOOK, x, y + 8, { t: this.t, scale: 0.55 });
       text(ctx, '出发点', x + 32, y - 6, { size: 13, align: 'left', color: '#ffe9a0' });
     } else {
       text(ctx, '出发点', x, y + 4, { size: 12, align: 'center', color: 'rgba(255,255,255,0.4)' });
@@ -257,8 +259,11 @@ export class MapScene {
       const k = (this.t * 0.9 + n.col * 0.3) % 1;
       ctx.strokeStyle = `rgba(255,210,74,${0.9 * (1 - k)})`; ctx.lineWidth = 4;
       ctx.beginPath(); ctx.arc(x, y, r + 5 + k * 16, 0, Math.PI * 2); ctx.stroke();
-      ctx.strokeStyle = '#ffd24a'; ctx.lineWidth = 3.5; ctx.shadowColor = '#ffd24a'; ctx.shadowBlur = 14;
-      ctx.beginPath(); ctx.arc(x, y, r + 6 + Math.sin(this.t * 4) * 1.5, 0, Math.PI * 2); ctx.stroke(); ctx.shadowBlur = 0;
+      const rr = r + 6 + Math.sin(this.t * 4) * 1.5;
+      ctx.strokeStyle = '#ffd24a'; ctx.globalAlpha = (dim ? 0.3 : 1) * 0.3; ctx.lineWidth = 9;
+      ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.stroke();                         // 先垫一圈淡宽线，当作亮边
+      ctx.globalAlpha = dim ? 0.3 : 1; ctx.lineWidth = 3.5;
+      ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.stroke();
     }
     if (hov && !dim) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, r + 3, 0, Math.PI * 2); ctx.stroke(); }
     // 节点圆底
@@ -277,7 +282,7 @@ export class MapScene {
     }
     ctx.restore();
     // 现在站在这个节点上：主角小头像
-    if (isPos) drawActor(ctx, HERO_LOOK, x - r - 20, y + 14, { t: this.t, scale: 0.5 });
+    if (isPos) drawActorNow(ctx, HERO_LOOK, x - r - 20, y + 14, { t: this.t, scale: 0.5 });
   }
 
   drawRail(ctx) {

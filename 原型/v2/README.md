@@ -31,14 +31,14 @@ node tools/serve.js --open
 | `?mode=tutorial` | 直接进第 1 步的 4 场教学仗 |
 | `?auto=1&speed=8` | 假玩家自动打（只用来测试，可加 `gate=retreat`、`heal=1`、`loop=1`） |
 | `?art=blocks` | 不用工坊像素模型，退回色块（排错、对照用）；工坊脚本没加载成功时也会自动退回 |
-| `?dpr=1` | 把画布的物理像素压到 1920×1080（测帧率用）。不写时默认跟屏幕走、最多 2 倍，并带一道保险：连续两段 60 帧都慢于 26 毫秒就自动降到 1 倍 |
+| `?dpr=1` | 把画布的物理像素压到 1920×1080（测帧率用）。不写时默认跟屏幕走、最多 2 倍（3840×2160 画布稳 120 帧，不再自动降分辨率）。按 P 键看性能浮层 |
 | `?show=名字` | 直接看某个画面：`title`、`map`、`camp`、`shop`、`gate`、`event`、`summary`、`summary-defeat`、`enc:e_slime` 等 8 场遭遇（`e_slime`、`e_sheep`、`e_goblin`、`e_fairy`、`e_leopard`、`e_gibbon`、`e_sloth`、`e_boss`）；可加 `&biome=` |
 
 ## 美术（第 3 步）
 
-- 角色、生态摆件、建筑用 `美术/像素堆叠生物工坊/` 里现成的像素堆叠模型，**严格只读**，一个字没改。`app/index.html` 按方案 4.2 清单加载 31 个脚本（6 个内核、1 个地貌色板、11 个生态摆件、8 只怪、主角和行商、3 个建筑）。开发时 `/art/` 由 `tools/serve.js` 映射过去；导出时抽进 `art/`。
+- 角色、生态摆件、建筑用 `美术/游戏实装美术库/` 里现成的像素堆叠模型，**严格只读**，一个字没改。`app/index.html` 按方案 4.2 清单加载 31 个脚本（6 个内核、1 个地貌色板、11 个生态摆件、8 只怪、主角和行商、3 个建筑），外加 `art-packs/pack_ground_vfx.js`（UI-04 地面与 3D 特效）。开发时 `/art/` 由 `tools/serve.js` 映射过去；导出时抽进 `art/`。
 - 没有工坊的圆形展示台。每个场景是：整屏生态地面 + 微粒在最下，2~3 个摆件由远到近放在左右和上方（不挡中间），怪在上，主角（`npc_mage`，背对镜头）在下。营火场景 = 营火 + 岩洞 + 主角；行商 = 帐篷 + 货箱木牌 + 行商 + 主角；界门 = 青苔石门。
-- 接法在 `modules/render/workshop-adapter.js`：缓存模式（`prepareActor` + `drawPreparedActor`），同一种模型同时出现几只时共用体素和图集，图集上限 28MB（实际 5~6MB）；像素层关平滑、整数倍缩放，不拉伸半个像素。
+- 接法在 `modules/render/world-stage.js`（统一世界舞台，镜头在 `camera.js`；`workshop-adapter.js` 只是兼容出口）：缓存模式（`prepareActor` + `drawPreparedActor`），同一种模型同时出现几只时共用体素和图集，图集上限 28MB（实际 5~6MB）；像素层关平滑、整数倍缩放，不拉伸半个像素。
 - **战斗姿态和技能是 v2 这边自己做的**（工坊模型只有待机动作）：`modules/render/battle-pose.js` 管姿态（蓄力、扑出、受击、倒下、主角施法），`modules/ui/attack-fx.js` 管 8 只怪各自的出手特效（吐液、喷粉、挥棒、撒花瓣、抛果、扑爪、啃咬、地刺）。这些是我先定的默认，要不要换见 `偏离.md` 第 32 条。
 
 ## 音乐音效（第 3 步）
@@ -76,10 +76,10 @@ modules/shared/      色环常量与关系、数值配置、可重放随机数
 modules/content/     数据表：29 张牌、秘术牌、印记、雕琢、怪、8 场遭遇、4 个偶遇、8 套生态色板和摆件位置
 modules/battle-rules/ 纯逻辑战斗（不碰 canvas，node 直接测）
 modules/run-rules/   纯逻辑一趟：路线图生成、节点流程、成长、行商、偶遇、界门、结算、试玩记录（record.js）
-modules/render/      出口 index.js；workshop-adapter.js（接工坊像素模型）、battle-pose.js（战斗姿态）、blocks.js（色块备用）、env-ground.js + scene-env.js（生态地面、微粒、摆件）
+modules/render/      出口 index.js；world-stage.js + camera.js + ground-fallback.js（统一世界舞台：像素模型、地面、镜头）、workshop-adapter.js（兼容出口）、battle-pose.js（战斗姿态）、blocks.js（色块备用）、env-ground.js + scene-env.js（生态地面、微粒、摆件）
 modules/audio/       音乐、环境声、音效（music-data / synth / bgm / sfx / settings / index）
 modules/ui/          弧形手牌、血条盾格倒计时、集色环、按钮、飘字、牌组网格、路线图图标、attack-fx（出手特效）、audio-bar（音乐音效按钮）
-tools/serve.js       本地小服务；/art/ 只读映射到 ../../美术/像素堆叠生物工坊/
+tools/serve.js       本地小服务；/art/ 只读映射到 ../../美术/游戏实装美术库/
 tools/export-web.js  导出外测包（zip.js 是不依赖第三方的 zip 写入）
 tools/test.js        一键测试
 ```

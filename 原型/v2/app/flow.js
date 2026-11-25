@@ -102,9 +102,9 @@ export class Flow {
   draw(ctx) { this.cur.draw(ctx); this.audioBar.draw(ctx); }
   // 音量条在最上层：鼠标在它上面时，下面的画面当作没碰到
   pointerMove(x, y) { if (this.audioBar.pointerMove(x, y)) this.cur.pointerMove(-99, -99); else this.cur.pointerMove(x, y); }
-  pointerDown(x, y) { if (this.audioBar.pointerDown(x, y)) return; this.cur.pointerDown(x, y); }
-  pointerUp(x, y) { if (this.audioBar.pointerUp()) return; this.cur.pointerUp(x, y); }
+  pointerDown(x, y, btn = 0) { if (this.audioBar.pointerDown(x, y)) return; this.cur.pointerDown(x, y, btn); }
+  pointerUp(x, y, btn = 0) { if (this.audioBar.pointerUp()) return; this.cur.pointerUp(x, y, btn); }
   key(k) { this.cur.key(k); }
   wheel(dy) { if (this.cur.wheel) this.cur.wheel(dy); }
-  cancelDrag() { this.audioBar.pointerUp(); if (this.cur.drag) this.cur.drag = null; }
+  cancelDrag() { this.audioBar.pointerUp(); if (this.cur.drag) this.cur.drag = null; if (this.cur.viewIn) this.cur.viewIn.cancel(); }
 }

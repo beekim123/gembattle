@@ -2,7 +2,7 @@
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildExport, collectModules, artScripts, rewriteIndex, ART_ROOT } from './export-web.js';
+import { buildExport, collectModules, artScripts, rewriteIndex, isPack, ART_ROOT } from './export-web.js';
 import { readZip, zipEntries, crc32 } from './zip.js';
 
 // 方案 4.2 清单：31 个工坊脚本（内核 6 + 地貌 1 + 主角与行商 2 + 怪物 8 + 摆件与建筑 14）
@@ -17,6 +17,9 @@ const PLAN_4_2 = [
   'scenes/scene_campfire.js', 'scenes/scene_rock_hollow.js', 'scenes/scene_crates_sign.js', 'buildings/building_camp_tent.js', 'buildings/building_stone_gate.js',
 ];
 
+// 已接入的界面与特效包（第 1 段：地面与特效；第 2 段再接另外 4 个）
+const PACKS_NOW = ['art-packs/pack_ground_vfx.js'];
+
 export default function (t) {
   t.test('zip 读写：往返一致，坏文件会被发现', () => {
     const files = [{ name: 'a.txt', data: Buffer.from('你好 hello '.repeat(50)) }, { name: 'dir/b.bin', data: Buffer.from([1, 2, 3, 4]) }, { name: 'empty.txt', data: Buffer.alloc(0) }];
@@ -30,12 +33,19 @@ export default function (t) {
     t.assert.deepEqual(zipEntries(files), zipEntries(files), '同样的输入出同样的包');
   });
 
-  t.test('入口页点名的工坊脚本，正好是方案 4.2 的 31 个', () => {
+  t.test('入口页点名的资产脚本，正好是方案 4.2 的 31 个；美术包是已接入的那几个', () => {
     const html = readFileSync(new URL('../app/index.html', import.meta.url), 'utf8');
-    const got = artScripts(html);
+    const all = artScripts(html), got = all.filter(a => !isPack(a)), packs = all.filter(isPack);
     t.assert.equal(got.length, 31);
     t.assert.deepEqual([...got].sort(), [...PLAN_4_2].sort());
-    t.assert.equal(new Set(got).size, 31, '没有重复');
+    t.assert.equal(new Set(all).size, all.length, '没有重复');
+    t.assert.deepEqual([...packs].sort(), [...PACKS_NOW].sort());
+  });
+
+  t.test('实装库的清单和入口页对得上：31 个资产路径一个不少，接入的包文件都在 art-packs/ 里', () => {
+    const man = JSON.parse(readFileSync(join(ART_ROOT, 'manifest.json'), 'utf8'));
+    const listed = Object.values(man.groups).flat().map(x => x.path);
+    for (const rel of [...PLAN_4_2, ...PACKS_NOW]) t.assert.ok(listed.includes(rel), rel + ' 要登记在 manifest.json');
   });
 
   t.test('入口页改写：路径变成相对根目录，file:// 打开会提示', () => {
@@ -48,22 +58,22 @@ export default function (t) {
 
   t.test('运行代码从 main.js 顺着 import 找全：含假玩家，不含单测', () => {
     const mods = collectModules('app/main.js');
-    for (const need of ['app/main.js', 'app/flow.js', 'app/autopilot.js', 'app/record.js', 'modules/audio/index.js', 'modules/audio/bgm.js', 'modules/render/workshop-adapter.js', 'modules/render/battle-pose.js', 'modules/ui/audio-bar.js', 'modules/run-rules/record.js']) t.assert.ok(mods.includes(need), need);
+    for (const need of ['app/main.js', 'app/flow.js', 'app/autopilot.js', 'app/record.js', 'modules/audio/index.js', 'modules/audio/bgm.js', 'modules/render/workshop-adapter.js', 'modules/render/world-stage.js', 'modules/render/camera.js', 'modules/render/battle-pose.js', 'modules/ui/audio-bar.js', 'modules/run-rules/record.js']) t.assert.ok(mods.includes(need), need);
     t.assert.ok(!mods.some(m => /\.test\.js$|\/tests\//.test(m)), '不带单测');
     t.assert.ok(!mods.some(m => m.startsWith('tools/')));
   });
 
-  t.test('导出一遍：index.html 在 zip 根目录，31 个工坊脚本逐字节照搬，没有单测，没有越界路径', () => {
+  t.test('导出一遍：index.html 在 zip 根目录，资产脚本和美术包逐字节照搬实装库，没有单测，没有越界路径', () => {
     const dir = mkdtempSync(join(tmpdir(), 'code00-export-'));
     try {
       const { zip, entries } = buildExport({ outDir: dir, quiet: true });
       const files = readZip(zip), names = files.map(f => f.name);
       t.assert.equal(names[0], 'index.html');
-      t.assert.equal(names.filter(n => n.startsWith('art/')).length, 31);
-      for (const rel of PLAN_4_2) {
+      t.assert.equal(names.filter(n => n.startsWith('art/')).length, 31 + PACKS_NOW.length);
+      for (const rel of [...PLAN_4_2, ...PACKS_NOW]) {
         const f = files.find(x => x.name === 'art/' + rel);
         t.assert.ok(f, rel);
-        t.assert.ok(f.data.equals(readFileSync(join(ART_ROOT, rel))), rel + ' 要和工坊里的一个字都不差');
+        t.assert.ok(f.data.equals(readFileSync(join(ART_ROOT, rel))), rel + ' 要和实装库里的一个字都不差');
       }
       t.assert.ok(names.every(n => !n.includes('..') && !n.startsWith('/')), '路径里没有 .. 或绝对路径');
       t.assert.ok(!names.some(n => /\.test\.js$|\/tests\//.test(n)));

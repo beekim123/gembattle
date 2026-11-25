@@ -6,7 +6,7 @@ import {
 } from '../../modules/run-rules/index.js';
 import { SEALS, LINES, ARCANA, CARVES, JUNK, LOOT, EVENTS, BIOMES, HERO_LOOK, SHOP_PRICE } from '../../modules/content/index.js';
 import { COLOR_NAMES } from '../../modules/shared/index.js';
-import { drawActor, createEnv } from '../../modules/render/index.js';
+import { drawActor, createEnv, setView, flushWorld, camera, ViewInput } from '../../modules/render/index.js';
 import { audio } from '../../modules/audio/index.js';
 import { recorder, copyText } from '../record.js';
 import {
@@ -16,13 +16,22 @@ import {
 
 const LINE_HEX = { shield: '#8ff0ff', white: '#ffffff', rainbow: '#ffb0f0', hold: '#ffd24a', chain: '#9aff9a' };
 
+// 能转镜头的画面：标题、营火、行商、青苔界门、林中偶遇（别的是盖满全屏的选牌和结果，转了也看不见）
+const ROTATABLE = new Set(['title', 'camp', 'shop', 'gate', 'event']);
+
 export class PanelScene {
-  constructor() { this.t = 0; this.hits = []; this.mx = 0; this.my = 0; this.screen = null; this.env = null; this.hooks = null; this.trip = null; this.copiedAt = -1; }
+  constructor() { this.t = 0; this.hits = []; this.mx = 0; this.my = 0; this.screen = null; this.env = null; this.hooks = null; this.trip = null; this.copiedAt = -1; this.viewIn = new ViewInput(); }
 
   // ---------- 入口 ----------
-  setEnv(biome, seed, opts) { this.env = createEnv(biome, seed, opts); audio.scene('explore', { biome }); }
+  // view：镜头设置。origin 是世界原点落在布局哪里，也是转镜头的中心，各画面放在主角或营火脚下
+  setEnv(biome, seed, opts, view = {}) {
+    setView({ mode: 'free', origin: [480, 300], ...view });
+    this.viewIn.cancel();
+    this.env = createEnv(biome, seed, opts); audio.scene('explore', { biome });
+  }
+  rotatable() { return !!this.screen && ROTATABLE.has(this.screen.kind); }
   title(hooks) {
-    this.hooks = hooks; this.trip = null; this.setEnv('forest', 3);
+    this.hooks = hooks; this.trip = null; this.setEnv('forest', 3, undefined, { origin: [480, 318], autoSpin: 0.12 });      // 标题页慢速缓转
     this.screen = { kind: 'title' };
   }
   loot(trip, kind, hooks) {
@@ -34,7 +43,7 @@ export class PanelScene {
     else this.screen = { kind: 'result', title: `战利品：${LOOT[r.kind].name}`, lines: [r.text] };
   }
   camp(trip, hooks) {
-    this.trip = trip; this.hooks = hooks; this.setEnv('camp', trip.seed + trip.step);
+    this.trip = trip; this.hooks = hooks; this.setEnv('camp', trip.seed + trip.step, undefined, { origin: [480, 292] });
     this.screen = { kind: 'camp', opts: campOptions(trip), done: null };
   }
   shop(trip, hooks) {
@@ -59,16 +68,18 @@ export class PanelScene {
   update(dt) { this.t += dt; if (this.env) this.env.update(dt); }
 
   // ---------- 输入 ----------
-  pointerMove(x, y) { this.mx = x; this.my = y; }
-  pointerDown(x, y) {
+  pointerMove(x, y) { this.mx = x; this.my = y; if (this.viewIn.active) this.viewIn.move(x); }
+  pointerDown(x, y, btn = 0) {
     this.pointerMove(x, y);
     for (let i = this.hits.length - 1; i >= 0; i--) {
       const h = this.hits[i];
       if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) { if (h.enabled !== false && h.fn) { audio.sfx('click'); h.fn(); } return; }
     }
+    if (this.rotatable()) this.viewIn.down(x, btn);                  // 没点到按钮：左键或右键拖动转镜头
   }
-  pointerUp() {}
+  pointerUp() { this.viewIn.up(); }
   key(k) {
+    if (this.rotatable() && this.viewIn.key(k)) return;               // Q / E 转，R 回正
     if (this.screen?.kind === 'title' && (k === ' ' || k === 'Enter')) this.hooks.onStart();
   }
 
@@ -121,19 +132,34 @@ export class PanelScene {
   }
 
   // ---------- 绘制 ----------
+  // 先把世界排好队一次画完（地面、摆件、角色），再在上面画 2D 界面
   draw(ctx) {
     this.hits = [];
     if (this.env) this.env.draw(ctx);
     const s = this.screen; if (!s) return;
+    this.queueActors(ctx, s);
+    flushWorld(ctx);
     this['draw_' + s.kind](ctx, s);
     if (s.kind !== 'title' && s.kind !== 'summary') this.status(ctx);
+    if (this.rotatable()) text(ctx, '拖动画面或按 Q / E 转视角，R 回正', 10, 530, { size: 11, color: 'rgba(255,255,255,0.55)', outline: 'rgba(0,0,0,0.5)' });
+  }
+  // 每个画面里站在世界里的角色（营火、行商摊和界门这些摆件由生态环境负责）
+  queueActors(ctx, s) {
+    const t = this.t;
+    if (s.kind === 'title') drawActor(ctx, HERO_LOOK, 480, 318, { t, scale: 1.5 });
+    else if (s.kind === 'camp') drawActor(ctx, HERO_LOOK, 395, 318, { t, scale: 1 });
+    else if (s.kind === 'shop') { drawActor(ctx, 'npc_gear_smith', 285, 282, { t, scale: 1 }); drawActor(ctx, HERO_LOOK, 650, 304, { t, scale: 1 }); }
+    else if (s.kind === 'event') drawActor(ctx, HERO_LOOK, 480, 300, { t, scale: 1 });
+    else if (s.kind === 'gate') drawActor(ctx, HERO_LOOK, 480, 404, { t, scale: 1, yaw: Math.PI });
   }
 
   draw_title(ctx) {
-    ctx.fillStyle = 'rgba(6,14,8,0.45)'; ctx.fillRect(0, 0, 960, 540);
+    // 只压暗上下两条（标题字和按钮所在），中间留给转着的主角
+    const g = ctx.createLinearGradient(0, 0, 0, 540);
+    g.addColorStop(0, 'rgba(6,14,8,0.62)'); g.addColorStop(0.36, 'rgba(6,14,8,0.12)'); g.addColorStop(0.62, 'rgba(6,14,8,0.12)'); g.addColorStop(1, 'rgba(6,14,8,0.6)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 960, 540);
     text(ctx, '落果密林', 480, 110, { size: 60, align: 'center', color: '#ffe9a0', weight: 800 });
     text(ctx, 'code00 · 一局清晰的主线（第 1 步 到 第 8 步）', 480, 160, { size: 16, align: 'center', color: '#d8e8c8' });
-    drawActor(ctx, HERO_LOOK, 480, 318, { t: this.t, scale: 1.5 });
     this.button(ctx, '深入林地', 390, 350, 180, 48, () => this.hooks.onStart(), { accent: true, size: 20 });
     this.button(ctx, '核心试玩（4 场教学仗）', 390, 410, 180, 32, () => this.hooks.onTutorial(), { size: 13 });
     text(ctx, '拖牌进链尾，空格施法；链里的牌不能再拖，放错了点「退回一张」或「清空」。', 480, 470, { size: 13, align: 'center', color: '#c8d8c0' });
@@ -247,7 +273,6 @@ export class PanelScene {
   // ---------- 营火整备 ----------
   draw_camp(ctx, s) {
     ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fillRect(0, 0, 960, 540);
-    drawActor(ctx, HERO_LOOK, 395, 318, { t: this.t, scale: 1 });
     this.header(ctx, '营火整备', s.done ? s.done : '三选一，选了就整备完毕');
     if (s.done) { this.button(ctx, '继续赶路', 405, 400, 150, 38, () => this.hooks.onDone(), { accent: true }); return; }
     const w = 220, h = 118, gap = 24, x0 = 480 - (3 * w + 2 * gap) / 2, y = 392;
@@ -272,8 +297,6 @@ export class PanelScene {
   // ---------- 行商营帐 ----------
   draw_shop(ctx, s) {
     const trip = this.trip;
-    drawActor(ctx, 'npc_gear_smith', 285, 282, { t: this.t, scale: 1 });
-    drawActor(ctx, HERO_LOOK, 650, 304, { t: this.t, scale: 1 });
     this.header(ctx, '行商营帐', s.msg || `花本趟打怪掉落的金币。你有 ${trip.gold} 金币`);
     const w = 140, h = 156, gap = 8, x0 = 480 - (6 * w + 5 * gap) / 2, y = 340;
     trip.shop.forEach((it, i) => {
@@ -296,7 +319,6 @@ export class PanelScene {
   // ---------- 林中偶遇 ----------
   draw_event(ctx, s) {
     const ev = EVENTS[s.id], trip = this.trip;
-    drawActor(ctx, HERO_LOOK, 480, 300, { t: this.t, scale: 1 });
     if (s.stage === 'ask') {
       this.header(ctx, ev.name, ev.text);
       const w = 300, h = 110, gap = 30, x0 = 480 - (2 * w + gap) / 2, y = 400;
@@ -323,7 +345,6 @@ export class PanelScene {
   // ---------- 青苔界门 ----------
   draw_gate(ctx) {
     const trip = this.trip;
-    drawActor(ctx, HERO_LOOK, 480, 404, { t: this.t, scale: 1, yaw: Math.PI });
     this.header(ctx, '青苔界门', '第 4 步打完了。门后面是密林腹地：收益更高，也更险');
     const w = 330, h = 150, y = 330;
     this.choice(ctx, 90, y, w, h, { title: '见好就收 · 折返结算', text: '带着现在攒下的金币和战利品，安全离开林地，看本趟战果。', color: '#9ad8a0' }, () => this.hooks.onChoose('retreat'));

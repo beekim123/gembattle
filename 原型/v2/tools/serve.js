@@ -1,4 +1,4 @@
-// 本地静态小服务：托管 原型/v2/，并把 /art/ 只读映射到 ../../美术/像素堆叠生物工坊/。
+// 本地静态小服务：托管 原型/v2/，并把 /art/ 只读映射到 ../../美术/游戏实装美术库/（31 个资产加 art-packs/ 里的 5 个界面与特效包）。
 // 命令行：node tools/serve.js [--port 8200] [--open]
 // 程序调用：import { startServer } from './serve.js'
 import { createServer } from 'node:http';
@@ -8,14 +8,14 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const ART_ROOT = resolve(ROOT, '../../美术/像素堆叠生物工坊');
+const ART_ROOT = resolve(ROOT, '../../美术/游戏实装美术库');
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.md': 'text/plain; charset=utf-8',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.wav': 'audio/wav', '.mp3': 'audio/mpeg',
 };
 
-// 把请求路径变成磁盘路径；跳出根目录的一律拒绝。/art/ 只读映射到工坊目录。
+// 把请求路径变成磁盘路径；跳出根目录的一律拒绝。/art/ 只读映射到实装库目录。
 export function mapPath(urlPath) {
   let p;
   try { p = decodeURIComponent(urlPath.split('?')[0].split('#')[0]); } catch { return null; }

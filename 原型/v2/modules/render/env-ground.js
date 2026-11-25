@@ -1,6 +1,7 @@
-// 生态场景的静态地面：一张 960×540 的底图（烘焙一次，以后每帧只贴图）。
+// 色块模式（?art=blocks）的静态地面：一张 960×540 的底图（烘焙一次，以后每帧只贴图）。
 // 构图铁律：不画圆台；摆件只在左右两翼和上方远景，中央留给怪、主角和手牌；整层压暗 15%。
-// 第 3 步把摆件换成工坊的 3D 像素模型时，只需要不再画这里的 wings。
+// 接了像素美术的世界舞台（world-stage.js）时不再走这里：地面是 UI-04 的地砖，摆件是 3D 模型。
+// bakeGround 的 props 开关就是为此留的：props = false 时不画任何假树、假帐篷、假石门、假树洞、假水洼，只剩地面本身。
 export const W = 960, H = 540;
 
 export function rng(seed) {
@@ -107,10 +108,10 @@ function pool(c, x, y, rx, ry, color, r, pads = 3) {
 
 // ---------- 各生态 ----------
 const PAINTERS = {
-  forest(c, b, r) {
-    base(c, b); patches(c, b, r); grass(c, r); leaves(c, b, r); fruits(c, b, r); forestWings(c, r);
+  forest(c, b, r, P) {
+    base(c, b); patches(c, b, r); grass(c, r); leaves(c, b, r); fruits(c, b, r); if (P) forestWings(c, r);
   },
-  meadow(c, b, r) {
+  meadow(c, b, r, P) {
     base(c, b); patches(c, b, r); grass(c, r);
     for (let i = 0; i < 150; i++) {
       const x = r() * W, y = 30 + r() * (H - 30), col = b.leaf[(r() * 3) | 0];
@@ -118,21 +119,21 @@ const PAINTERS = {
       for (let k = 0; k < 5; k++) { const a = k * 1.2566; c.beginPath(); c.arc(x + Math.cos(a) * 2.6, y + Math.sin(a) * 2.6, 1.7, 0, 6.3); c.fill(); }
       c.beginPath(); c.arc(x, y, 1.4, 0, 6.3); c.fillStyle = '#e8a030'; c.fill();
     }
-    meadowWings(c, r);
+    if (P) meadowWings(c, r);
   },
-  swamp(c, b, r) {
+  swamp(c, b, r, P) {
     base(c, b); patches(c, b, r, 170);
     // 泥地里的水洼：中央留净空，水洼挤在两翼和上沿
     const pools = [[120, 150, 90, 28], [150, 330, 70, 22], [840, 170, 96, 30], [810, 350, 72, 24], [480, 78, 120, 20], [300, 470, 80, 14], [680, 480, 90, 14]];
-    for (const [x, y, rx, ry] of pools) pool(c, x, y, rx, ry, b.water, r);
+    if (P) for (const [x, y, rx, ry] of pools) pool(c, x, y, rx, ry, b.water, r);
     grass(c, r, 260); leaves(c, b, r, 50, 0.4);
     for (let i = 0; i < 40; i++) {                       // 芦苇
       const x = (r() < 0.5 ? r() * 200 : 760 + r() * 200), y = 90 + r() * 330;
       c.strokeStyle = '#4e7a4a'; c.lineWidth = 2; c.beginPath(); c.moveTo(x, y); c.lineTo(x + (r() - 0.5) * 4, y - 16 - r() * 14); c.stroke();
     }
-    stump(c, 46, 260, 30, 96, r); stump(c, 918, 244, 26, 84, r);
+    if (P) { stump(c, 46, 260, 30, 96, r); stump(c, 918, 244, 26, 84, r); }
   },
-  ruins(c, b, r) {
+  ruins(c, b, r, P) {
     base(c, b);
     // 青灰古石板拼地：一格一格，颜色略有深浅，缝里长青苔
     const tw = 64, th = 38;
@@ -151,6 +152,7 @@ const PAINTERS = {
       c.beginPath(); c.ellipse(x, y, 3 + r() * 9, 1.5 + r() * 3, 0, 0, 6.3); c.fill();
     }
     c.globalAlpha = 1;
+    if (!P) return;
     for (const [x, y, rx, ry] of [[150, 330, 50, 16], [820, 150, 44, 14], [730, 400, 38, 12]]) pool(c, x, y, rx, ry, b.water, r, 0);
     // 上沿居中：破损苔藓遗迹拱门（只画远景，不挡战区）
     c.fillStyle = '#394240'; c.fillRect(372, 30, 34, 84); c.fillRect(554, 44, 34, 70);
@@ -163,7 +165,7 @@ const PAINTERS = {
     for (let k = 0; k < 6; k++) { c.beginPath(); c.moveTo(908, 108 + k * 24); c.lineTo(924, 108 + k * 24 + 4); c.stroke(); }
     c.fillStyle = b.moss; c.globalAlpha = 0.7; c.fillRect(888, 238, 56, 24); c.globalAlpha = 1;
   },
-  canopy(c, b, r) {
+  canopy(c, b, r, P) {
     // 树冠下面是翻涌的叶海
     c.fillStyle = '#16331e'; c.fillRect(0, 0, W, H);
     for (let i = 0; i < 160; i++) {
@@ -184,6 +186,7 @@ const PAINTERS = {
     for (let i = 0; i < 26; i++) {                       // 苔斑
       c.fillStyle = 'rgba(80,130,70,0.35)'; c.beginPath(); c.ellipse(120 + r() * 720, 80 + r() * 420, 8 + r() * 22, 3 + r() * 6, 0, 0, 6.3); c.fill();
     }
+    if (!P) return;
     // 上缘横铺一根苔皮粗枝，枝上有水洼
     c.fillStyle = '#4a321f'; c.beginPath(); c.roundRect(-20, 28, 1000, 40, 18); c.fill();
     c.fillStyle = '#5e4129'; c.beginPath(); c.roundRect(-20, 28, 1000, 12, 8); c.fill();
@@ -196,11 +199,12 @@ const PAINTERS = {
       for (let k = 0; k < 4; k++) { c.beginPath(); c.arc(sx - 18 + k * 12, 150 + (k % 2) * 8, 5, 0, 6.3); c.fillStyle = '#c8402e'; c.fill(); }
     }
   },
-  camp(c, b, r) {
+  camp(c, b, r, P) {
     base(c, b); patches(c, b, r); grass(c, r); leaves(c, b, r, 70, 0.4);
     // 暖橘地照：以营火为中心
     const g = c.createRadialGradient(480, 250, 10, 480, 250, 300); g.addColorStop(0, 'rgba(255,150,60,0.30)'); g.addColorStop(1, 'rgba(255,150,60,0)');
     c.fillStyle = g; c.fillRect(0, 0, W, H);
+    if (!P) return;
     // 围着火的几块石头和倒木座
     for (let k = 0; k < 9; k++) {
       const a = k / 9 * Math.PI * 2, x = 480 + Math.cos(a) * 74, y = 262 + Math.sin(a) * 30;
@@ -212,13 +216,14 @@ const PAINTERS = {
     // 树洞石碑
     c.fillStyle = '#51564f'; c.beginPath(); c.roundRect(814, 270, 70, 70, 14); c.fill(); c.fillStyle = '#1a1c18'; c.beginPath(); c.ellipse(849, 312, 16, 22, 0, 0, 6.3); c.fill();
   },
-  trade(c, b, r) {
+  trade(c, b, r, P) {
     base(c, b); patches(c, b, r, 100); grass(c, r, 300);
     // 压实的林间土路：一条横穿的宽带，车辙两道
     c.fillStyle = '#8a7650'; c.beginPath(); c.moveTo(0, 300); c.bezierCurveTo(300, 270, 640, 330, 960, 296); c.lineTo(960, 430); c.bezierCurveTo(640, 462, 300, 410, 0, 440); c.closePath(); c.fill();
     c.strokeStyle = 'rgba(60,44,24,0.45)'; c.lineWidth = 3;
     for (const dy of [340, 388]) { c.beginPath(); c.moveTo(0, dy); c.bezierCurveTo(300, dy - 30, 640, dy + 28, 960, dy - 6); c.stroke(); }
     for (let i = 0; i < 150; i++) { c.fillStyle = r() < 0.5 ? 'rgba(60,44,24,0.25)' : 'rgba(210,190,140,0.2)'; c.fillRect(r() * W, 290 + r() * 150, 3 + r() * 5, 2); }
+    if (!P) return;
     tree(c, 50, 30, 100, 250, 80, r); tree(c, 912, 28, 90, 240, 76, r);
     // 行商的野外帐篷（左后）和岔路木牌、木箱（右）
     c.fillStyle = '#8a3a2c'; c.beginPath(); c.moveTo(150, 250); c.lineTo(240, 140); c.lineTo(330, 250); c.closePath(); c.fill();
@@ -228,11 +233,12 @@ const PAINTERS = {
     c.fillStyle = '#6a4a2a'; c.fillRect(740, 240, 56, 40); c.fillRect(780, 262, 44, 32); c.strokeStyle = '#3a2816'; c.lineWidth = 2; c.strokeRect(740, 240, 56, 40); c.strokeRect(780, 262, 44, 32);
     c.fillStyle = '#5a3f26'; c.fillRect(870, 190, 6, 100); c.fillStyle = '#7a5a34'; c.fillRect(846, 196, 52, 16); c.fillRect(850, 222, 48, 14);
   },
-  gate(c, b, r) {
+  gate(c, b, r, P) {
     base(c, b); patches(c, b, r, 120); grass(c, r, 300); leaves(c, b, r, 60, 0.35);
-    // 青石林道岔口：一条直直的石板路通向石门
+    // 青石林道岔口：一条直直的石板路通向石门（路是地面，门才是摆件）
     c.fillStyle = '#566660'; c.beginPath(); c.moveTo(380, 540); c.lineTo(580, 540); c.lineTo(540, 200); c.lineTo(420, 200); c.closePath(); c.fill();
     for (let k = 0; k < 12; k++) { const y = 210 + k * 28; c.strokeStyle = 'rgba(0,0,0,0.22)'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(420 - (y - 200) * 0.1, y); c.lineTo(540 + (y - 200) * 0.1, y); c.stroke(); }
+    if (!P) return;
     // 青苔石门横立中景
     c.fillStyle = '#4a5855'; c.fillRect(350, 70, 56, 150); c.fillRect(554, 70, 56, 150);
     c.fillStyle = '#566663'; c.beginPath(); c.moveTo(330, 80); c.lineTo(630, 80); c.lineTo(610, 52); c.lineTo(350, 52); c.closePath(); c.fill();
@@ -244,12 +250,12 @@ const PAINTERS = {
   },
 };
 
-export function bakeGround(biome, seed) {
+export function bakeGround(biome, seed, { props = true } = {}) {
   const cv = document.createElement('canvas');
   cv.width = W * 2; cv.height = H * 2;
   const c = cv.getContext('2d'); c.scale(2, 2);
   const r = rng(seed);
-  (PAINTERS[biome.id] || PAINTERS.forest)(c, biome, r);
+  (PAINTERS[biome.id] || PAINTERS.forest)(c, biome, r, props);
   finish(c, biome);
   return cv;
 }

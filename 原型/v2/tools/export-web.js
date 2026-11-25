@@ -1,15 +1,15 @@
 // 一键导出网页试玩包：node tools/export-web.js [--out dist]
-// 把运行游戏要用的代码（从 app/main.js 顺着 import 找全）和 app/index.html 里点名的 31 个工坊脚本，
-// 抽进 dist/，再打成 index.html 在根目录的纯静态 zip（dist/code00-forest-web.zip）。
+// 把运行游戏要用的代码（从 app/main.js 顺着 import 找全）和 app/index.html 里点名的 31 个实装库资产脚本、
+// 以及 art-packs/ 里已接入的界面与特效包，抽进 dist/，再打成 index.html 在根目录的纯静态 zip（dist/code00-forest-web.zip）。
 // 直接上传 itch.io（HTML5，选 Restricted 密码访问），朋友点链接就能玩，不用装任何东西，也不用本地服务。
-// 工坊目录（美术/）只读：这里只读它的文件，绝不写回去。
+// 实装库目录（美术/游戏实装美术库/）只读：这里只读它的文件，绝不写回去。
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, statSync } from 'node:fs';
 import { dirname, join, resolve, relative, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { zipEntries } from './zip.js';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
-export const ART_ROOT = resolve(ROOT, '../../美术/像素堆叠生物工坊');
+export const ART_ROOT = resolve(ROOT, '../../美术/游戏实装美术库');
 export const ZIP_NAME = 'code00-forest-web.zip';
 
 // 顺着 import / export ... from / import() 找全要用的 js（相对路径），返回相对 ROOT 的文件列表
@@ -28,8 +28,10 @@ export function collectModules(entry = 'app/main.js', root = ROOT) {
   return [...seen].sort();
 }
 
-// index.html 里点名的工坊脚本（../art/ 开头）
+// index.html 里点名的美术脚本（../art/ 开头）：资产脚本（内核、地貌、怪、摆件）加 art-packs/ 下的界面与特效包
 export function artScripts(html) { return [...html.matchAll(/<script src="\.\.\/art\/([^"]+)"/g)].map(m => m[1]); }
+export const isPack = rel => rel.startsWith('art-packs/');
+export const ASSET_COUNT = 31;
 
 // 导出用的入口页：路径改成相对根目录；file:// 打开时给一句提示（浏览器不让 file:// 用模块脚本）
 export function rewriteIndex(html) {
@@ -47,12 +49,13 @@ export function rewriteIndex(html) {
 export function buildExport({ outDir = join(ROOT, 'dist'), artRoot = ART_ROOT, root = ROOT, quiet = false } = {}) {
   const html = readFileSync(join(root, 'app/index.html'), 'utf8');
   const arts = artScripts(html);
-  if (arts.length !== 31) throw new Error(`index.html 里应当点名 31 个工坊脚本，实际 ${arts.length} 个`);
+  const assets = arts.filter(a => !isPack(a)), packs = arts.filter(isPack);
+  if (assets.length !== ASSET_COUNT) throw new Error(`index.html 里应当点名 ${ASSET_COUNT} 个资产脚本，实际 ${assets.length} 个`);
   const entries = [{ name: 'index.html', data: Buffer.from(rewriteIndex(html), 'utf8') }];
   for (const rel of collectModules('app/main.js', root)) entries.push({ name: rel, data: readFileSync(join(root, rel)) });
   for (const rel of arts) {
     const file = join(artRoot, rel);
-    if (!existsSync(file)) throw new Error(`工坊里没有这个脚本：${rel}`);
+    if (!existsSync(file)) throw new Error(`实装库里没有这个脚本：${rel}${isPack(rel) ? '（先把外派包同步进 art-packs/）' : ''}`);
     entries.push({ name: 'art/' + rel, data: readFileSync(file) });
   }
   entries.sort((a, b) => (a.name === 'index.html' ? -1 : b.name === 'index.html' ? 1 : a.name.localeCompare(b.name)));
@@ -64,7 +67,7 @@ export function buildExport({ outDir = join(ROOT, 'dist'), artRoot = ART_ROOT, r
   writeFileSync(zipPath, zip);
   const total = entries.reduce((a, e) => a + e.data.length, 0);
   if (!quiet) {
-    console.log(`已导出 ${entries.length} 个文件（运行代码 ${entries.length - arts.length - 1} 个，工坊脚本 ${arts.length} 个，入口页 1 个），共 ${(total / 1024).toFixed(0)} KB`);
+    console.log(`已导出 ${entries.length} 个文件（运行代码 ${entries.length - arts.length - 1} 个，资产脚本 ${assets.length} 个，美术包 ${packs.length} 个，入口页 1 个），共 ${(total / 1024).toFixed(0)} KB`);
     console.log(`网页试玩包：${relative(process.cwd(), zipPath) || zipPath}（${(zip.length / 1024).toFixed(0)} KB）`);
     console.log('上传 itch.io：新建项目 → Kind of project 选 HTML → 上传这个 zip，勾选 This file will be played in the browser → Visibility 选 Restricted 并设密码。');
   }
