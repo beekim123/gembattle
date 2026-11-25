@@ -104,3 +104,13 @@ test('核心试玩 10 只：只有 29 张宝石牌、不带加成队友，心接
   });
   assert.throws(() => createCoreTrialPacket({ index: 10 }));
 });
+
+test('核心试玩：宝石等级接上一只打完的（一趟里一直带着），不给就是三色 1 级', () => {
+  const fresh = createCoreTrialPacket({ index: 0, seed: 'lv' });
+  for (const c of ['red', 'green', 'blue']) assert.deepEqual(fresh.player.gemLevels[c], { level: 1, exp: 0 });
+  const carried = { red: { level: 3, exp: 7 }, green: { level: 1, exp: 4 }, blue: { level: 2, exp: 0 } };
+  const next = createCoreTrialPacket({ index: 3, gemLevels: carried, seed: 'lv' });
+  assert.deepEqual(next.player.gemLevels, carried);
+  assert.notEqual(next.player.gemLevels.red, carried.red, '要复制一份，不能跟上一只共用');
+  assert.equal(validateBattleStartPacket(next).ok, true);
+});

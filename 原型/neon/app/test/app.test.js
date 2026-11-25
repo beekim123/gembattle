@@ -294,6 +294,15 @@ test('核心试玩：只有宝石牌，打赢回来到下一只、心接着用�
   assert.equal(sm.getCurrentName(), 'core');
   assert.equal(session.core.index, 1);
   assert.equal(session.core.hearts, battle.getResult().remainingHearts);
+  // 宝石等级接着带进下一只（设计稿 5.2「一趟里有效」）
+  assert.deepEqual(session.core.gemLevels, battle.getResult().gemLevels);
+  tap(sm.getCurrentScene().getHitBoxes().find((b) => b.id === 'go'));
+  assert.equal(sm.getCurrentName(), 'battle');
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(sm.getCurrentScene().getBattle().getSnapshot().player.gemLevels).map(([c, g]) => [c, { level: g.level, exp: g.exp }])),
+    battle.getResult().gemLevels,
+  );
+  sm.switchTo('core');
 
   // 输了：从头再来，心回满，记下最好打过几只
   sm.switchTo('core', { battleResult: { outcome: 'lose', remainingHearts: 0, stats: { turns: 6, heartsLost: 3 } } });
@@ -307,4 +316,5 @@ test('核心试玩：只有宝石牌，打赢回来到下一只、心接着用�
   assert.equal(session.core.hearts, 3);
   assert.equal(session.core.attempt, 2);
   assert.equal(session.core.best, 1);
+  assert.equal(session.core.gemLevels, null, '从头来，宝石回 1 级');
 });

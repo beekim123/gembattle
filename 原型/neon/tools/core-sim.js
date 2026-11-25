@@ -2,6 +2,7 @@
 // 只有宝石牌，照 CORE_TRIAL 连打 10 只怪，心不回。量两个数给用户当参考（好不好玩还是用户打了算）：
 //   一、乱打和想清楚了打差多少（能不能打完 10 只）；
 //   二、是不是永远排最长链就对（把所有排法都试一遍，比排最长链好多少）。
+// 心和宝石等级都照真的试玩，一只接一只带下去。
 // 用法：node tools/core-sim.js [--runs 200]
 
 import { createBattle } from '../modules/battle-rules/index.js';
@@ -64,9 +65,10 @@ const BOTS = [
 function runTrial(bot, i) {
   seed = i * 7919 + 13;
   let hearts = CORE_TRIAL.hearts;
+  let gemLevels = null;
   const perFight = [];
   for (let idx = 0; idx < CORE_TRIAL.fights.length; idx++) {
-    const packet = createCoreTrialPacket({ index: idx, hearts, seed: `core-sim-${bot.id}-${i}` });
+    const packet = createCoreTrialPacket({ index: idx, hearts, gemLevels, seed: `core-sim-${bot.id}-${i}` });
     if (SCALES?.[idx]) {
       const k = SCALES[idx] / CORE_TRIAL.fights[idx].hpScale;
       for (const m of packet.monsters) for (const bar of m.bars) bar.maxHp = Math.round(bar.maxHp * k);
@@ -78,6 +80,7 @@ function runTrial(bot, i) {
     if (!r) return { reached: idx, perFight };
     perFight.push({ turns: r.stats.turns, heartsLost: r.stats.heartsLost });
     hearts = r.remainingHearts;
+    gemLevels = r.gemLevels;
     if (r.outcome !== 'win') return { reached: idx, perFight };
   }
   return { reached: CORE_TRIAL.fights.length, perFight };

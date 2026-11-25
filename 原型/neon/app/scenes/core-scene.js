@@ -1,5 +1,6 @@
 // 核心试玩（设计稿 10.4，用户 2026-11-24 定的；做法见 设计/做原型的方法.md）：
 // 只有宝石牌，连着打 10 只怪，心不回，掉完就输，输了从第 1 只重来。
+// 宝石等级 10 只连着带（设计稿 5.2「一趟里有效」，用户原型就是这样），从头来回 1 级。
 // 这一页只管：第几只、还剩几颗心、下一只是什么、开打；打一仗交给战斗场景，打完回到这里。
 // 外圈（大厅、工会、走一趟、试打台）冻住了，入口关在 app/main.js。
 
@@ -17,6 +18,7 @@ function freshTrial(prev = null) {
     attempt: (prev?.attempt ?? 0) + 1,
     index: 0,
     hearts: CORE_TRIAL.hearts,
+    gemLevels: null, // 上一只打完的宝石等级，下一只接着用；null 是三色 1 级
     fights: [], // 这一趟每只打了几回合、掉几颗心
     status: 'ready', // ready / lost / cleared
     best: prev?.best ?? 0,
@@ -58,7 +60,7 @@ export function createCoreScene(context) {
   function startFight() {
     const t = trial();
     const last = t.index === N - 1;
-    const packet = createCoreTrialPacket({ index: t.index, hearts: t.hearts, seed: `core-${t.seedBase}-${t.attempt}` });
+    const packet = createCoreTrialPacket({ index: t.index, hearts: t.hearts, gemLevels: t.gemLevels, seed: `core-${t.seedBase}-${t.attempt}` });
     context.switchTo('battle', {
       runPacket: packet,
       rulesConfig: CORE_TRIAL.rulesConfig,
@@ -77,6 +79,7 @@ export function createCoreScene(context) {
     const t = trial();
     t.fights[t.index] = { turns: res.stats?.turns ?? 0, heartsLost: res.stats?.heartsLost ?? 0, win: res.outcome === 'win' };
     t.hearts = res.remainingHearts;
+    if (res.gemLevels) t.gemLevels = JSON.parse(JSON.stringify(res.gemLevels));
     if (res.outcome === 'win') {
       t.index++;
       if (t.index >= N) t.status = 'cleared';
@@ -134,6 +137,8 @@ export function createCoreScene(context) {
 
       hearts(r, 60, 140, t.hearts, CORE_TRIAL.hearts, 22);
       txt(r, `第 ${t.attempt} 趟${t.best ? ` · 最好打过 ${t.best} 只` : ''}`, 160, 140, { size: F.s, color: T.text2 });
+      const lv = (c) => t.gemLevels?.[c]?.level ?? 1;
+      txt(r, `宝石等级：${['red', 'green', 'blue'].map((c) => `${COLOR_META[c]?.label || c} ${lv(c)} 级`).join(' · ')}（10 只连着带，从头来回 1 级）`, 60, 168, { size: F.s, color: T.text2 });
 
       // 10 只排一排：打过的绿、现在这只金、输在这只红、还没到的暗
       CORE_TRIAL.fights.forEach((f, i) => {

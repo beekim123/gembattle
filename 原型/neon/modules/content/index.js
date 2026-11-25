@@ -213,7 +213,11 @@ export function createBattlePacket({
  * 核心试玩第 index 只怪的开战包（设计稿 10.4）：只有宝石牌，主角属性固定，
  * 心是上一只打完剩下的，怪的血照 hpScale 放大缩小。
  */
-export function createCoreTrialPacket({ index = 0, hearts = CORE_TRIAL.hearts, seed = 'core-trial' } = {}) {
+/**
+ * 核心试玩第 index 只的开战包。hearts、gemLevels 接上一只打完剩的（心不回；宝石等级一趟里一直带着，
+ * 设计稿 5.2，用户原型就是这样）。gemLevels 不给就是三色 1 级。
+ */
+export function createCoreTrialPacket({ index = 0, hearts = CORE_TRIAL.hearts, gemLevels = null, seed = 'core-trial' } = {}) {
   const fight = CORE_TRIAL.fights[index];
   if (!fight) throw new Error(`核心试玩没有第 ${index + 1} 只怪`);
   const packet = createBattlePacket({
@@ -224,6 +228,11 @@ export function createCoreTrialPacket({ index = 0, hearts = CORE_TRIAL.hearts, s
     rulesConfig: CORE_TRIAL.rulesConfig,
   });
   packet.player.hearts = Math.min(packet.player.maxHearts, hearts);
+  if (gemLevels) {
+    for (const c of ['red', 'green', 'blue']) {
+      if (gemLevels[c]) packet.player.gemLevels[c] = { level: gemLevels[c].level, exp: gemLevels[c].exp };
+    }
+  }
   for (const m of packet.monsters) {
     for (const bar of m.bars) bar.maxHp = Math.round((bar.maxHp * fight.hpScale) / 100) * 100;
   }
