@@ -19,3 +19,15 @@ export const TRAITS = {
   junk: '出手时往你的弃牌堆塞 1 张缠藤废牌',
   canopy: '第 2 条血起，每回合遮住你 1 张手牌的颜色（只标「已遮蔽」）',
 };
+
+// 出手技能的画法（画在 ui/attack-fx.js）。原型阶段只写功能不取名；这是我先按各自模样定的默认，等用户挑。
+export const ATTACK_FX = {
+  slime_jelly: 'spit',        // 吐一团水滴
+  earth2_barometz: 'puff',    // 撞过去，一路掉毛团
+  goblin_scout: 'club',       // 抡棒砸下的一道弧
+  fairy_meadow: 'petals',     // 一捧旋转的花瓣
+  earth6_long_arm: 'fruit',   // 抛一颗红果
+  earth3_zheng: 'claw',       // 三道爪痕
+  earth1_belly_maw: 'bite',   // 一张大嘴合上
+  tree3_leshy: 'roots',       // 树根破土
+};

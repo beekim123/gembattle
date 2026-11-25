@@ -14,6 +14,48 @@
 <body>
 <div id="stage"><canvas id="game"></canvas></div>
 <div id="err"></div>
+
+<!-- 工坊像素堆叠美术（第 3 步）：方案 4.2 清单的 31 个脚本，只读引用，一个字不改。
+     开发时 /art/ 由 tools/serve.js 映射到工坊目录；导出时 tools/export-web.js 把用到的抽进 art/ 并改写路径。
+     加载失败或网址带 ?art=blocks 时，画面自动退回色块。 -->
+<!-- 工坊内核（6） -->
+<script src="../art/core/math.js"></script>
+<script src="../art/core/voxel.js"></script>
+<script src="../art/core/solvers.js"></script>
+<script src="../art/core/behaviors.js"></script>
+<script src="../art/core/renderer.js"></script>
+<script src="../art/core/registry.js"></script>
+<!-- 地貌色板（1） -->
+<script src="../art/scenes/habitats.js"></script>
+<!-- 生态摆件（11）：林地、泥泽、花甸、树冠、营火与行商 -->
+<script src="../art/scenes/scene_forest_tree.js"></script>
+<script src="../art/scenes/scene_t09_fallen_fruit_log.js"></script>
+<script src="../art/scenes/scene_t17_swamp_cypress.js"></script>
+<script src="../art/scenes/scene_flora_cluster.js"></script>
+<script src="../art/scenes/scene_t10_giant_bud.js"></script>
+<script src="../art/scenes/scene_t16_moss_obelisk.js"></script>
+<script src="../art/scenes/scene_t11_canopy_bough.js"></script>
+<script src="../art/scenes/scene_t11_epiphyte_nest.js"></script>
+<script src="../art/scenes/scene_campfire.js"></script>
+<script src="../art/scenes/scene_rock_hollow.js"></script>
+<script src="../art/scenes/scene_crates_sign.js"></script>
+<!-- 怪物（8） -->
+<script src="../art/creatures/slime.js"></script>
+<script src="../art/creatures/earth2_barometz.js"></script>
+<script src="../art/creatures/goblin.js"></script>
+<script src="../art/creatures/fairy.js"></script>
+<script src="../art/creatures/earth6_long_arm.js"></script>
+<script src="../art/creatures/earth3_zheng.js"></script>
+<script src="../art/creatures/earth1_belly_maw.js"></script>
+<script src="../art/creatures/tree3_leshy.js"></script>
+<!-- 主角与行商（2） -->
+<script src="../art/npc/npc_mage.js"></script>
+<script src="../art/npc/npc_gear_smith.js"></script>
+<!-- 建筑（3） -->
+<script src="../art/buildings/building_ruin_arch.js"></script>
+<script src="../art/buildings/building_camp_tent.js"></script>
+<script src="../art/buildings/building_stone_gate.js"></script>
+
 <script type="module" src="./main.js"></script>
 </body>
 </html>

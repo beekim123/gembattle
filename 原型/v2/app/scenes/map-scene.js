@@ -6,6 +6,7 @@ import {
 } from '../../modules/run-rules/index.js';
 import { SEALS, LINES, LOOT, BIOMES, HERO_LOOK } from '../../modules/content/index.js';
 import { drawActor, createEnv } from '../../modules/render/index.js';
+import { audio } from '../../modules/audio/index.js';
 import {
   text, panel, wrap, roundRect, drawHearts, Button, GOLD, NODE_STYLE, drawNodeIcon, drawLootBadge, LOOT_HEX,
   layoutDeckGrid, drawDeckGrid, hitDeckGrid, GRID_CARD_H, WHEEL_HEX,
@@ -40,7 +41,7 @@ export class MapScene {
   }
   show(trip, hooks) {
     this.trip = trip; this.hooks = hooks; this.hover = null; this.overlay = null;
-    this.env = createEnv('forest', trip.seed + 5);
+    this.env = createEnv('forest', trip.seed + 5, { props: false });     // 路线图背景只要地面和微粒，不摆像素摆件
     this.sealHits = [];
     this.press = null;
     this.cam = this.camTarget = this.focusCam();
@@ -114,6 +115,7 @@ export class MapScene {
     if (!pr || pr.moved) return;
     if (this.overlay) { this.overlay = null; return; }
     for (const b of Object.values(this.buttons)) if (b.hit(x, y)) {
+      audio.sfx('click');
       if (b.id === 'deck') this.overlay = { kind: 'deck' }; else this.hooks.onRestart();
       return;
     }
@@ -305,13 +307,13 @@ export class MapScene {
     ctx.fillStyle = 'rgba(8,16,10,0.75)'; ctx.fillRect(0, 0, 960, 28);
     drawHearts(ctx, 20, 14, p.hearts, p.maxHearts, 8);
     text(ctx, '落果密林 · 探索路线', 108, 14, { size: 14, color: '#bfe0b0' });
-    text(ctx, `金币 ${trip.gold}`, 262, 14, { size: 13, color: GOLD });
-    text(ctx, `手牌 N = ${p.handBase}`, 330, 14, { size: 13, color: '#cfd8dc' });
-    text(ctx, `攻击 ${p.atk}`, 410, 14, { size: 13, color: '#cfd8dc' });
-    p.gems.forEach((g, j) => text(ctx, `${['红', '绿', '蓝'][j]}${g.level}级`, 480 + j * 52, 14, { size: 12, color: ['#ff8a7a', '#7ae07a', '#8aaaff'][j] }));
+    text(ctx, `金币 ${trip.gold}`, 250, 14, { size: 13, color: GOLD });
+    text(ctx, `手牌 N = ${p.handBase}`, 308, 14, { size: 13, color: '#cfd8dc' });
+    text(ctx, `攻击 ${p.atk}`, 384, 14, { size: 13, color: '#cfd8dc' });
+    p.gems.forEach((g, j) => text(ctx, `${['红', '绿', '蓝'][j]}${g.level}级`, 442 + j * 46, 14, { size: 12, color: ['#ff8a7a', '#7ae07a', '#8aaaff'][j] }));
     this.sealHits = [];
     p.seals.forEach((id, k) => {
-      const x = 650 + k * 17, y = 6;
+      const x = 584 + k * 16, y = 6;
       roundRect(ctx, x, y, 15, 15, 3); ctx.fillStyle = LINE_HEX[SEALS[id].line]; ctx.fill(); ctx.lineWidth = 1; ctx.strokeStyle = '#111'; ctx.stroke();
       text(ctx, SEALS[id].name[0], x + 7.5, y + 8, { size: 12, align: 'center', color: '#1a1a14', outline: null, weight: 800 });
       this.sealHits.push({ x, y, w: 15, h: 15, id });

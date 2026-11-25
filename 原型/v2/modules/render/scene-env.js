@@ -1,11 +1,14 @@
 // 生态场景环境：全屏 2D 地面（env-ground.js 烘焙）+ 动态微粒与氛围。绝不画圆台。
-// 画布坐标是 960×540 布局单位（调用方已缩放好）。第 3 步把摆件换成工坊的 3D 像素模型。
+// 画布坐标是 960×540 布局单位（调用方已缩放好）。
+// 第 3 步：地面和微粒照旧是全屏 2D；再按 biomes.js 里的 props，远到近摆 2~3 件工坊的 3D 像素堆叠摆件
+// （接了像素美术时，原来手画的花簇和火堆就不再画，免得叠成两份；?art=blocks 时照旧手画）。
 //   落果浅林：斜飘碎叶 + 红果滚落 + 林隙暖斑      泽畔浅洼：冒泡与涟漪 + 低空薄雾
 //   花甸林隙：暖金花粉 + 花簇轻摇                苔石古径：温水汽升腾 + 青苔孢
 //   巨木树冠：劲风碎叶掠过 + 树梢亮斑呼吸（进第 3 条血风更急）
 //   营火 / 行商 / 界门：火屑与暖晕 / 尘埃 / 青苔细屑
 import { BIOMES } from '../content/biomes.js';
 import { bakeGround, rng, W, H } from './env-ground.js';
+import { getStage } from './workshop-adapter.js';
 
 const TAU = Math.PI * 2;
 
@@ -49,7 +52,7 @@ const SYSTEMS = {
       },
     };
   },
-  meadow(r, biome) {
+  meadow(r, biome, env) {
     const pollen = swarm(46, r,
       (r, any) => ({ x: any ? r() * W : -10 + r() * 60, y: any ? r() * H : -10 + r() * 200, vx: 8 + r() * 10, vy: -2 + r() * 6, ph: r() * TAU, spin: 2 + r() * 2, size: 1.8 + r() * 1.8 }),
       drift,
@@ -59,7 +62,7 @@ const SYSTEMS = {
       update(dt, time) { pollen.update(dt, time); },
       draw(ctx, time) {
         sunPatches(ctx, biome, time); pollen.draw(ctx, time);
-        sway.forEach(([x, y], i) => {           // 花簇节奏轻摇：叠几朵会晃的花头
+        if (!env.art3d) sway.forEach(([x, y], i) => {           // 花簇节奏轻摇：叠几朵会晃的花头（接了像素摆件就交给摆件）
           for (let k = 0; k < 3; k++) {
             const fx = x + (k - 1) * 18 + Math.sin(time * 1.6 + i + k) * 3, fy = y - 12 + k * 3;
             ctx.fillStyle = ['#f6a8c4', '#fbf0d0', '#f6d878'][(i + k) % 3];
@@ -141,6 +144,7 @@ SYSTEMS.camp = (r, biome, env) => {
       const g = ctx.createRadialGradient(fx, fy - 10, 6, fx, fy - 10, 220 * pulse);   // 地面呼吸暖晕
       g.addColorStop(0, 'rgba(255,170,70,0.38)'); g.addColorStop(1, 'rgba(255,150,60,0)');
       ctx.fillStyle = g; ctx.fillRect(fx - 240, fy - 250, 480, 480);
+      if (env.art3d) { embers.draw(ctx, time); return; }      // 火堆本体是 3D 摆件，这里只留暖晕和火屑
       ctx.fillStyle = '#4a321f'; ctx.save(); ctx.translate(fx, fy); ctx.rotate(0.35); ctx.fillRect(-26, -3, 52, 7); ctx.rotate(-0.7); ctx.fillRect(-26, -3, 52, 7); ctx.restore();
       const flame = (h, w, col, off) => {
         const wob = Math.sin(time * 9 + off) * 3, tip = Math.sin(time * 6 + off * 2) * 4;
@@ -167,18 +171,29 @@ SYSTEMS.gate = (r, biome) => {
   return { update(dt, time) { flakes.update(dt, time); }, draw(ctx, time) { sunPatches(ctx, biome, time); flakes.draw(ctx, time); } };
 };
 
-// opts: { fireX, fireY }（营火位置）。env.setWind(k)：巨木树冠的风速倍数。
+// opts: { fireX, fireY }（营火位置）、props: false（不摆像素摆件，比如路线图背景）。env.setWind(k)：巨木树冠的风速倍数。
 export function createEnv(biomeId, seed = 1, opts = {}) {
   const biome = BIOMES[biomeId] || BIOMES.forest;
   const id = BIOMES[biomeId] ? biomeId : 'forest';
+  const stage = getStage();
+  const list = opts.props === false ? [] : (biome.props || []).filter(p => stage && stage.has(p.id));
   const base = bakeGround(biome, seed * 131 + id.length * 7 + id.charCodeAt(0));
   const r = rng(seed + 99);
-  const env = { opts, wind: 1, time: 0 };
+  const art3d = !!stage && list.length > 0;
+  const fire = art3d && biome.fire ? { fireX: biome.fire.x, fireY: biome.fire.y } : {};
+  const env = { opts: { ...fire, ...opts }, wind: 1, time: 0, art3d };
   const sys = SYSTEMS[id](r, biome, env);
+  // 远 → 近：落脚点靠上的先画
+  const placed = list.map((p, i) => ({ ...p, slot: id + ':' + i })).sort((a, b) => a.y - b.y);
   return {
-    biome,
+    biome, art3d,
     setWind(k) { env.wind = k; },
     update(dt) { env.time += dt; sys.update(dt, env.time); },
-    draw(ctx) { ctx.drawImage(base, 0, 0, W, H); ctx.save(); sys.draw(ctx, env.time); ctx.restore(); },
+    // 先地面，再摆件（比地面上的微粒靠后），最后微粒、薄雾和暖晕盖在摆件前面
+    draw(ctx) {
+      ctx.drawImage(base, 0, 0, W, H);
+      for (const p of placed) stage.draw(ctx, p.id, p.x, p.y, { slot: p.slot, yaw: p.yaw ?? 0, act: p.act, dark: 0.85 });   // 摆件压暗 15%，让战区更跳出来
+      ctx.save(); sys.draw(ctx, env.time); ctx.restore();
+    },
   };
 }

@@ -8,3 +8,5 @@ export * from './floaters.js';
 export * from './arc.js';
 export * from './deckgrid.js';
 export * from './mapicons.js';
+export * from './attack-fx.js';
+export * from './audio-bar.js';

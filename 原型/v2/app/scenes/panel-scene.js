@@ -7,18 +7,20 @@ import {
 import { SEALS, LINES, ARCANA, CARVES, JUNK, LOOT, EVENTS, BIOMES, HERO_LOOK, SHOP_PRICE } from '../../modules/content/index.js';
 import { COLOR_NAMES } from '../../modules/shared/index.js';
 import { drawActor, createEnv } from '../../modules/render/index.js';
+import { audio } from '../../modules/audio/index.js';
+import { recorder, copyText } from '../record.js';
 import {
   text, panel, wrap, roundRect, drawHearts, drawCard, CARD_W, CARD_H, GOLD, WHEEL_HEX, drawLootBadge, LOOT_HEX, carveHex,
-  layoutDeckGrid, drawDeckGrid, hitDeckGrid,
+  layoutDeckGrid, drawDeckGrid, hitDeckGrid, font,
 } from '../../modules/ui/index.js';
 
 const LINE_HEX = { shield: '#8ff0ff', white: '#ffffff', rainbow: '#ffb0f0', hold: '#ffd24a', chain: '#9aff9a' };
 
 export class PanelScene {
-  constructor() { this.t = 0; this.hits = []; this.mx = 0; this.my = 0; this.screen = null; this.env = null; this.hooks = null; this.trip = null; }
+  constructor() { this.t = 0; this.hits = []; this.mx = 0; this.my = 0; this.screen = null; this.env = null; this.hooks = null; this.trip = null; this.copiedAt = -1; }
 
   // ---------- 入口 ----------
-  setEnv(biome, seed, opts) { this.env = createEnv(biome, seed, opts); }
+  setEnv(biome, seed, opts) { this.env = createEnv(biome, seed, opts); audio.scene('explore', { biome }); }
   title(hooks) {
     this.hooks = hooks; this.trip = null; this.setEnv('forest', 3);
     this.screen = { kind: 'title' };
@@ -49,6 +51,8 @@ export class PanelScene {
   }
   summary(trip, hooks) {
     this.trip = trip; this.hooks = hooks; this.setEnv(trip.ended?.kind === 'victory' ? 'canopy' : 'forest', trip.seed + 17);
+    this.copiedAt = -1;
+    audio.scene('result', { variant: trip.ended?.kind === 'defeat' ? 'lose' : 'win' });     // 结算短乐句
     this.screen = { kind: 'summary', s: summarize(trip) };
   }
 
@@ -60,7 +64,7 @@ export class PanelScene {
     this.pointerMove(x, y);
     for (let i = this.hits.length - 1; i >= 0; i--) {
       const h = this.hits[i];
-      if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) { if (h.enabled !== false && h.fn) h.fn(); return; }
+      if (x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h) { if (h.enabled !== false && h.fn) { audio.sfx('click'); h.fn(); } return; }
     }
   }
   pointerUp() {}
@@ -109,7 +113,11 @@ export class PanelScene {
     text(ctx, `手牌 N = ${t.player.handBase}`, 200, 14, { size: 13, color: '#cfd8dc' });
     text(ctx, `攻击 ${t.player.atk}`, 290, 14, { size: 13, color: '#cfd8dc' });
     text(ctx, `牌组 ${t.deckCards.length} 张`, 370, 14, { size: 13, color: '#cfd8dc' });
-    text(ctx, t.player.seals.length ? '印记：' + t.player.seals.map(id => SEALS[id].name).join('、') : '还没有秘宝印记', 470, 14, { size: 12, color: '#ffe9a0' });
+    // 印记名字太长就只写个数，别压到右上角的音乐 / 音效按钮
+    let seals = t.player.seals.length ? '印记：' + t.player.seals.map(id => SEALS[id].name).join('、') : '还没有秘宝印记';
+    ctx.font = font(12, 600);
+    if (ctx.measureText(seals).width > 270) seals = `秘宝印记 ${t.player.seals.length} 个（悬停路线图上的小图标看说明）`;
+    text(ctx, seals, 470, 14, { size: 12, color: '#ffe9a0' });
   }
 
   // ---------- 绘制 ----------
@@ -125,7 +133,7 @@ export class PanelScene {
     ctx.fillStyle = 'rgba(6,14,8,0.45)'; ctx.fillRect(0, 0, 960, 540);
     text(ctx, '落果密林', 480, 110, { size: 60, align: 'center', color: '#ffe9a0', weight: 800 });
     text(ctx, 'code00 · 一局清晰的主线（第 1 步 到 第 8 步）', 480, 160, { size: 16, align: 'center', color: '#d8e8c8' });
-    drawActor(ctx, HERO_LOOK, 480, 300, { t: this.t, scale: 1.4 });
+    drawActor(ctx, HERO_LOOK, 480, 318, { t: this.t, scale: 1.5 });
     this.button(ctx, '深入林地', 390, 350, 180, 48, () => this.hooks.onStart(), { accent: true, size: 20 });
     this.button(ctx, '核心试玩（4 场教学仗）', 390, 410, 180, 32, () => this.hooks.onTutorial(), { size: 13 });
     text(ctx, '拖牌进链尾，空格施法；链里的牌不能再拖，放错了点「退回一张」或「清空」。', 480, 470, { size: 13, align: 'center', color: '#c8d8c0' });
@@ -158,6 +166,7 @@ export class PanelScene {
     text(ctx, p.length ? '已有印记：' + p.map(id => `${SEALS[id].name}（${LINES[SEALS[id].line].name}）`).join('、') : '还没有秘宝印记', 480, y, { size: 13, align: 'center', color: '#e8e0c8' });
   }
   afterPick(msg) {
+    audio.sfx('reward');
     if (this.screen.thenJunk) finishCarveJunk(this.trip);
     this.screen = { kind: 'result', title: msg, lines: this.screen.thenJunk ? ['往牌组里塞进了 1 张缠藤废牌。'] : ['已加入这一趟。'] };
   }
@@ -226,6 +235,7 @@ export class PanelScene {
   startCarve(mode, extra = {}) {
     const trip = this.trip;
     const finish = (card, kind) => {
+      audio.sfx('reward');
       if (mode === 'loot') { applyCarve(trip, card.uid, kind); this.screen = { kind: 'result', title: `${COLOR_NAMES[card.color]}牌：${CARVES[kind].name}`, lines: [CARVES[kind].text] }; }
       else if (mode === 'camp') { campCarve(trip, card.uid, kind); this.screen = { kind: 'result', title: `${COLOR_NAMES[card.color]}牌：${CARVES[kind].name}`, lines: [CARVES[kind].text], leave: true }; }
       else if (mode === 'shop') { applyCarve(trip, card.uid, kind); payCarve(trip, extra.item); this.screen = { kind: 'shop', msg: `买下了宝石雕琢：${COLOR_NAMES[card.color]}牌 ${CARVES[kind].name}` }; }
@@ -237,7 +247,7 @@ export class PanelScene {
   // ---------- 营火整备 ----------
   draw_camp(ctx, s) {
     ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.fillRect(0, 0, 960, 540);
-    drawActor(ctx, HERO_LOOK, 395, 318, { t: this.t, scale: 1.3 });
+    drawActor(ctx, HERO_LOOK, 395, 318, { t: this.t, scale: 1 });
     this.header(ctx, '营火整备', s.done ? s.done : '三选一，选了就整备完毕');
     if (s.done) { this.button(ctx, '继续赶路', 405, 400, 150, 38, () => this.hooks.onDone(), { accent: true }); return; }
     const w = 220, h = 118, gap = 24, x0 = 480 - (3 * w + 2 * gap) / 2, y = 392;
@@ -262,8 +272,8 @@ export class PanelScene {
   // ---------- 行商营帐 ----------
   draw_shop(ctx, s) {
     const trip = this.trip;
-    drawActor(ctx, 'npc_gear_smith', 285, 262, { t: this.t, scale: 1.4 });
-    drawActor(ctx, HERO_LOOK, 650, 300, { t: this.t, scale: 1.1 });
+    drawActor(ctx, 'npc_gear_smith', 285, 282, { t: this.t, scale: 1 });
+    drawActor(ctx, HERO_LOOK, 650, 304, { t: this.t, scale: 1 });
     this.header(ctx, '行商营帐', s.msg || `花本趟打怪掉落的金币。你有 ${trip.gold} 金币`);
     const w = 140, h = 156, gap = 8, x0 = 480 - (6 * w + 5 * gap) / 2, y = 340;
     trip.shop.forEach((it, i) => {
@@ -286,7 +296,7 @@ export class PanelScene {
   // ---------- 林中偶遇 ----------
   draw_event(ctx, s) {
     const ev = EVENTS[s.id], trip = this.trip;
-    drawActor(ctx, HERO_LOOK, 480, 300, { t: this.t, scale: 1.2 });
+    drawActor(ctx, HERO_LOOK, 480, 300, { t: this.t, scale: 1 });
     if (s.stage === 'ask') {
       this.header(ctx, ev.name, ev.text);
       const w = 300, h = 110, gap = 30, x0 = 480 - (2 * w + gap) / 2, y = 400;
@@ -313,7 +323,7 @@ export class PanelScene {
   // ---------- 青苔界门 ----------
   draw_gate(ctx) {
     const trip = this.trip;
-    drawActor(ctx, HERO_LOOK, 480, 400, { t: this.t, scale: 1.3 });
+    drawActor(ctx, HERO_LOOK, 480, 404, { t: this.t, scale: 1, yaw: Math.PI });
     this.header(ctx, '青苔界门', '第 4 步打完了。门后面是密林腹地：收益更高，也更险');
     const w = 330, h = 150, y = 330;
     this.choice(ctx, 90, y, w, h, { title: '见好就收 · 折返结算', text: '带着现在攒下的金币和战利品，安全离开林地，看本趟战果。', color: '#9ad8a0' }, () => this.hooks.onChoose('retreat'));
@@ -344,6 +354,9 @@ export class PanelScene {
     list('秘宝印记', s.seals.map(id => SEALS[id].name), 318);
     list('宝石雕琢', s.carves.map(c => `${COLOR_NAMES[c.color]}牌${CARVES[c.kind].name}`), 372);
     list('秘术牌', s.arcana.map(id => ARCANA[id].name), 426);
-    this.button(ctx, '再来一趟', 405, 452, 150, 32, () => this.hooks.onAgain(), { accent: true });
+    this.button(ctx, this.copiedAt > 0 && this.t - this.copiedAt < 2.5 ? '已复制，发给我吧' : '复制试玩记录', 300, 452, 170, 32, async () => {
+      if (await copyText(recorder.text(summarize(this.trip)))) this.copiedAt = this.t;
+    }, { size: 14 });
+    this.button(ctx, '再来一趟', 490, 452, 170, 32, () => this.hooks.onAgain(), { accent: true });
   }
 }
