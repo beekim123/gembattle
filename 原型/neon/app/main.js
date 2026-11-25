@@ -5,14 +5,10 @@ import { SCHEMA_VERSION, SCREEN } from '../modules/shared/index.js';
 import { RENDER_BACKEND, createRenderer } from '../modules/render/index.js';
 import { createGameLoop } from './loop.js';
 import { createSceneManager } from './scene-manager.js';
-import { createTrialScene } from './scenes/trial-scene.js';
 import { createBattleScene } from './scenes/battle-scene.js';
-import { createRunScene } from './scenes/run-scene.js';
-import { createHubScene } from './scenes/hub-scene.js';
 import { createCoreScene } from './scenes/core-scene.js';
-import { createSaveStore } from '../modules/save/index.js';
 import { formatPlayLog, session } from './session.js';
-import { TRIAL_ALLY_IDS, TRIAL_BUFF_IDS, QUEST_DEFS, buildHeroLoadout } from '../modules/content/index.js';
+// 外圈（大厅、试打台、走一趟、存档）不在这里静态导入：OUTER_ON 关着就一行都不加载，见下面的 loadOuter()
 
 // 画面按 1920×1080 设计（用户 2026-11-23 定的，设计稿 10 节）。
 // 代码里的坐标用「布局单位」：960×540，一个单位 = 1920×1080 上的 2 个像素。
@@ -43,26 +39,18 @@ const sceneManager = createSceneManager({
   renderBackend: RENDER_BACKEND,
 });
 
-// 存档存在浏览器里（以后 Electron 换成存文件，只改这一句传进去的 storage）
-session.saveStore = createSaveStore(window.localStorage);
-session.saveStore.load();
-
 // 外圈冻住（用户 2026-11-24 定的，设计稿 10.4、设计/做原型的方法.md）：
 // 先把「只用宝石牌打怪」做到好玩，大厅、工会、招募、出发、卡册、走一趟、试打台的入口都关掉。
 // 代码都留着，核心过关以后一层层接回来：把 OUTER_ON 改成 true 就是原来的整圈。
+// 关着的时候外圈的文件一个都不加载（设计稿 10.7，第 8 版）。
 const OUTER_ON = false;
 
 sceneManager.register('core', createCoreScene); // 核心试玩：只有宝石牌连打 10 只
 sceneManager.register('battle', createBattleScene);
-if (OUTER_ON) {
-  sceneManager.register('home', createHubScene);
-  sceneManager.register('trial', createTrialScene); // 试打台：只打一仗、测手感
-  sceneManager.register('run', createRunScene);
-}
 
 const params = new URLSearchParams(window.location.search);
 const directEncounter = params.get('encounter');
-if (OUTER_ON) enterOuter();
+if (OUTER_ON) await enterOuter();
 else if (directEncounter) {
   // 截图、调试用：?encounter=dual_shield 直接打一仗（只有宝石牌）
   sceneManager.switchTo('battle', {
@@ -74,8 +62,27 @@ else if (directEncounter) {
   });
 } else sceneManager.switchTo('core');
 
+/** 外圈开着才加载：大厅、试打台、走一趟三个场景，加上存档 */
+async function loadOuter() {
+  const [hub, trial, run, save, content] = await Promise.all([
+    import('./scenes/hub-scene.js'),
+    import('./scenes/trial-scene.js'),
+    import('./scenes/run-scene.js'),
+    import('../modules/save/index.js'),
+    import('../modules/content/index.js'),
+  ]);
+  sceneManager.register('home', hub.createHubScene);
+  sceneManager.register('trial', trial.createTrialScene); // 试打台：只打一仗、测手感
+  sceneManager.register('run', run.createRunScene);
+  // 存档存在浏览器里（以后 Electron 换成存文件，只改这一句传进去的 storage）
+  session.saveStore = save.createSaveStore(window.localStorage);
+  session.saveStore.load();
+  return content;
+}
+
 /** 外圈开着时原来的入口：大厅，或照 URL 参数直达 */
-function enterOuter() {
+async function enterOuter() {
+  const { TRIAL_ALLY_IDS, TRIAL_BUFF_IDS, QUEST_DEFS, buildHeroLoadout } = await loadOuter();
   if (params.get('fresh') === '1') session.saveStore.reset(); // 截图、测试用：新档
   if (directEncounter) {
     // 支持通过 URL 参数直达指定仗（方便调试与自动截图，例如 ?encounter=gatekeeper_layer2）
