@@ -74,7 +74,10 @@ export function startAutopilot(flow, params) {
     const id = ids[Math.floor(rnd() * ids.length)];
     const [x, y] = m.pos(id);
     say(`选 ${id}`);
-    m.pointerMove(x, y); m.pointerDown(x, y);
+    // 点以前先把镜头摆到这个节点看得见的位置（真人要拖，假玩家直接设）
+    m.cam = m.camTarget = m.clampCam(y - 300);
+    const sy = y - m.cam;
+    m.pointerMove(x, sy); m.pointerDown(x, sy); m.pointerUp(x, sy);
   }
 
   setInterval(() => {

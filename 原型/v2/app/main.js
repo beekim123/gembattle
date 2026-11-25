@@ -38,8 +38,9 @@ canvas.addEventListener('pointermove', e => scene.pointerMove(...toLayout(e)));
 canvas.addEventListener('pointerup', e => scene.pointerUp(...toLayout(e)));
 canvas.addEventListener('pointercancel', () => scene.cancelDrag());
 window.addEventListener('blur', () => scene.cancelDrag());
+canvas.addEventListener('wheel', e => { e.preventDefault(); scene.wheel(e.deltaMode === 1 ? e.deltaY * 30 : e.deltaY); }, { passive: false });
 window.addEventListener('keydown', e => {
-  if (e.key === ' ' || e.key === 'Backspace') e.preventDefault();
+  if (e.key === ' ' || e.key === 'Backspace' || e.key.startsWith('Arrow') || e.key.startsWith('Page')) e.preventDefault();
   scene.key(e.key);
 });
 

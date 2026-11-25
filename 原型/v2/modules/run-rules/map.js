@@ -115,7 +115,8 @@ export function generateMap(seed) {
       edges.push({ from: layers[s][i].id, to: layers[s + 1][j].id });
     }
   }
-  return { seed, layers: layers.map(l => l.map(n => n.id)), nodes, edges };
+  // steps / gateAfter / segments 一并存进图里：界面按这几个数画，以后加深度只改生成这里
+  return { seed, steps: layers.length, gateAfter: GATE_AFTER, segments: SEGMENTS, layers: layers.map(l => l.map(n => n.id)), nodes, edges };
 }
 
 export const childrenOf = (map, id) => map.edges.filter(e => e.from === id).map(e => e.to);

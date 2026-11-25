@@ -71,5 +71,6 @@ export class Flow {
   pointerDown(x, y) { this.cur.pointerDown(x, y); }
   pointerUp(x, y) { this.cur.pointerUp(x, y); }
   key(k) { this.cur.key(k); }
+  wheel(dy) { if (this.cur.wheel) this.cur.wheel(dy); }
   cancelDrag() { if (this.cur.drag) this.cur.drag = null; }
 }

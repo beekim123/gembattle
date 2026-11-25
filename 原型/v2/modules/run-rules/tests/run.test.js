@@ -87,6 +87,12 @@ export default function (t) {
       eq(new Set(ev).size, Math.min(ev.length, 4));
     }
   });
+  t.test('图里带着步数、界门位置、生态分段：界面按这几个数画，以后加深度不用改界面', () => {
+    const m = generateMap(4);
+    eq(m.steps, 8); eq(m.gateAfter, 4);
+    assert.deepEqual(m.segments.map(s => s.name), ['林缘', '腹地', '巨木树冠']);
+    eq(m.layers.length, m.steps);
+  });
   t.test('生态分段：林缘 1~4、腹地 5~7、巨木树冠 8', () => {
     eq(segmentOf(1).name, '林缘'); eq(segmentOf(4).name, '林缘');
     eq(segmentOf(5).name, '腹地'); eq(segmentOf(7).name, '腹地');

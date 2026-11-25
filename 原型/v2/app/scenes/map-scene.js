@@ -2,7 +2,7 @@
 //   左边是步数刻度和生态段名；中间画青苔界门分界线；
 //   已走过的是实金线，现在能走的是脉冲金环 + 流动箭头，悬停未来节点会把上下连通的路径亮出来，走不到的压暗。
 import {
-  childrenOf, parentsOf, reachableFrom, ancestorsOf, nextNodes, nodeOf, nodeInfo, SEGMENTS, GATE_AFTER, STEPS, TYPE_NAME,
+  childrenOf, parentsOf, reachableFrom, ancestorsOf, nextNodes, nodeOf, nodeInfo, TYPE_NAME,
 } from '../../modules/run-rules/index.js';
 import { SEALS, LINES, LOOT, BIOMES, HERO_LOOK } from '../../modules/content/index.js';
 import { drawActor, createEnv } from '../../modules/render/index.js';
@@ -12,10 +12,10 @@ import {
 } from '../../modules/ui/index.js';
 import { ARCANA, CARVES, JUNK } from '../../modules/content/index.js';
 
-const TOP = 86, BOTTOM = 482, XL = 214, XW = 520;
-const stepY = step => BOTTOM - (step - 1) * (BOTTOM - TOP) / (STEPS - 1);
-const nodeXY = n => [XL + n.x * XW, stepY(n.step)];
-const START = [XL + XW / 2, 524];
+// 路线图是一张比屏幕高的长图：每一步隔 STEP_H，上下拖动、滚轮或方向键看。深度加多少步都排得下。
+// 世界坐标：y 从图的最上面往下数；镜头 cam 是屏幕顶端对应的世界 y。
+const XL = 214, XW = 520;
+const STEP_H = 104, MARGIN_TOP = 84, MARGIN_BOTTOM = 150, VIEW_TOP = 30, VIEW_H = 540 - VIEW_TOP;
 const LINE_HEX = { shield: '#8ff0ff', white: '#ffffff', rainbow: '#ffb0f0', hold: '#ffd24a', chain: '#9aff9a' };
 
 function bez(a, b) {
@@ -35,14 +35,38 @@ function strokeBez(ctx, p) { ctx.beginPath(); ctx.moveTo(...p[0]); ctx.bezierCur
 export class MapScene {
   constructor() {
     this.t = 0; this.hover = null; this.hooks = null; this.trip = null; this.overlay = null;
+    this.cam = 0; this.camTarget = 0; this.press = null;
     this.buttons = { deck: new Button('deck', '查看牌组', 842, 1, 64, 24), restart: new Button('restart', '重开', 910, 1, 44, 24) };
   }
   show(trip, hooks) {
     this.trip = trip; this.hooks = hooks; this.hover = null; this.overlay = null;
     this.env = createEnv('forest', trip.seed + 5);
     this.sealHits = [];
+    this.press = null;
+    this.cam = this.camTarget = this.focusCam();
   }
-  update(dt) { this.t += dt; this.env.update(dt); }
+  update(dt) {
+    this.t += dt; this.env.update(dt);
+    this.cam += (this.camTarget - this.cam) * (1 - Math.exp(-dt * 12));   // 滚轮、方向键是滑过去的
+    if (Math.abs(this.camTarget - this.cam) < 0.2) this.cam = this.camTarget;
+  }
+
+  // ---------- 长图的尺寸与镜头 ----------
+  get steps() { return this.trip.map.steps; }
+  worldH() { return MARGIN_TOP + (this.steps - 1) * STEP_H + MARGIN_BOTTOM; }
+  maxCam() { return Math.max(0, this.worldH() - 540); }
+  stepY(step) { return MARGIN_TOP + (this.steps - step) * STEP_H; }
+  wxy(n) { return [XL + n.x * XW, this.stepY(n.step)]; }
+  startXY() { return [XL + XW / 2, this.stepY(1) + 86]; }
+  clampCam(v) { return Math.max(0, Math.min(this.maxCam(), v)); }
+  // 开图时把镜头摆到「现在站的位置」和下一步能走的那几个格子都看得见的地方
+  focusCam() {
+    const trip = this.trip, curStep = trip.pos ? trip.map.nodes[trip.pos].step : 0;
+    const y = curStep ? this.stepY(curStep) : this.startXY()[1];
+    return this.clampCam(y - 400);
+  }
+  scrollBy(dy) { this.camTarget = this.clampCam(this.camTarget + dy); }
+  wheel(dy) { if (!this.overlay) this.scrollBy(dy * 0.8); }
 
   // ---------- 状态 ----------
   states() {
@@ -54,14 +78,16 @@ export class MapScene {
     else for (const id of map.layers[0]) for (const x of reachableFrom(map, id)) reach.add(x);
     return { path, avail, reach, pos };
   }
-  pos(id) { return nodeXY(this.trip.map.nodes[id]); }
+  pos(id) { return this.wxy(this.trip.map.nodes[id]); }                    // 世界坐标
+  screenPos(id) { const [x, y] = this.pos(id); return [x, y - this.cam]; }   // 屏幕坐标（点击、悬停用）
 
   // ---------- 输入 ----------
   hitNode(x, y) {
+    if (y < VIEW_TOP) return null;
     const map = this.trip.map;
     let best = null, bd = 1e9;
     for (const n of Object.values(map.nodes)) {
-      const [nx, ny] = nodeXY(n), r = NODE_STYLE[n.type].r + 6, d = Math.hypot(x - nx, y - ny);
+      const [nx, ny] = this.wxy(n), r = NODE_STYLE[n.type].r + 6, d = Math.hypot(x - nx, y + this.cam - ny);
       if (d <= r && d < bd) { best = n.id; bd = d; }
     }
     return best;
@@ -70,33 +96,60 @@ export class MapScene {
     this.mx = x; this.my = y;
     for (const b of Object.values(this.buttons)) b.hover = b.enabled && b.hit(x, y);
     this.hoverSeal = this.sealHits.find(h => x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h)?.id || null;
+    // 按住拖动：整张图跟着手上下走（移动超过 5 个单位才算拖，不算点击）
+    if (this.press) {
+      if (!this.press.moved && Math.hypot(x - this.press.x, y - this.press.y) > 5) this.press.moved = true;
+      if (this.press.moved) { this.cam = this.camTarget = this.clampCam(this.press.cam - (y - this.press.y)); this.hover = null; return; }
+    }
     if (this.overlay) { this.hoverCard = hitDeckGrid(this.gridItems || [], x, y); this.hover = null; return; }
     this.hover = this.hitNode(x, y);
   }
   pointerDown(x, y) {
     this.pointerMove(x, y);
+    this.press = { x, y, cam: this.cam, moved: false };
+  }
+  // 点击在松手时才算：按下后没拖动，才当成点
+  pointerUp(x, y) {
+    const pr = this.press; this.press = null;
+    if (!pr || pr.moved) return;
     if (this.overlay) { this.overlay = null; return; }
     for (const b of Object.values(this.buttons)) if (b.hit(x, y)) {
       if (b.id === 'deck') this.overlay = { kind: 'deck' }; else this.hooks.onRestart();
       return;
     }
-    const id = this.hit = this.hitNode(x, y);
+    const id = this.hitNode(x, y);
     if (id && nextNodes(this.trip).includes(id)) this.hooks.onPick(id);
   }
-  pointerUp() {}
-  key(k) { if (k === 'Escape') this.overlay = null; }
+  key(k) {
+    if (k === 'Escape') this.overlay = null;
+    else if (k === 'ArrowUp' || k === 'w') this.scrollBy(-120);
+    else if (k === 'ArrowDown' || k === 's') this.scrollBy(120);
+    else if (k === 'PageUp') this.scrollBy(-360);
+    else if (k === 'PageDown') this.scrollBy(360);
+    else if (k === 'Home') this.camTarget = 0;                      // 看最深处（图的最上面）
+    else if (k === 'End') this.camTarget = this.maxCam();           // 回到起点（图的最下面）
+  }
 
   // ---------- 绘制 ----------
   draw(ctx) {
     const trip = this.trip, map = trip.map, st = this.states();
     this.env.draw(ctx);
     ctx.fillStyle = 'rgba(6,12,8,0.62)'; ctx.fillRect(0, 0, 960, 540);       // 压暗，路线图才是主体
+    // 长图：只在顶栏下面的窗口里画，跟着镜头上下走
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, VIEW_TOP, 960, VIEW_H); ctx.clip();
+    ctx.translate(0, -this.cam);
     this.drawGate(ctx);
     this.drawEdges(ctx, st);
     this.drawStart(ctx, st);
     for (const n of Object.values(map.nodes)) this.drawNode(ctx, n, st);
     this.drawRail(ctx);
+    ctx.restore();
+    const fade = ctx.createLinearGradient(0, VIEW_TOP, 0, VIEW_TOP + 56);   // 顶上淡出，别跟提示条糊在一起
+    fade.addColorStop(0, 'rgba(6,12,8,0.9)'); fade.addColorStop(1, 'rgba(6,12,8,0)');
+    ctx.fillStyle = fade; ctx.fillRect(0, VIEW_TOP, 780, 56);
     this.drawTopBar(ctx);
+    this.drawScrollbar(ctx);
     this.drawLegend(ctx);
     if (this.hover && !this.overlay) this.drawCard(ctx, map.nodes[this.hover], st);
     if (this.hoverSeal && !this.overlay) {
@@ -116,7 +169,7 @@ export class MapScene {
   }
 
   drawGate(ctx) {
-    const y = (stepY(GATE_AFTER) + stepY(GATE_AFTER + 1)) / 2;
+    const y = (this.stepY(this.trip.map.gateAfter) + this.stepY(this.trip.map.gateAfter + 1)) / 2;
     const passed = this.trip.gateChosen;
     // 青苔石门横界线：一条贯穿全图的虚线，左边立一座小石门，门名写在左边的刻度栏里
     ctx.save();
@@ -153,7 +206,7 @@ export class MapScene {
       return { e, p: bez(a, b), kind, hl: hl && hl.has(e.from) && hl.has(e.to) };
     });
     // 起点到第 1 步
-    const starts = trip.pos ? [] : map.layers[0].map(id => ({ e: { from: 'start', to: id }, p: bez(START, this.pos(id)), kind: 'avail', hl: false }));
+    const starts = trip.pos ? [] : map.layers[0].map(id => ({ e: { from: 'start', to: id }, p: bez(this.startXY(), this.pos(id)), kind: 'avail', hl: false }));
     ctx.save(); ctx.lineCap = 'round';
     const order = { dim: 0, future: 1, avail: 2, walked: 3 };
     for (const E of [...edges, ...starts].sort((a, b) => order[a.kind] - order[b.kind] || (a.hl - b.hl))) {
@@ -180,7 +233,7 @@ export class MapScene {
   }
 
   drawStart(ctx, st) {
-    const [x, y] = START;
+    const [x, y] = this.startXY();
     ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(x, y + 6, 22, 7, 0, 0, Math.PI * 2); ctx.fill();
     if (!this.trip.pos) {
       drawActor(ctx, HERO_LOOK, x, y + 8, { t: this.t, scale: 0.55 });
@@ -191,7 +244,7 @@ export class MapScene {
   }
 
   drawNode(ctx, n, st) {
-    const [x0, y0] = nodeXY(n), sty = NODE_STYLE[n.type], visited = st.path.has(n.id), isPos = st.pos === n.id;
+    const [x0, y0] = this.wxy(n), sty = NODE_STYLE[n.type], visited = st.path.has(n.id), isPos = st.pos === n.id;
     const avail = st.avail.has(n.id), dim = !visited && !st.reach.has(n.id);
     const hov = this.hover === n.id;
     const bob = avail ? Math.sin(this.t * 3 + n.col) * 2.5 : 0;
@@ -228,18 +281,18 @@ export class MapScene {
   drawRail(ctx) {
     const trip = this.trip;
     // 步数刻度
-    for (let s = 1; s <= STEPS; s++) {
-      const y = stepY(s), cur = trip.step === s, done = trip.step > s;
+    for (let s = 1; s <= this.steps; s++) {
+      const y = this.stepY(s), cur = trip.step === s, done = trip.step > s;
       ctx.beginPath(); ctx.arc(34, y, 14, 0, Math.PI * 2);
       ctx.fillStyle = cur ? '#f2b93a' : done ? 'rgba(255,210,74,0.25)' : 'rgba(20,30,22,0.8)'; ctx.fill();
       ctx.lineWidth = 2; ctx.strokeStyle = cur ? '#fff2b0' : 'rgba(255,255,255,0.45)'; ctx.stroke();
       text(ctx, String(s), 34, y + 1, { size: 15, align: 'center', color: cur ? '#2a1c08' : '#fff', outline: null, weight: 800 });
       ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(52, y); ctx.lineTo(XL - 40, y); ctx.stroke();
     }
-    text(ctx, '第几步', 34, TOP - 38, { size: 12, align: 'center', color: '#cfd8dc' });
+    text(ctx, '第几步', 34, this.stepY(this.steps) - 38, { size: 12, align: 'center', color: '#cfd8dc' });
     // 生态段名：每段一道竖括号
-    for (const sg of SEGMENTS) {
-      const y1 = stepY(sg.to) - 14, y2 = stepY(sg.from) + 14;
+    for (const sg of trip.map.segments) {
+      const y1 = this.stepY(sg.to) - 14, y2 = this.stepY(sg.from) + 14;
       ctx.strokeStyle = 'rgba(190,230,170,0.7)'; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(64, y1); ctx.lineTo(60, y1); ctx.lineTo(60, y2); ctx.lineTo(64, y2); ctx.stroke();
       text(ctx, sg.name, 72, (y1 + y2) / 2, { size: 14, align: 'left', color: '#d8f0c8', weight: 800 });
@@ -267,11 +320,31 @@ export class MapScene {
     // 提示条
     const going = nextNodes(trip).length > 0;
     if (going) {
+      panel(ctx, 150, 34, 640, 24, 'rgba(6,12,8,0.7)', null);
       const a = 0.75 + 0.25 * Math.sin(this.t * 4);
       ctx.save(); ctx.globalAlpha = a;
-      text(ctx, trip.pos ? '请选择下一步去向（亮着金环的格子）' : '请选择从哪里进入密林（亮着金环的两个入口）', 480, 46, { size: 16, align: 'center', color: '#ffe9a0', weight: 800 });
+      text(ctx, trip.pos ? '请选择下一步去向（亮着金环的格子；按住上下拖动、滚轮看全图）' : '请选择从哪里进入密林（亮着金环的两个入口；按住上下拖动、滚轮看全图）', 480, 46, { size: 16, align: 'center', color: '#ffe9a0', weight: 800 });
       ctx.restore();
     }
+  }
+
+  // 右边一根细滚动条 + 上下还有路时的提示箭头
+  drawScrollbar(ctx) {
+    const mc = this.maxCam();
+    if (mc <= 0) return;
+    const x = 778, y0 = VIEW_TOP + 8, h = VIEW_H - 16;
+    ctx.fillStyle = 'rgba(255,255,255,0.12)'; roundRect(ctx, x, y0, 6, h, 3); ctx.fill();
+    const th = Math.max(28, h * VIEW_H / this.worldH()), ty = y0 + (h - th) * (this.cam / mc);
+    ctx.fillStyle = this.press?.moved ? '#ffd24a' : 'rgba(255,230,150,0.7)'; roundRect(ctx, x, ty, 6, th, 3); ctx.fill();
+    const hint = (label, y, up) => {                          // 看不到的那头还有东西
+      const a = 0.6 + 0.4 * Math.sin(this.t * 4);
+      ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = '#ffe9a0';
+      ctx.beginPath(); up ? (ctx.moveTo(480 - 7, y + 4), ctx.lineTo(480 + 7, y + 4), ctx.lineTo(480, y - 6)) : (ctx.moveTo(480 - 7, y - 4), ctx.lineTo(480 + 7, y - 4), ctx.lineTo(480, y + 6));
+      ctx.closePath(); ctx.fill(); ctx.restore();
+      text(ctx, label, 496, y, { size: 12, align: 'left', color: '#ffe9a0' });
+    };
+    if (this.cam > 4) hint('往上拖还有更深处', VIEW_TOP + 52, true);
+    if (this.cam < mc - 4) hint('往下拖回到起点', 534, false);
   }
 
   drawLegend(ctx) {
@@ -297,7 +370,7 @@ export class MapScene {
 
   drawCard(ctx, n, st) {
     const info = nodeInfo(n);
-    const [nx, ny] = nodeXY(n);
+    const [nx, ny] = this.screenPos(n.id);
     const w = 250;
     const wr = [];
     wr.push({ s: info.title, k: 0 });
@@ -307,7 +380,7 @@ export class MapScene {
     wrap(ctx, '风险：' + info.risk, w - 16, 12).forEach(s => wr.push({ s, k: 2, c: '#ffb0a0' }));
     const h = 14 + wr.length * 17;
     let x = nx + 40; if (x + w > 780) x = nx - 40 - w;
-    let y = Math.max(34, Math.min(540 - h - 6, ny - h / 2));
+    let y = Math.max(VIEW_TOP + 6, Math.min(540 - h - 6, ny - h / 2));
     panel(ctx, x, y, w, h, 'rgba(10,16,12,0.96)', 'rgba(255,255,255,0.35)');
     let yy = y + 15;
     for (const l of wr) {
