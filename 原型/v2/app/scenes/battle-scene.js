@@ -2,10 +2,13 @@
 // 规则全在 battle-rules（纯逻辑）；这里只负责摆、画、收输入、把结算事件播成动画。
 import {
   createRun, createBattle, queueCard, undoLast, undoAll, previewChain, cast, setTarget, commitVictory, enemyView,
+  playInstant, instantCheck, handCap, hasSeal,
 } from '../../modules/battle-rules/index.js';
-import { BATTLES, HERO_LOOK, BIOMES } from '../../modules/content/index.js';
-import { COLOR_NAMES, CHANNELS, relationOf, REL_TEXT, CONFIG } from '../../modules/shared/index.js';
-import { drawActor, ACTOR_SIZE, createEnv } from '../../modules/render/index.js';
+import {
+  BATTLES, HERO_LOOK, BIOMES, ARCANA, SEALS, LINES, CARVES, TRAITS, JUNK, LOOT, isInstant,
+} from '../../modules/content/index.js';
+import { COLOR_NAMES, CHANNELS, relationOf, REL_TEXT, CONFIG, countBits } from '../../modules/shared/index.js';
+import { drawActor, ACTOR_SIZE, ENEMY_SCALE, createEnv } from '../../modules/render/index.js';
 import {
   text, panel, wrap, roundRect, drawCard, CARD_W, CARD_H, drawCardBack, drawHpBar, drawShield, drawCountdown, drawHearts,
   drawColorRing, Button, Floaters, handPos, cardHitTest, WHEEL_HEX, GEM_HEX, ART_HEX, REL_HEX, font, GOLD,
@@ -13,18 +16,21 @@ import {
 
 const SLOT_S = 0.72;
 const ENEMY_FEET_Y = 205, HERO = { x: 480, y: 308 };
-const enemyScale = look => (look === 'slime_jelly' ? 1.5 : 1.4);
-const attackText = h => (h >= 1 ? `扣 ${h} 心` : '扣半心');
+const enemyScale = look => ENEMY_SCALE[look] || 1.4;
+const LINE_HEX = { shield: '#8ff0ff', white: '#ffffff', rainbow: '#ffb0f0', hold: '#ffd24a', chain: '#9aff9a' };
+const attackText = (h, note = '') => (h >= 1 ? `扣 ${h} 心` : '扣半心') + note;
 
 export class BattleScene {
-  constructor() {
+  // mode: 'tutorial' 第 1 步的 4 场教学仗（?mode=tutorial）；'trip' 一趟里的战斗（由 app/flow.js 驱动）
+  constructor({ mode = 'trip' } = {}) {
+    this.mode = mode; this.hooks = null; this.node = null;
     this.t = 0;
     this.floaters = new Floaters();
     this.banners = [];
     this.bolts = [];
     this.cardPos = new Map();
     this.hurt = []; this.fade = [];
-    this.hero = { lunge: 0, hurt: 0 };
+    this.hero = { lunge: 0, hurt: 0, ward: 0 };
     this.rainbowGlow = 0; this.waveRing = 0;
     this.buttons = {
       undo: new Button('undo', '退回一张', 0, 0, 100, 28),
@@ -38,7 +44,7 @@ export class BattleScene {
     this.buttons.undo.x = 324; this.buttons.clear.x = 432; this.buttons.cast.x = 512;
     for (const k of ['undo', 'clear', 'cast']) this.buttons[k].y = 414;
     this.overlayButtons = [];
-    this.newRun();
+    if (mode === 'tutorial') this.newRun();
   }
 
   // ---------- 流程 ----------
@@ -46,11 +52,17 @@ export class BattleScene {
     this.run = createRun(seed);
     this.startBattle();
   }
-  startBattle() {
-    const def = BATTLES[this.run.battleIndex];
+  // 一趟里的战斗：trip 是一趟的存档（跟 createRun 的形状兼容），node 是路线图上的节点，def 是这场仗的定义
+  beginTrip(trip, node, def, b, hooks) {
+    this.mode = 'trip'; this.run = trip; this.node = node; this.hooks = hooks;
+    this.startBattle(def, b);
+  }
+  startBattle(defIn, bIn) {
+    const def = defIn || BATTLES[this.run.battleIndex];
     this.def = def;
-    this.b = createBattle(this.run, def);
+    this.b = bIn || createBattle(this.run, def);
     this.env = createEnv(def.biome, this.run.seed + this.run.battleIndex * 7);
+    this.tip = null;
     this.play = null; this.vis = null; this.drag = null; this.overlay = null;
     this.hidden = new Set(); this.cardPos.clear();
     this.hurt = this.b.enemies.map(() => ({ shake: 0, flash: 0 }));
@@ -70,7 +82,8 @@ export class BattleScene {
   heartsNow() { return this.vis ? this.vis.hearts : this.b.player.hearts; }
 
   // ---------- 摆位 ----------
-  slotCount() { return Math.max(this.b.player.handBase + CONFIG.handCapExtra, this.b.deck.chain.length + (this.drag ? 1 : 0)); }
+  slotCount() { return Math.max(handCap(this.b), this.b.deck.chain.length + (this.drag && !isInstant(this.dragCard()) ? 1 : 0)); }
+  dragCard() { return this.drag ? this.b.deck.hand.find(c => c.uid === this.drag.uid) : null; }
   slotPos(k) {
     const S = this.slotCount();
     return { x: 480 + (k - (S - 1) / 2) * 54, y: 344, rot: 0, s: SLOT_S };
@@ -118,6 +131,7 @@ export class BattleScene {
     this.fade.forEach((f, i) => { if (!this.view(i).alive) this.fade[i] = Math.max(0, f - dt * 2.2); });
     this.hero.lunge = Math.max(0, this.hero.lunge - dt * 4.5);
     this.hero.hurt = Math.max(0, this.hero.hurt - dt * 4);
+    this.hero.ward = Math.max(0, this.hero.ward - dt * 2.5);
     this.rainbowGlow = Math.max(0, this.rainbowGlow - dt * 0.8);
     this.waveRing = Math.max(0, this.waveRing - dt * 1.6);
     for (const bn of this.banners) bn.t += dt;
@@ -147,7 +161,7 @@ export class BattleScene {
     this.vis = {
       enemies: b.enemies.map(enemyView), hearts: b.player.hearts,
       ring: { collected: b.color.collected, cursor: b.color.cursor },
-      gems: b.player.gems.map(g => ({ ...g })),
+      gems: b.player.gems.map(g => ({ ...g })), ward: b.ward,
     };
     const cards = b.deck.chain.map(c => ({ ...c }));
     const res = cast(b);
@@ -199,6 +213,10 @@ export class BattleScene {
           const e = ev; this.at(T, () => { this.waveRing = 1; this.banner('补色合白：全体', '#ffffff', 480, 262); });
           T += 0.3; break;
         }
+        case 'tide': {
+          this.at(T, () => { this.waveRing = 1; this.banner('碎甲白潮：全体再来一轮', '#8ff0ff', 480, 262, 24); });
+          T += 0.4; break;
+        }
         case 'rainbow': {
           this.at(T, () => { this.rainbowGlow = 1.6; this.banner('集齐六色：彩虹，全体再打两遍', '#ffd0ff', 480, 262, 26); });
           T += 0.5; break;
@@ -224,8 +242,15 @@ export class BattleScene {
           T += 0.2;
           this.at(T, () => {
             this.vis.enemies[e.enemy] = e.view; this.vis.hearts = e.heartsAfter;
-            this.hero.hurt = 1; this.atk[e.enemy] = 1;
-            this.floaters.add({ x: HERO.x, y: HERO.y - 90, text: attackText(e.hearts), color: '#ff6a78', size: 22, life: 1.3 });
+            this.atk[e.enemy] = 1;
+            if (e.blocked) {
+              this.vis.ward = e.ward; this.hero.ward = 1;
+              this.floaters.add({ x: HERO.x, y: HERO.y - 90, text: '护壁挡下了', color: '#8ff0ff', size: 22, life: 1.3 });
+            } else {
+              this.hero.hurt = 1;
+              this.floaters.add({ x: HERO.x, y: HERO.y - 90, text: attackText(e.hearts), color: '#ff6a78', size: 22, life: 1.3 });
+              if (e.junk) this.floaters.add({ x: HERO.x, y: HERO.y - 66, delay: 0.25, text: '弃牌堆里多了一张缠藤废牌', color: '#b8d890', size: 14, life: 1.6 });
+            }
           });
           T += 0.5; break;
         }
@@ -280,7 +305,7 @@ export class BattleScene {
   endCursor() { return this.prev.endCursor; }
   handFrames() {
     const ec = this.endCursor();
-    return this.b.deck.hand.map(c => relationOf(c.color, ec));
+    return this.b.deck.hand.map(c => (c.color < 0 || c.uid === this.b.maskedUid ? null : relationOf(c.color, ec)));
   }
   hitHand(x, y) {
     const hand = this.b.deck.hand;
@@ -302,6 +327,7 @@ export class BattleScene {
   pointerMove(x, y) {
     this.mx = x; this.my = y;
     for (const bt of [...Object.values(this.buttons), ...this.overlayButtons]) bt.hover = bt.enabled && bt.hit(x, y);
+    this.hoverSeal = (this.sealHits || []).find(h => x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h)?.id || null;
     if (this.drag) { this.drag.x = x - this.drag.gx; this.drag.y = y - this.drag.gy; return; }
     if (this.play || this.overlay) { this.hoverHand = null; this.hoverEnemy = -1; return; }
     const hi = this.hitHand(x, y);
@@ -338,8 +364,26 @@ export class BattleScene {
     const inZone = x >= zone.x && x <= zone.x + zone.w && y >= zone.y - 40 && y <= zone.y + zone.h;
     if (inZone) {
       const idx = this.b.deck.hand.findIndex(c => c.uid === d.uid);
-      if (idx >= 0 && queueCard(this.b, idx)) this.refresh();
+      if (idx < 0) return;
+      if (isInstant(this.b.deck.hand[idx])) this.useInstant(idx);
+      else if (queueCard(this.b, idx)) this.refresh();
     }
+  }
+  // 瞬发秘术和废牌：松手立刻生效，不占链位
+  useInstant(idx) {
+    const b = this.b, c = b.deck.hand[idx];
+    const r = playInstant(b, idx);
+    if (!r.ok) { this.toast = { str: r.reason, t: 2.2 }; return; }
+    for (const ev of r.events) {
+      if (ev.type === 'instant') this.banner(ARCANA[ev.id].name, '#ffe9a0', 480, 300, 24);
+      else if (ev.type === 'junkDrop') this.floaters.add({ x: 480, y: 330, text: '丢掉了一张废牌', color: '#b8d890', size: 14, life: 1.2 });
+      else if (ev.type === 'ward') this.floaters.add({ x: HERO.x, y: HERO.y - 90, text: `护壁 ×${ev.ward}`, color: '#8ff0ff', size: 18, life: 1.4 });
+      else if (ev.type === 'surge') this.floaters.add({ x: HERO.x, y: HERO.y - 90, text: '本回合每发 +50%', color: '#ffb04a', size: 18, life: 1.4 });
+      else if (ev.type === 'light') this.floaters.add({ x: 68, y: 76, text: '点亮 ' + ev.colors.map(k => COLOR_NAMES[k]).join('、'), color: '#ffe9a0', size: 14, life: 1.4 });
+      else if (ev.type === 'shave') { this.hurt[ev.enemy].flash = 0.8; this.floaters.add({ x: this.enemyX(ev.enemy), y: ENEMY_FEET_Y - 70, text: '盾 −' + ev.cells.reduce((a, k) => a + k, 0), color: '#8ff0ff', size: 14, life: 0.9 }); }
+      else if (ev.type === 'break') this.banner('破盾！', '#8ff0ff', this.enemyX(ev.enemy), ENEMY_FEET_Y - 90, 26);
+    }
+    this.refresh();
   }
   onButton(id) {
     const b = this.b;
@@ -347,8 +391,10 @@ export class BattleScene {
     else if (id === 'clear') { if (undoAll(b)) this.refresh(); }
     else if (id === 'cast') this.doCast();
     else if (id === 'deck') this.overlay = this.overlay?.kind === 'deck' ? null : { kind: 'deck' };
-    else if (id === 'restart' || id === 'again') this.newRun();
+    else if (id === 'restart') { if (this.hooks) this.hooks.onRestart(); else this.newRun(); }
+    else if (id === 'again') { if (this.hooks) this.hooks.onLose(); else this.newRun(); }
     else if (id === 'next') {
+      if (this.hooks) { this.hooks.onWin(this.b); return; }
       commitVictory(this.run, this.b);
       if (this.run.battleIndex >= BATTLES.length) this.overlay = { kind: 'clear' };
       else this.startBattle();
@@ -376,27 +422,33 @@ export class BattleScene {
     this.drawBanners(ctx);
     if (this.rainbowGlow > 0) this.drawRainbowEdge(ctx);
     if (this.hoverEnemy >= 0 && !this.drag && !this.overlay) this.drawEnemyTip(ctx, this.hoverEnemy);
+    if (this.hoverHand && !this.drag && !this.overlay && !this.play) this.drawCardTip(ctx);
+    if (this.hoverSeal && !this.overlay) this.drawSealTip(ctx);
     if (this.toast) { const w = 520; panel(ctx, 480 - w / 2, 232, w, 28, 'rgba(60,20,16,0.85)'); text(ctx, this.toast.str, 480, 247, { size: 13, align: 'center' }); }
     if (this.overlay) this.drawOverlay(ctx);
     this.overlayButtonsDraw(ctx);
   }
 
   drawTopBar(ctx) {
-    const b = this.b;
+    const b = this.b, trip = this.mode === 'trip';
     ctx.fillStyle = 'rgba(8,16,10,0.62)'; ctx.fillRect(0, 0, 960, 28);
     drawHearts(ctx, 20, 14, this.heartsNow(), b.player.maxHearts, 8);
-    text(ctx, `${this.def.title}／共 ${BATTLES.length} 战`, 108, 14, { size: 14 });
-    text(ctx, BIOMES[b.biome].name, 232, 14, { size: 13, color: '#bfe0b0' });
-    text(ctx, `第 ${b.turn} 回合`, 316, 14, { size: 13, color: '#cfd8dc' });
+    text(ctx, trip ? this.def.title : `${this.def.title}／共 ${BATTLES.length} 战`, 108, 14, { size: 14 });
+    text(ctx, BIOMES[b.biome].name, 262, 14, { size: 13, color: '#bfe0b0' });
+    text(ctx, `第 ${b.turn} 回合`, 326, 14, { size: 13, color: '#cfd8dc' });
+    if (trip) text(ctx, `金币 ${this.run.gold}`, 388, 14, { size: 13, color: GOLD });
+    text(ctx, `N = ${b.player.handBase}`, 458, 14, { size: 13, color: '#cfd8dc' });
     // 抽牌堆各色剩余
-    text(ctx, '抽牌堆', 432, 14, { size: 12, color: '#cfd8dc' });
+    text(ctx, '抽牌堆', 506, 14, { size: 12, color: '#cfd8dc' });
     const cnt = [0, 0, 0, 0, 0, 0, 0];
-    b.deck.draw.forEach(c => cnt[c.color]++);
+    let extra = 0;
+    b.deck.draw.forEach(c => { if (c.color >= 0 && !c.arcana) cnt[c.color]++; else extra++; });
     for (let i = 0; i < 7; i++) {
-      const x = 470 + i * 44;
+      const x = 548 + i * 36;
       roundRect(ctx, x, 5, 18, 18, 4); ctx.fillStyle = WHEEL_HEX[i]; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = 1.5; ctx.stroke();
-      text(ctx, String(cnt[i]), x + 22, 14, { size: 12, align: 'left' });
+      text(ctx, String(cnt[i]), x + 21, 14, { size: 12, align: 'left' });
     }
+    if (extra) text(ctx, `+${extra}`, 800, 14, { size: 12, align: 'left', color: '#ffe9a0' });
     this.buttons.deck.draw(ctx); this.buttons.restart.draw(ctx);
   }
 
@@ -421,19 +473,44 @@ export class BattleScene {
       drawShield(ctx, x, hpY + 14, v.shield, v.shieldMax, v.broken);
       drawCountdown(ctx, x - 46, hpY - 30, v.countdown, t);
       text(ctx, e.name, x - 30, hpY - 30, { size: 14, align: 'left' });
-      text(ctx, attackText(e.attackHearts), x + 70, hpY - 30, { size: 13, align: 'right', color: e.attackHearts >= 1 ? '#ff9a8a' : '#ffe0a0' });
+      const ah = v.attackHearts ?? e.attackHearts;
+      ctx.font = font(14, 600);
+      text(ctx, attackText(ah, e.attackNote), x - 30 + ctx.measureText(e.name).width + 8, hpY - 30, { size: 13, align: 'left', color: ah >= 1 ? '#ff9a8a' : '#ffe0a0' });
       if (e.trait === 'resist' && b.resist) {
         const rx = x + sz.w * sc / 2 + 14;
         text(ctx, '本回合抵制', rx, ENEMY_FEET_Y - 78, { size: 12, align: 'left', color: '#d8d8c8' });
         text(ctx, `${COLOR_NAMES[b.resist.now]}（伤减半、不削盾）`, rx, ENEMY_FEET_Y - 62, { size: 13, align: 'left', color: WHEEL_HEX[b.resist.now], weight: 800 });
         text(ctx, `下回合抵制：${COLOR_NAMES[b.resist.next]}`, rx, ENEMY_FEET_Y - 44, { size: 12, align: 'left', color: '#d8d8c8' });
       }
+      if (e.trait === 'gibbon') {
+        const rx = x + sz.w * sc / 2 + 12, n = countBits(this.vis ? this.vis.ring.collected : this.prev.endCollected), ok = n >= CONFIG.gibbonNeed;
+        text(ctx, `集色 ${n}/${CONFIG.gibbonNeed}`, rx, ENEMY_FEET_Y - 70, { size: 13, align: 'left', color: ok ? '#9aff9a' : '#ffb0a0', weight: 800 });
+        text(ctx, ok ? '已满，伤害正常' : '没满：受伤减半', rx, ENEMY_FEET_Y - 52, { size: 12, align: 'left', color: '#d8d8c8' });
+      }
+      if (e.trait === 'canopy' && v.bar >= 1) {
+        const rx = x + sz.w * sc / 2 + 10;
+        text(ctx, '每回合遮住 1 张手牌', rx, ENEMY_FEET_Y - 70, { size: 12, align: 'left', color: '#ffd0a0', weight: 800 });
+        text(ctx, '（只标「已遮蔽」）', rx, ENEMY_FEET_Y - 52, { size: 12, align: 'left', color: '#d8d8c8' });
+      }
     });
   }
 
   drawHero(ctx) {
-    const h = this.hero;
+    const h = this.hero, b = this.b;
+    const ward = this.vis ? this.vis.ward : b.ward;
     drawActor(ctx, HERO_LOOK, HERO.x, HERO.y, { t: this.t, scale: 1.05, dy: -12 * h.lunge, dx: Math.sin(this.t * 70) * 4 * h.hurt, flash: h.hurt * 0.7 });
+    if (ward > 0 || h.ward > 0) {                         // 护壁：罩在主角身上的一层半透明壳
+      ctx.save(); ctx.globalAlpha = (ward > 0 ? 0.5 : 0.5 * h.ward) + 0.1 * Math.sin(this.t * 4);
+      ctx.strokeStyle = '#8ff0ff'; ctx.lineWidth = 3; ctx.fillStyle = 'rgba(140,240,255,0.15)';
+      ctx.beginPath(); ctx.ellipse(HERO.x + 4, HERO.y - 40, 36, 52, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore();
+    }
+    // 主角身边的状态说明
+    const lines = [];
+    if (ward > 0) lines.push([`护壁 ×${ward}：挡下一次攻击`, '#8ff0ff']);
+    if (b.buff.surge > 0) lines.push([`魔力沸腾：每发 +${50 * b.buff.surge}%`, '#ffb04a']);
+    if (b.startMult > 1 && !this.vis) lines.push([`蓄锋待发：链倍率 ×${b.startMult} 起步`, '#ffd24a']);
+    if (b.capExtra > 0) lines.push([`手牌上限 +${b.capExtra}`, '#b0e0ff']);
+    lines.forEach(([str, col], k) => text(ctx, str, HERO.x + 46, HERO.y - 62 + k * 16, { size: 12, align: 'left', color: col, weight: 800 }));
   }
 
   drawSidePanels(ctx) {
@@ -451,9 +528,26 @@ export class BattleScene {
     }
     text(ctx, '宝石等级', 68, 226, { size: 12, align: 'center', color: '#cfd8dc' });
     // 右：这一战要验证什么
-    panel(ctx, 790, 34, 164, 150);
-    text(ctx, `${this.def.title}：${BIOMES[this.b.biome].name}`, 800, 50, { size: 13, color: GOLD, align: 'left' });
-    wrap(ctx, this.def.lesson, 144, 12).forEach((ln, i) => text(ctx, ln, 800, 72 + i * 17, { size: 12, align: 'left', weight: 500, outline: null, color: '#f0ece0' }));
+    const trip = this.mode === 'trip';
+    const lesson = wrap(ctx, this.def.lesson, 144, 12);
+    const seals = trip ? this.b.player.seals : [];
+    const rows = Math.ceil(seals.length / 6);
+    const h = 56 + lesson.length * 17 + (seals.length ? 26 + rows * 28 : 0);
+    panel(ctx, 790, 34, 164, h);
+    text(ctx, trip ? BIOMES[this.b.biome].name : `${this.def.title}：${BIOMES[this.b.biome].name}`, 800, 50, { size: 13, color: GOLD, align: 'left' });
+    lesson.forEach((ln, i) => text(ctx, ln, 800, 72 + i * 17, { size: 12, align: 'left', weight: 500, outline: null, color: '#f0ece0' }));
+    this.sealHits = [];
+    if (seals.length) {
+      const y0 = 72 + lesson.length * 17 + 6;
+      text(ctx, '秘宝印记（悬停看说明）', 800, y0 + 6, { size: 12, align: 'left', color: '#cfd8dc' });
+      seals.forEach((id, k) => {
+        const x = 800 + (k % 6) * 25, y = y0 + 18 + Math.floor(k / 6) * 28;
+        roundRect(ctx, x, y, 22, 22, 5); ctx.fillStyle = LINE_HEX[SEALS[id].line]; ctx.globalAlpha = 0.9; ctx.fill(); ctx.globalAlpha = 1;
+        ctx.lineWidth = 1.5; ctx.strokeStyle = '#1a1a14'; ctx.stroke();
+        text(ctx, SEALS[id].name[0], x + 11, y + 12, { size: 13, align: 'center', color: '#1a1a14', outline: null, weight: 800 });
+        this.sealHits.push({ x, y, w: 22, h: 22, id });
+      });
+    }
   }
 
   drawChainArea(ctx) {
@@ -509,15 +603,19 @@ export class BattleScene {
       ctx.save(); ctx.globalAlpha = Math.min(1, p.a ?? 1);
       ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.scale(p.s, p.s);
       const o = {};
-      if (v.zone === 'hand' && frames) {
+      if (v.zone === 'hand' && b.maskedUid === v.c.uid) o.masked = true;
+      if (v.zone === 'hand' && frames && !o.masked) {
         const idx = b.deck.hand.indexOf(v.c);
         const rel = frames[idx];
         const show = this.drag || this.hoverHand === v.c.uid;
-        if (show) {
+        if (show && rel) {
           if (rel === 'near' || rel === 'comp' || rel === 'wild') o.frame = rel;
           else if (rel === 'break') { o.dim = true; o.frame = 'break'; }
           o.tag = REL_TEXT[rel]; o.tagColor = REL_HEX[rel];
           if (resistNow === v.c.color) { o.tag = '抵制'; o.tagColor = '#ff9a8a'; }
+        } else if (show && !rel) {
+          o.tag = v.c.junk ? '拖进来丢掉' : '松手生效'; o.tagColor = '#ffe9a0';
+          if (v.c.junk) o.dim = true;
         }
       }
       if (v.zone === 'column') { o.lit = this.play.lit >= v.i; o.dim = this.play.lit < v.i; }
@@ -564,14 +662,40 @@ export class BattleScene {
     const lines = [
       e.name,
       `血条 第 ${v.bar + 1}/${v.barsTotal} 条：${v.hp} / ${v.maxHp}`,
-      v.shieldMax.some(c => c) ? '盾：' + v.shield.map((c, j) => (v.shieldMax[j] ? `${CHANNELS[j]}${c}/${v.shieldMax[j]}` : '')).filter(Boolean).join('  ') + (v.broken ? '（已破盾，受伤 ×1.5）' : '（有盾受伤 ×0.75）') : '没有盾',
-      `${v.countdown} 回合后出手：${attackText(e.attackHearts)}`,
+      v.shieldMax.some(c => c) ? '盾：' + v.shield.map((c, j) => (v.shieldMax[j] ? `${CHANNELS[j]}${c}/${v.shieldMax[j]}` : '')).filter(Boolean).join('  ') + (v.broken ? `（已破盾，受伤 ×${hasSeal(this.b, 'desperate') ? 2.25 : 1.5}）` : '（有盾受伤 ×0.75）') : '没有盾',
+      `${v.countdown} 回合后出手：${attackText(v.attackHearts ?? e.attackHearts, e.attackNote)}`,
     ];
-    if (e.trait === 'resist') lines.push('每回合抵制一种颜色：该色的牌伤减半、不削盾');
-    const w = 270, h = 10 + lines.length * 18 + 6;
-    let x = Math.min(950 - w, Math.max(10, this.enemyX(i) + 50)), y = 60;
-    panel(ctx, x, y, w, h, 'rgba(10,16,12,0.92)', 'rgba(255,255,255,0.3)');
-    lines.forEach((ln, k) => { const lines2 = wrap(ctx, ln, w - 16, 12); text(ctx, lines2[0] + (lines2.length > 1 ? '…' : ''), x + 8, y + 16 + k * 18, { size: k === 0 ? 14 : 12, align: 'left', weight: k === 0 ? 800 : 500, color: k === 0 ? GOLD : '#fff', outline: null }); });
+    if (e.trait && TRAITS[e.trait]) lines.push(TRAITS[e.trait]);
+    this.tipBox(ctx, lines, Math.min(950 - 270, Math.max(10, this.enemyX(i) + 56)), 60, 270);
+  }
+
+  // 悬停说明框：第一行是标题，后面逐行折行显示
+  tipBox(ctx, lines, x, y, w, bottomY = null) {
+    const wrapped = lines.map((ln, k) => wrap(ctx, ln, w - 16, k === 0 ? 14 : 12));
+    const total = wrapped.reduce((a, l) => a + l.length, 0);
+    const h = 14 + total * 17;
+    if (bottomY !== null) y = bottomY - h;
+    panel(ctx, x, y, w, h, 'rgba(10,16,12,0.94)', 'rgba(255,255,255,0.3)');
+    let yy = y + 15;
+    wrapped.forEach((ls, k) => ls.forEach(l => { text(ctx, l, x + 8, yy, { size: k === 0 ? 14 : 12, align: 'left', weight: k === 0 ? 800 : 500, color: k === 0 ? GOLD : '#fff', outline: null }); yy += 17; }));
+  }
+
+  drawCardTip(ctx) {
+    const c = this.b.deck.hand.find(x => x.uid === this.hoverHand), p = c && this.cardPos.get(c.uid);
+    if (!c || !p) return;
+    let lines = null;
+    if (this.b.maskedUid === c.uid) lines = ['已遮蔽', '这张牌的颜色被遮住了：靠你记住牌组和已打出的牌来判断'];
+    else if (c.junk) lines = [JUNK.name, JUNK.text];
+    else if (c.arcana) lines = [ARCANA[c.arcana].name, ARCANA[c.arcana].kind === 'instant' ? '瞬发秘术：拖进链区松手生效，补摸 1 张，不占链位' : '入链秘术：拖进链尾', ARCANA[c.arcana].text];
+    else if (c.carve && c.carve.length) lines = [`${COLOR_NAMES[c.color]}牌的宝石雕琢`, ...c.carve.map(k => `${CARVES[k].name}：${CARVES[k].text}`)];
+    if (!lines) return;
+    const w = 230;
+    this.tipBox(ctx, lines, Math.max(8, Math.min(952 - w, p.x - w / 2)), 0, w, 436);
+  }
+  drawSealTip(ctx) {
+    const sd = SEALS[this.hoverSeal];
+    if (!sd) return;
+    this.tipBox(ctx, [sd.name, LINES[sd.line].name, sd.text], 560, 40, 224);
   }
 
   drawOverlay(ctx) {
@@ -581,31 +705,45 @@ export class BattleScene {
     const mk = (id, label, x, y, w = 150) => { const bt = new Button(id, label, x, y, w, 34); bt.accent = true; this.overlayButtons.push(bt); return bt; };
     if (o.kind === 'deck') {
       panel(ctx, 230, 70, 500, 400, 'rgba(14,22,16,0.96)', 'rgba(255,255,255,0.3)');
-      text(ctx, '牌组（固定 29 张，一趟里不加不删）', 480, 94, { size: 16, color: GOLD, align: 'center' });
-      const d = this.b.deck, cnt = k => [0, 1, 2, 3, 4, 5, 6].map(c => k.filter(x => x.color === c).length);
+      text(ctx, this.mode === 'trip' ? '牌组（29 张宝石牌 + 一趟里拿到的秘术牌和废牌）' : '牌组（固定 29 张，一趟里不加不删）', 480, 94, { size: 16, color: GOLD, align: 'center' });
+      const d = this.b.deck, cnt = k => [0, 1, 2, 3, 4, 5, 6].map(c => k.filter(x => x.color === c && !x.arcana && !x.junk).length);
       const draw = cnt(d.draw), dis = cnt(d.discard), hand = cnt([...d.hand, ...d.chain]);
       text(ctx, '色', 270, 124, { size: 13, color: '#cfd8dc', align: 'center' });
       ['合计', '抽牌堆', '弃牌堆', '手里'].forEach((s, i) => text(ctx, s, 380 + i * 90, 124, { size: 13, color: '#cfd8dc', align: 'center' }));
+      const other = k => [k.filter(x => x.arcana).length, k.filter(x => x.junk).length];
+      const o1 = other(d.draw), o2 = other(d.discard), o3 = other([...d.hand, ...d.chain]);
+      if (this.mode === 'trip') ['秘术牌', '缠藤废牌'].forEach((nm, r) => {
+        const y = 156 + (7 + r) * 34;
+        text(ctx, nm, 270, y, { size: 14, align: 'center', color: '#ffe9a0' });
+        [o1[r] + o2[r] + o3[r], o1[r], o2[r], o3[r]].forEach((n, i) => text(ctx, String(n), 380 + i * 90, y, { size: 16, align: 'center' }));
+      });
       for (let c = 0; c < 7; c++) {
-        const y = 156 + c * 38;
+        const y = 156 + c * (this.mode === 'trip' ? 34 : 38);
         roundRect(ctx, 252, y - 14, 36, 28, 5); ctx.fillStyle = WHEEL_HEX[c]; ctx.fill(); ctx.strokeStyle = '#000'; ctx.lineWidth = 1.5; ctx.stroke();
         text(ctx, COLOR_NAMES[c], 270, y, { size: 16, align: 'center', color: c === 6 || c === 1 ? '#3a3320' : '#fff', outline: null });
         [draw[c] + dis[c] + hand[c], draw[c], dis[c], hand[c]].forEach((n, i) => text(ctx, String(n), 380 + i * 90, y, { size: 16, align: 'center' }));
       }
-      text(ctx, '点任意处关闭', 480, 446, { size: 12, align: 'center', color: '#cfd8dc' });
+      text(ctx, '点任意处关闭', 480, 452, { size: 12, align: 'center', color: '#cfd8dc' });
       return;
     }
     panel(ctx, 280, 150, 400, 240, 'rgba(14,22,16,0.95)', GOLD);
     if (o.kind === 'win') {
       text(ctx, `${this.def.title}胜利`, 480, 188, { size: 28, color: GOLD, align: 'center', weight: 800 });
       drawHearts(ctx, 480 - 40, 232, this.b.player.hearts, this.b.player.maxHearts, 9);
-      text(ctx, '心不会自动回满，宝石等级带进下一战', 480, 270, { size: 14, align: 'center' });
-      const last = this.run.battleIndex + 1 >= BATTLES.length;
-      mk('next', last ? '完成 4 战' : '继续前进', 405, 330);
+      if (this.hooks) {
+        const gold = this.node?.type === 'elite' ? 45 : this.node?.type === 'boss' ? 0 : 25;
+        text(ctx, gold ? `掉落金币 ${gold}` : '林地首领倒下了', 480, 270, { size: 15, align: 'center', color: GOLD });
+        if (this.node?.loot) text(ctx, `战利品：${LOOT[this.node.loot].name}`, 480, 296, { size: 15, align: 'center' });
+        mk('next', this.node?.type === 'boss' ? '看结算' : (this.node?.loot ? '去拿战利品' : '继续前进'), 405, 330);
+      } else {
+        text(ctx, '心不会自动回满，宝石等级带进下一战', 480, 270, { size: 14, align: 'center' });
+        const last = this.run.battleIndex + 1 >= BATTLES.length;
+        mk('next', last ? '完成 4 战' : '继续前进', 405, 330);
+      }
     } else if (o.kind === 'lose') {
       text(ctx, '心耗尽了', 480, 190, { size: 28, color: '#ff8a8a', align: 'center', weight: 800 });
-      text(ctx, `倒在 ${this.def.title}。宝石等级也一起归 1 级。`, 480, 250, { size: 14, align: 'center' });
-      mk('again', '重新开始', 405, 330);
+      text(ctx, this.hooks ? `倒在 ${this.def.title}。这一趟的战利品都没带出去。` : `倒在 ${this.def.title}。宝石等级也一起归 1 级。`, 480, 250, { size: 14, align: 'center' });
+      mk('again', this.hooks ? '看结算' : '重新开始', 405, 330);
     } else if (o.kind === 'clear') {
       text(ctx, '4 场全部打完', 480, 190, { size: 28, color: GOLD, align: 'center', weight: 800 });
       text(ctx, `剩 ${this.run.player.hearts} 颗心 · 宝石等级 红${this.run.player.gems[0].level} 绿${this.run.player.gems[1].level} 蓝${this.run.player.gems[2].level}`, 480, 250, { size: 14, align: 'center' });

@@ -9,7 +9,14 @@ export const ACTOR_SIZE = {
   earth2_barometz: { w: 70, h: 56 },
   goblin_scout: { w: 52, h: 66 },
   fairy_meadow: { w: 56, h: 74 },
+  earth3_zheng: { w: 88, h: 54 },
+  earth6_long_arm: { w: 62, h: 84 },
+  earth1_belly_maw: { w: 86, h: 66 },
+  tree3_leshy: { w: 100, h: 112 },
+  npc_gear_smith: { w: 46, h: 72 },
 };
+// 战斗里怪的放大倍数（首领大一些，别的差不多）
+export const ENEMY_SCALE = { slime_jelly: 1.5, tree3_leshy: 1.1, earth3_zheng: 1.3, earth1_belly_maw: 1.3, earth6_long_arm: 1.3 };
 
 // o: { t 秒, scale, flash 0..1 发白, alpha, dx, dy 位移, squash }
 export function drawActor(ctx, look, x, y, o = {}) {
@@ -112,6 +119,79 @@ const DRAW = {
     }
     ell(ctx, 0, -40, 9, 9, F('#fbe06a'));
     ell(ctx, -3, -41, 1.5, 2, '#5a3a18', 'transparent'); ell(ctx, 3, -41, 1.5, 2, '#5a3a18', 'transparent');
+  },
+  // 五尾赤豹：低伏的赤色豹，身后扇开五条尾巴
+  earth3_zheng(ctx, F, t) {
+    const sway = Math.sin(t * 2.4) * 0.12;
+    for (let k = 0; k < 5; k++) {
+      const a = -0.9 + k * 0.45 + sway * (k - 2) * 0.5;
+      ctx.save(); ctx.translate(-26, -26); ctx.rotate(a - Math.PI / 2 + Math.PI);
+      ctx.strokeStyle = F(k % 2 ? '#c8402e' : '#e0663a'); ctx.lineWidth = 5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(10, 18, 2, 36); ctx.stroke(); ctx.restore();
+    }
+    for (const lx of [-18, -6, 16, 28]) rect(ctx, lx - 3, -14, 7, 14, F('#b8381f'));
+    ell(ctx, 0, -28, 32, 15, F('#d8502e'));
+    for (const [sx, sy] of [[-14, -33], [-2, -36], [10, -32], [-6, -24], [18, -26]]) ell(ctx, sx, sy, 3.5, 2.5, F('#7a2214'), 'transparent');
+    ell(ctx, 34, -34, 13, 11, F('#e0663a'));
+    poly(ctx, [[28, -42], [31, -52], [37, -43]], F('#b8381f')); poly(ctx, [[38, -43], [43, -51], [45, -40]], F('#b8381f'));
+    ell(ctx, 38, -35, 2, 2.4, '#fff2a0', 'transparent'); ell(ctx, 45, -31, 2.4, 1.8, '#3a1410', 'transparent');
+  },
+  // 摇果长臂猿：灰褐的身子，两条超长的手臂，手里攥着红果
+  earth6_long_arm(ctx, F, t) {
+    const sw = Math.sin(t * 2) * 5;
+    rect(ctx, -10, -16, 8, 16, F('#6a4a30')); rect(ctx, 3, -16, 8, 16, F('#6a4a30'));
+    ell(ctx, 0, -38, 15, 22, F('#8a6240'));
+    ell(ctx, 0, -32, 9, 13, F('#c8a47c'), 'transparent');
+    for (const sx of [-1, 1]) {
+      ctx.strokeStyle = F('#8a6240'); ctx.lineWidth = 6; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(sx * 13, -52); ctx.quadraticCurveTo(sx * (34 + sw), -34, sx * (30 + sw * 1.4), -4); ctx.stroke();
+      ell(ctx, sx * (30 + sw * 1.4), -3, 6, 6, F('#c8402e'));
+    }
+    ell(ctx, 0, -66, 13, 12, F('#8a6240'));
+    ell(ctx, 0, -63, 9, 8, F('#d8b890'), 'transparent');
+    ell(ctx, -4, -66, 1.8, 2.2, '#2a1a10', 'transparent'); ell(ctx, 4, -66, 1.8, 2.2, '#2a1a10', 'transparent');
+  },
+  // 腹口懒兽：圆滚滚的一大团，肚皮上裂开一张大嘴
+  earth1_belly_maw(ctx, F, t) {
+    const br = 1 + Math.sin(t * 1.6) * 0.03;
+    ctx.scale(br, 1 / br);
+    rect(ctx, -26, -10, 14, 12, F('#6a5a46')); rect(ctx, 12, -10, 14, 12, F('#6a5a46'));
+    ell(ctx, 0, -30, 36, 28, F('#8a7a5e'));
+    ell(ctx, 0, -22, 22, 15, F('#3a1e1a'));
+    for (let k = -3; k <= 3; k++) { poly(ctx, [[k * 6 - 3, -33], [k * 6 + 3, -33], [k * 6, -26]], '#f2ecd8', 'transparent'); poly(ctx, [[k * 6 - 3, -11], [k * 6 + 3, -11], [k * 6, -18]], '#f2ecd8', 'transparent'); }
+    ell(ctx, 0, -16, 7, 4, F('#c0504a'), 'transparent');
+    ell(ctx, -22, -54, 11, 9, F('#7a6a50'));
+    ell(ctx, -25, -55, 1.6, 2, '#2a2218', 'transparent');
+    ctx.strokeStyle = '#2a2218'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(-29, -58); ctx.lineTo(-22, -57); ctx.stroke();
+  },
+  // 千丈古树精：一棵会走的老树，树干上有脸，枝条当手臂，顶着一冠叶子
+  tree3_leshy(ctx, F, t) {
+    const sw = Math.sin(t * 1.4) * 4;
+    for (const [rx, rw] of [[-34, 18], [-14, 12], [16, 12], [34, 18]]) poly(ctx, [[rx - rw / 2, 0], [rx + rw / 2, 0], [rx * 0.6, -26]], F('#4a321f'));
+    poly(ctx, [[-26, -22], [26, -22], [20, -76], [-20, -76]], F('#5c4129'));
+    rect(ctx, -26, -22, 9, 54, F('#6a4a2e'), 'transparent');
+    for (const sx of [-1, 1]) {
+      ctx.strokeStyle = F('#4a321f'); ctx.lineWidth = 9; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(sx * 22, -60); ctx.quadraticCurveTo(sx * (46 + sw), -64, sx * (52 + sw), -88); ctx.stroke();
+      ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(sx * (52 + sw), -88); ctx.lineTo(sx * (60 + sw), -98); ctx.moveTo(sx * (52 + sw), -88); ctx.lineTo(sx * (46 + sw), -100); ctx.stroke();
+    }
+    for (const [lx, ly, lr, col] of [[0, -96, 34, '#2e6a38'], [-24, -88, 24, '#265a30'], [24, -88, 24, '#265a30'], [0, -108, 22, '#3a7a42']]) ell(ctx, lx, ly, lr, lr * 0.8, F(col));
+    for (let k = 0; k < 5; k++) ell(ctx, -22 + k * 11, -92 + (k % 2) * 8, 3.2, 3.2, '#c8402e', 'transparent');
+    ell(ctx, -8, -52, 4, 5, '#f2c050', 'transparent'); ell(ctx, 8, -52, 4, 5, '#f2c050', 'transparent');
+    ctx.strokeStyle = '#2a1a10'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, -40, 9, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  },
+  // 行商：背着大包袱的矮个子
+  npc_gear_smith(ctx, F, t) {
+    const bob = Math.sin(t * 2.2) * 1;
+    ctx.translate(0, bob);
+    ell(ctx, -14, -34, 14, 18, F('#8a5a30'));
+    poly(ctx, [[-14, 0], [14, 0], [11, -34], [-11, -34]], F('#5a7a4a'));
+    rect(ctx, -12, -20, 24, 5, F('#e8c24a'));
+    ell(ctx, 0, -44, 9, 9.5, F('#f0c8a0'));
+    poly(ctx, [[-12, -48], [12, -48], [8, -62], [-8, -62]], F('#a03a2c'));
+    ell(ctx, -3, -45, 1.6, 1.8, '#2a2020', 'transparent'); ell(ctx, 4, -45, 1.6, 1.8, '#2a2020', 'transparent');
+    ctx.strokeStyle = '#6b4a2a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(18, 2); ctx.lineTo(18, -40); ctx.stroke();
+    ell(ctx, 18, -44, 5, 6, F('#e8c24a'));
   },
   fallback(ctx, F) { rect(ctx, -16, -40, 32, 40, F('#c06060')); },
 };

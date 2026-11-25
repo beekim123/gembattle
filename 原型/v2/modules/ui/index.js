@@ -6,3 +6,5 @@ export * from './ring.js';
 export * from './button.js';
 export * from './floaters.js';
 export * from './arc.js';
+export * from './deckgrid.js';
+export * from './mapicons.js';

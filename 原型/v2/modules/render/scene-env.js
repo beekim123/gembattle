@@ -1,165 +1,184 @@
-// 生态场景环境：全屏 2D 地面 + 左右两翼摆件 + 微粒氛围。绝不画圆台。
+// 生态场景环境：全屏 2D 地面（env-ground.js 烘焙）+ 动态微粒与氛围。绝不画圆台。
 // 画布坐标是 960×540 布局单位（调用方已缩放好）。第 3 步把摆件换成工坊的 3D 像素模型。
+//   落果浅林：斜飘碎叶 + 红果滚落 + 林隙暖斑      泽畔浅洼：冒泡与涟漪 + 低空薄雾
+//   花甸林隙：暖金花粉 + 花簇轻摇                苔石古径：温水汽升腾 + 青苔孢
+//   巨木树冠：劲风碎叶掠过 + 树梢亮斑呼吸（进第 3 条血风更急）
+//   营火 / 行商 / 界门：火屑与暖晕 / 尘埃 / 青苔细屑
 import { BIOMES } from '../content/biomes.js';
+import { bakeGround, rng, W, H } from './env-ground.js';
 
-const W = 960, H = 540;
+const TAU = Math.PI * 2;
 
-function rng(seed) {
-  let s = seed >>> 0;
-  return () => { s = (s + 0x6D2B79F5) >>> 0; let t = Math.imul(s ^ (s >>> 15), s | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+function sunPatches(ctx, biome, time) {
+  for (let k = 0; k < 3; k++) {
+    const a = 0.5 + 0.5 * Math.sin(time * 0.5 + k * 2);
+    const gx = 220 + k * 250, gy = 150 + (k % 2) * 90;
+    const gr = ctx.createRadialGradient(gx, gy, 5, gx, gy, 110);
+    gr.addColorStop(0, biome.sunPatch.replace(/[\d.]+\)$/, (0.05 + 0.1 * a).toFixed(3) + ')')); gr.addColorStop(1, 'rgba(255,240,180,0)');
+    ctx.fillStyle = gr; ctx.fillRect(gx - 110, gy - 110, 220, 220);
+  }
 }
 
-function bake(biome, seed) {
-  const cv = document.createElement('canvas');
-  cv.width = W * 2; cv.height = H * 2;
-  const c = cv.getContext('2d'); c.scale(2, 2);
-  const r = rng(seed);
-  const g = c.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, biome.groundTop); g.addColorStop(1, biome.groundBottom);
-  c.fillStyle = g; c.fillRect(0, 0, W, H);
-  // 草坪的深浅斑块
-  for (let i = 0; i < 150; i++) {
-    c.globalAlpha = 0.14 + r() * 0.18; c.fillStyle = biome.patch;
-    c.beginPath(); c.ellipse(r() * W, r() * H, 14 + r() * 50, 6 + r() * 20, 0, 0, Math.PI * 2); c.fill();
-  }
-  c.globalAlpha = 1;
-  // 细草
-  c.lineWidth = 1.4;
-  for (let i = 0; i < 520; i++) {
-    const x = r() * W, y = r() * H, hgt = 3 + r() * 6;
-    c.strokeStyle = r() < 0.5 ? 'rgba(20,50,24,0.5)' : 'rgba(150,210,110,0.35)';
-    c.beginPath(); c.moveTo(x, y); c.lineTo(x - 1.5, y - hgt); c.moveTo(x, y); c.lineTo(x + 1.5, y - hgt * 0.8); c.stroke();
-  }
-  if (biome.id === 'forest') {
-    // 落叶与散落的红果
-    for (let i = 0; i < 110; i++) {
-      c.fillStyle = biome.leaf[(r() * 3) | 0]; c.globalAlpha = 0.55;
-      c.save(); c.translate(r() * W, r() * H); c.rotate(r() * 6.28);
-      c.beginPath(); c.ellipse(0, 0, 4 + r() * 3, 2 + r() * 1.5, 0, 0, Math.PI * 2); c.fill(); c.restore();
-    }
-    c.globalAlpha = 1;
-    for (let i = 0; i < 16; i++) {
-      const x = r() * W, y = 60 + r() * (H - 60);
-      c.beginPath(); c.arc(x, y, 3 + r() * 1.5, 0, Math.PI * 2); c.fillStyle = biome.fruit; c.fill();
-      c.beginPath(); c.arc(x - 1, y - 1.2, 1, 0, Math.PI * 2); c.fillStyle = 'rgba(255,255,255,0.55)'; c.fill();
-    }
-    forestWings(c, r);
-  } else {
-    // 花甸：散落的小花
-    for (let i = 0; i < 150; i++) {
-      const x = r() * W, y = 30 + r() * (H - 30), col = biome.leaf[(r() * 3) | 0];
-      c.fillStyle = col;
-      for (let k = 0; k < 5; k++) { const a = k * 1.2566; c.beginPath(); c.arc(x + Math.cos(a) * 2.6, y + Math.sin(a) * 2.6, 1.7, 0, 6.3); c.fill(); }
-      c.beginPath(); c.arc(x, y, 1.4, 0, 6.3); c.fillStyle = '#e8a030'; c.fill();
-    }
-    meadowWings(c, r);
-  }
-  // 整层压暗 15%，让战区的角色和数字跳出来
-  c.fillStyle = 'rgba(0,0,0,0.15)'; c.fillRect(0, 0, W, H);
-  // 四角暗边
-  const v = c.createRadialGradient(W / 2, H * 0.52, H * 0.35, W / 2, H * 0.52, W * 0.66);
-  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, biome.vignette);
-  c.fillStyle = v; c.fillRect(0, 0, W, H);
-  return cv;
-}
-
-function tree(c, x, trunkW, top, bottom, canopyR, r) {
-  c.fillStyle = '#4a3320'; c.fillRect(x - trunkW / 2, top, trunkW, bottom - top);
-  c.fillStyle = '#5c4129'; c.fillRect(x - trunkW / 2, top, trunkW * 0.35, bottom - top);
-  c.fillStyle = '#4a3320';
-  c.beginPath(); c.moveTo(x - trunkW / 2, bottom); c.quadraticCurveTo(x - trunkW, bottom, x - trunkW * 1.3, bottom + 6); c.lineTo(x + trunkW * 1.3, bottom + 6); c.quadraticCurveTo(x + trunkW, bottom, x + trunkW / 2, bottom); c.fill();
-  const shades = ['#1d4426', '#265a30', '#2e6a38', '#1a3a22'];
-  for (let i = 0; i < 16; i++) {
-    c.fillStyle = shades[(r() * 4) | 0];
-    c.beginPath(); c.arc(x + (r() - 0.5) * canopyR * 1.8, top + (r() - 0.6) * canopyR * 1.1, canopyR * (0.35 + r() * 0.3), 0, 6.3); c.fill();
-  }
-  for (let i = 0; i < 7; i++) { // 树冠里挂的红果
-    c.beginPath(); c.arc(x + (r() - 0.5) * canopyR * 1.6, top + (r() - 0.4) * canopyR * 0.9, 3, 0, 6.3); c.fillStyle = '#c8402e'; c.fill();
-  }
-}
-function forestWings(c, r) {
-  tree(c, 56, 30, 110, 250, 80, r);
-  tree(c, 916, 28, 96, 236, 76, r);
-  // 右侧：一根卧着的苔藓倒木，上面堆着赤果
-  c.fillStyle = '#5a3f26'; c.beginPath(); c.roundRect(836, 296, 140, 34, 14); c.fill();
-  c.fillStyle = '#3d6a38'; c.beginPath(); c.roundRect(846, 292, 90, 12, 6); c.fill();
-  c.fillStyle = '#3a2816'; c.beginPath(); c.ellipse(838, 313, 6, 16, 0, 0, 6.3); c.fill();
-  for (let i = 0; i < 6; i++) { c.beginPath(); c.arc(868 + i * 12, 290 - (i % 2) * 4, 4, 0, 6.3); c.fillStyle = '#c8402e'; c.fill(); }
-}
-function meadowWings(c, r) {
-  const cluster = (x, y, n) => {
-    for (let i = 0; i < n; i++) {
-      const fx = x + (r() - 0.5) * 70, fy = y + (r() - 0.5) * 26;
-      c.strokeStyle = '#2f6a30'; c.lineWidth = 2; c.beginPath(); c.moveTo(fx, fy + 22); c.lineTo(fx, fy); c.stroke();
-      c.fillStyle = ['#f6a8c4', '#fbf0d0', '#f6d878'][(r() * 3) | 0];
-      for (let k = 0; k < 5; k++) { const a = k * 1.2566; c.beginPath(); c.arc(fx + Math.cos(a) * 5, fy + Math.sin(a) * 5, 3.6, 0, 6.3); c.fill(); }
-      c.beginPath(); c.arc(fx, fy, 3, 0, 6.3); c.fillStyle = '#e8a030'; c.fill();
-    }
+// 一群会漂的小东西：spawn 出生、step 每帧走一步、draw 画一个
+function swarm(n, r, spawn, step, draw) {
+  const parts = Array.from({ length: n }, () => spawn(r, true));
+  return {
+    update(dt, time) { for (const p of parts) { step(p, dt, time); if (p.dead) Object.assign(p, spawn(r, false), { dead: false }); } },
+    draw(ctx, time) { for (const p of parts) { ctx.save(); ctx.translate(p.x, p.y); draw(ctx, p, time); ctx.restore(); } },
   };
-  cluster(60, 190, 9); cluster(76, 300, 8); cluster(900, 210, 9); cluster(884, 310, 8);
-  // 左上：巨大的含露花苞
-  c.fillStyle = '#3f8a3c'; c.beginPath(); c.ellipse(70, 96, 36, 54, 0, 0, 6.3); c.fill();
-  c.fillStyle = '#f0a0bc'; c.beginPath(); c.moveTo(34, 80); c.quadraticCurveTo(70, 8, 106, 80); c.quadraticCurveTo(70, 46, 34, 80); c.fill();
-  c.fillStyle = 'rgba(255,255,255,0.5)'; c.beginPath(); c.ellipse(58, 70, 5, 8, 0.4, 0, 6.3); c.fill();
 }
+const drift = (p, dt) => { p.x += p.vx * dt; p.y += p.vy * dt; p.ph += dt * p.spin; if (p.x > W + 20 || p.x < -30 || p.y > H + 20 || p.y < -30) p.dead = true; };
 
-export function createEnv(biomeId, seed = 1) {
+const SYSTEMS = {
+  forest(r, biome) {
+    const leaves = swarm(20, r,
+      (r, any) => ({ x: any ? r() * W : -10 + r() * 60, y: any ? r() * H : -10 + r() * 200, vx: 12 + r() * 14, vy: 10 + r() * 12, ph: r() * TAU, spin: 1 + r() * 2, size: 3 + r() * 2.5, color: ['#7ab356', '#5c9a48', '#d8a040'][(r() * 3) | 0] }),
+      drift,
+      (ctx, p) => { ctx.rotate(p.ph); ctx.fillStyle = p.color; ctx.globalAlpha = 0.8; ctx.beginPath(); ctx.ellipse(0, 0, p.size, p.size * 0.5, 0, 0, TAU); ctx.fill(); });
+    let fruit = null, timer = 3;
+    return {
+      update(dt, time) {
+        leaves.update(dt, time);
+        timer -= dt;
+        if (!fruit && timer <= 0) { fruit = { x: r() < 0.5 ? 40 + r() * 70 : 850 + r() * 70, y: 150, vy: 0, bounces: 0 }; timer = 6 + r() * 4; }
+        if (fruit) { fruit.vy += 420 * dt; fruit.y += fruit.vy * dt; if (fruit.y > 262) { fruit.y = 262; fruit.vy *= -0.45; fruit.bounces++; if (fruit.bounces > 2) fruit = null; } }
+      },
+      draw(ctx, time) {
+        sunPatches(ctx, biome, time); leaves.draw(ctx, time);
+        if (fruit) { ctx.beginPath(); ctx.arc(fruit.x, fruit.y, 4, 0, TAU); ctx.fillStyle = '#c8402e'; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.stroke(); }
+      },
+    };
+  },
+  meadow(r, biome) {
+    const pollen = swarm(46, r,
+      (r, any) => ({ x: any ? r() * W : -10 + r() * 60, y: any ? r() * H : -10 + r() * 200, vx: 8 + r() * 10, vy: -2 + r() * 6, ph: r() * TAU, spin: 2 + r() * 2, size: 1.8 + r() * 1.8 }),
+      drift,
+      (ctx, p) => { ctx.globalAlpha = 0.45 + 0.35 * Math.sin(p.ph); ctx.fillStyle = '#ffe9a0'; ctx.beginPath(); ctx.arc(0, 0, p.size * 0.55, 0, TAU); ctx.fill(); });
+    const sway = [[60, 190], [76, 300], [900, 210], [884, 310]];
+    return {
+      update(dt, time) { pollen.update(dt, time); },
+      draw(ctx, time) {
+        sunPatches(ctx, biome, time); pollen.draw(ctx, time);
+        sway.forEach(([x, y], i) => {           // 花簇节奏轻摇：叠几朵会晃的花头
+          for (let k = 0; k < 3; k++) {
+            const fx = x + (k - 1) * 18 + Math.sin(time * 1.6 + i + k) * 3, fy = y - 12 + k * 3;
+            ctx.fillStyle = ['#f6a8c4', '#fbf0d0', '#f6d878'][(i + k) % 3];
+            for (let q = 0; q < 5; q++) { const a = q * 1.2566; ctx.beginPath(); ctx.arc(fx + Math.cos(a) * 4, fy + Math.sin(a) * 4, 3, 0, TAU); ctx.fill(); }
+            ctx.beginPath(); ctx.arc(fx, fy, 2.4, 0, TAU); ctx.fillStyle = '#e8a030'; ctx.fill();
+          }
+        });
+      },
+    };
+  },
+  swamp(r, biome) {
+    const spots = [[120, 150, 80], [150, 330, 60], [840, 170, 86], [810, 350, 62], [480, 78, 100]];
+    let bubbles = [], ripples = [], timer = 0.4;
+    const mist = Array.from({ length: 5 }, (_, i) => ({ x: r() * W, y: 300 + i * 40 + r() * 30, w: 220 + r() * 200, vx: 6 + r() * 6, a: 0.05 + r() * 0.05 }));
+    return {
+      update(dt) {
+        timer -= dt;
+        if (timer <= 0) {                                     // 水洼里随机冒一个泡
+          const [x, y, rx] = spots[(r() * spots.length) | 0];
+          bubbles.push({ x: x + (r() - 0.5) * rx, y, t: 0, life: 0.9 + r() * 0.6 });
+          timer = 0.3 + r() * 0.5;
+        }
+        for (const b of bubbles) { b.t += dt; b.y -= dt * 10; }
+        for (const b of bubbles.filter(b => b.t >= b.life)) ripples.push({ x: b.x, y: b.y + 8, t: 0 });
+        bubbles = bubbles.filter(b => b.t < b.life);
+        for (const p of ripples) p.t += dt;
+        ripples = ripples.filter(p => p.t < 1.4);
+        for (const m of mist) { m.x += m.vx * dt; if (m.x - m.w > W) m.x = -m.w; }
+      },
+      draw(ctx, time) {
+        sunPatches(ctx, biome, time);
+        for (const p of ripples) { const k = p.t / 1.4; ctx.strokeStyle = `rgba(190,240,200,${0.55 * (1 - k)})`; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(p.x, p.y, 4 + k * 22, 2 + k * 8, 0, 0, TAU); ctx.stroke(); }
+        for (const b of bubbles) { const k = b.t / b.life; ctx.globalAlpha = 1 - k * 0.5; ctx.fillStyle = 'rgba(220,255,230,0.8)'; ctx.beginPath(); ctx.arc(b.x, b.y, 1.5 + k * 2.2, 0, TAU); ctx.fill(); ctx.globalAlpha = 1; }
+        for (const m of mist) { const g = ctx.createRadialGradient(m.x, m.y, 4, m.x, m.y, m.w / 2); g.addColorStop(0, `rgba(210,240,225,${m.a})`); g.addColorStop(1, 'rgba(210,240,225,0)'); ctx.save(); ctx.translate(0, m.y); ctx.scale(1, 0.18); ctx.translate(0, -m.y); ctx.fillStyle = g; ctx.fillRect(m.x - m.w / 2, m.y - m.w / 2, m.w, m.w); ctx.restore(); }
+      },
+    };
+  },
+  ruins(r, biome) {
+    const pools = [[150, 330], [820, 150], [730, 400]];
+    const steam = swarm(24, r,
+      (r, any) => { const [x, y] = pools[(r() * pools.length) | 0]; return { x: x + (r() - 0.5) * 40, y: any ? y - r() * 70 : y, vx: (r() - 0.5) * 4, vy: -(6 + r() * 6), ph: r() * TAU, spin: 1, size: 5 + r() * 5, born: 0, life: 4 + r() * 3 }; },
+      (p, dt) => { p.x += p.vx * dt + Math.sin(p.ph) * 0.15; p.y += p.vy * dt; p.ph += dt; p.born += dt; if (p.born > p.life) p.dead = true; },
+      (ctx, p) => { const k = p.born / p.life; ctx.globalAlpha = 0.22 * Math.sin(Math.PI * Math.min(1, k)); ctx.fillStyle = '#e6f3e6'; ctx.beginPath(); ctx.arc(0, 0, p.size * (0.6 + k), 0, TAU); ctx.fill(); });
+    const spores = swarm(14, r,
+      (r, any) => ({ x: any ? r() * W : r() * W, y: any ? r() * H : H + 6, vx: (r() - 0.5) * 6, vy: -(3 + r() * 5), ph: r() * TAU, spin: 1.5, size: 1.6 + r() * 1.2 }),
+      drift,
+      (ctx, p) => { ctx.globalAlpha = 0.5 + 0.3 * Math.sin(p.ph); ctx.fillStyle = '#9ed89a'; ctx.beginPath(); ctx.arc(Math.sin(p.ph) * 2, 0, p.size, 0, TAU); ctx.fill(); });
+    return { update(dt, time) { steam.update(dt, time); spores.update(dt, time); }, draw(ctx, time) { sunPatches(ctx, biome, time); steam.draw(ctx, time); spores.draw(ctx, time); } };
+  },
+  canopy(r, biome, env) {
+    const streaks = swarm(26, r,
+      (r, any) => ({ x: any ? r() * W : -30, y: any ? r() * H : r() * H, vx: 70 + r() * 80, vy: 18 + r() * 24, ph: r() * TAU, spin: 3 + r() * 3, size: 3 + r() * 3 }),
+      (p, dt) => { const k = env.wind; p.x += p.vx * dt * k; p.y += p.vy * dt * k; p.ph += dt * p.spin; if (p.x > W + 40 || p.y > H + 20) p.dead = true; },
+      (ctx, p) => { ctx.rotate(Math.atan2(p.vy, p.vx)); ctx.strokeStyle = 'rgba(190,230,150,0.22)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(-22 * env.wind, 0); ctx.lineTo(0, 0); ctx.stroke(); ctx.fillStyle = '#9ac860'; ctx.globalAlpha = 0.85; ctx.beginPath(); ctx.ellipse(0, 0, p.size, p.size * 0.45, Math.sin(p.ph) * 0.6, 0, TAU); ctx.fill(); });
+    const spots = Array.from({ length: 9 }, () => ({ x: 60 + r() * 840, y: 90 + r() * 400, rx: 24 + r() * 40, ph: r() * TAU }));
+    return {
+      update(dt, time) { streaks.update(dt, time); },
+      draw(ctx, time) {
+        for (const s of spots) {                              // 树梢斑驳亮斑呼吸明暗
+          const a = 0.05 + 0.07 * (0.5 + 0.5 * Math.sin(time * 0.7 * env.wind + s.ph));
+          ctx.fillStyle = `rgba(255,236,170,${a})`; ctx.beginPath(); ctx.ellipse(s.x, s.y, s.rx, s.rx * 0.45, -0.3, 0, TAU); ctx.fill();
+        }
+        streaks.draw(ctx, time);
+      },
+    };
+  },
+};
+// 营火 / 行商 / 界门三个变体
+SYSTEMS.camp = (r, biome, env) => {
+  const fx = env.opts.fireX ?? 480, fy = env.opts.fireY ?? 262;
+  const embers = swarm(34, r,
+    (r, any) => ({ x: fx + (r() - 0.5) * 24, y: any ? fy - r() * 150 : fy - 6, vx: (r() - 0.5) * 10, vy: -(24 + r() * 30), ph: r() * TAU, spin: 3 + r() * 3, size: 1.2 + r() * 1.6, born: any ? r() * 2 : 0, life: 2 + r() * 2 }),
+    (p, dt) => { p.x += p.vx * dt + Math.sin(p.ph) * 0.3; p.y += p.vy * dt; p.ph += dt * p.spin; p.born += dt; if (p.born > p.life) p.dead = true; },
+    (ctx, p) => { const k = p.born / p.life; ctx.globalAlpha = 1 - k; ctx.fillStyle = k < 0.4 ? '#ffd870' : '#ff8a3a'; ctx.beginPath(); ctx.arc(0, 0, p.size * (1 - k * 0.4), 0, TAU); ctx.fill(); });
+  return {
+    update(dt, time) { embers.update(dt, time); },
+    draw(ctx, time) {
+      const pulse = 0.85 + 0.15 * Math.sin(time * 7) + 0.05 * Math.sin(time * 13);
+      const g = ctx.createRadialGradient(fx, fy - 10, 6, fx, fy - 10, 220 * pulse);   // 地面呼吸暖晕
+      g.addColorStop(0, 'rgba(255,170,70,0.38)'); g.addColorStop(1, 'rgba(255,150,60,0)');
+      ctx.fillStyle = g; ctx.fillRect(fx - 240, fy - 250, 480, 480);
+      ctx.fillStyle = '#4a321f'; ctx.save(); ctx.translate(fx, fy); ctx.rotate(0.35); ctx.fillRect(-26, -3, 52, 7); ctx.rotate(-0.7); ctx.fillRect(-26, -3, 52, 7); ctx.restore();
+      const flame = (h, w, col, off) => {
+        const wob = Math.sin(time * 9 + off) * 3, tip = Math.sin(time * 6 + off * 2) * 4;
+        ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(fx - w, fy - 2);
+        ctx.quadraticCurveTo(fx - w * 0.9 + wob, fy - h * 0.55, fx + tip, fy - h); ctx.quadraticCurveTo(fx + w * 0.9 + wob, fy - h * 0.55, fx + w, fy - 2); ctx.closePath(); ctx.fill();
+      };
+      flame(50 * pulse, 17, '#e0561e', 0); flame(38 * pulse, 12, '#ff9a2e', 1.3); flame(24 * pulse, 7, '#ffe27a', 2.6);
+      embers.draw(ctx, time);
+    },
+  };
+};
+SYSTEMS.trade = (r, biome) => {
+  const dust = swarm(40, r,
+    (r, any) => ({ x: any ? r() * W : -10, y: 280 + r() * 170, vx: 6 + r() * 10, vy: (r() - 0.5) * 3, ph: r() * TAU, spin: 1 + r(), size: 1 + r() * 1.6 }),
+    drift,
+    (ctx, p) => { ctx.globalAlpha = 0.3 + 0.2 * Math.sin(p.ph); ctx.fillStyle = '#f0dcae'; ctx.beginPath(); ctx.arc(0, 0, p.size, 0, TAU); ctx.fill(); });
+  return { update(dt, time) { dust.update(dt, time); }, draw(ctx, time) { sunPatches(ctx, biome, time); dust.draw(ctx, time); } };
+};
+SYSTEMS.gate = (r, biome) => {
+  const flakes = swarm(30, r,
+    (r, any) => ({ x: 340 + r() * 280, y: any ? 60 + r() * 380 : 70 + r() * 20, vx: (r() - 0.5) * 6, vy: 8 + r() * 10, ph: r() * TAU, spin: 2 + r() * 2, size: 1.4 + r() * 1.4 }),
+    drift,
+    (ctx, p) => { ctx.globalAlpha = 0.65; ctx.fillStyle = ['#7fb078', '#5a8756', '#a0c890'][((p.size * 7) | 0) % 3]; ctx.rotate(p.ph); ctx.fillRect(-p.size, -p.size * 0.5, p.size * 2, p.size); });
+  return { update(dt, time) { flakes.update(dt, time); }, draw(ctx, time) { sunPatches(ctx, biome, time); flakes.draw(ctx, time); } };
+};
+
+// opts: { fireX, fireY }（营火位置）。env.setWind(k)：巨木树冠的风速倍数。
+export function createEnv(biomeId, seed = 1, opts = {}) {
   const biome = BIOMES[biomeId] || BIOMES.forest;
-  const base = bake(biome, seed * 131 + biomeId.length);
+  const id = BIOMES[biomeId] ? biomeId : 'forest';
+  const base = bakeGround(biome, seed * 131 + id.length * 7 + id.charCodeAt(0));
   const r = rng(seed + 99);
-  const parts = [];
-  const count = biomeId === 'forest' ? 20 : 46;
-  for (let i = 0; i < count; i++) parts.push(spawn(biomeId, r, true));
-  let fruit = null, fruitTimer = 3, time = 0;
+  const env = { opts, wind: 1, time: 0 };
+  const sys = SYSTEMS[id](r, biome, env);
   return {
-    update(dt) {
-      time += dt;
-      for (const p of parts) {
-        p.x += p.vx * dt; p.y += p.vy * dt; p.ph += dt * p.spin;
-        if (p.x > W + 20 || p.y > H + 20) Object.assign(p, spawn(biomeId, r, false));
-      }
-      if (biomeId === 'forest') {
-        fruitTimer -= dt;
-        if (!fruit && fruitTimer <= 0) { fruit = { x: r() < 0.5 ? 40 + r() * 70 : 850 + r() * 70, y: 150, vy: 0, bounces: 0 }; fruitTimer = 6 + r() * 4; }
-        if (fruit) {
-          fruit.vy += 420 * dt; fruit.y += fruit.vy * dt;
-          if (fruit.y > 262) { fruit.y = 262; fruit.vy *= -0.45; fruit.bounces++; if (fruit.bounces > 2) fruit = null; }
-        }
-      }
-    },
-    draw(ctx) {
-      ctx.drawImage(base, 0, 0, W, H);
-      // 林隙里的暖斑，慢慢明暗
-      for (let k = 0; k < 3; k++) {
-        const a = 0.5 + 0.5 * Math.sin(time * 0.5 + k * 2);
-        const gx = 220 + k * 250, gy = 150 + (k % 2) * 90;
-        const gr = ctx.createRadialGradient(gx, gy, 5, gx, gy, 110);
-        gr.addColorStop(0, biome.sunPatch.replace(/[\d.]+\)$/, (0.05 + 0.1 * a).toFixed(3) + ')')); gr.addColorStop(1, 'rgba(255,240,180,0)');
-        ctx.fillStyle = gr; ctx.fillRect(gx - 110, gy - 110, 220, 220);
-      }
-      for (const p of parts) {
-        ctx.save(); ctx.translate(p.x, p.y);
-        if (biomeId === 'forest') {
-          ctx.rotate(p.ph); ctx.fillStyle = p.color; ctx.globalAlpha = 0.8;
-          ctx.beginPath(); ctx.ellipse(0, 0, p.size, p.size * 0.5, 0, 0, 6.3); ctx.fill();
-        } else {
-          ctx.globalAlpha = 0.45 + 0.35 * Math.sin(p.ph); ctx.fillStyle = '#ffe9a0';
-          ctx.beginPath(); ctx.arc(0, 0, p.size * 0.55, 0, 6.3); ctx.fill();
-        }
-        ctx.restore();
-      }
-      if (fruit) { ctx.beginPath(); ctx.arc(fruit.x, fruit.y, 4, 0, 6.3); ctx.fillStyle = '#c8402e'; ctx.fill(); ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.stroke(); }
-    },
-  };
-}
-
-function spawn(biomeId, r, anywhere) {
-  const forest = biomeId === 'forest';
-  return {
-    x: anywhere ? r() * W : -10 + r() * 60, y: anywhere ? r() * H : -10 + r() * 200,
-    vx: forest ? 12 + r() * 14 : 8 + r() * 10, vy: forest ? 10 + r() * 12 : -2 + r() * 6,
-    ph: r() * 6.3, spin: forest ? 1 + r() * 2 : 2 + r() * 2,
-    size: forest ? 3 + r() * 2.5 : 1.8 + r() * 1.8,
-    color: ['#7ab356', '#5c9a48', '#d8a040'][(r() * 3) | 0],
+    biome,
+    setWind(k) { env.wind = k; },
+    update(dt) { env.time += dt; sys.update(dt, env.time); },
+    draw(ctx) { ctx.drawImage(base, 0, 0, W, H); ctx.save(); sys.draw(ctx, env.time); ctx.restore(); },
   };
 }

@@ -1,5 +1,5 @@
 // 唯一组装处：画布缩放（960×540 布局单位 → 1920×1080）、主循环、输入分发。
-import { BattleScene } from './scenes/battle-scene.js';
+import { Flow } from './flow.js';
 
 const W = 960, H = 540;
 const canvas = document.getElementById('game');
@@ -19,10 +19,15 @@ function fit() {
 window.addEventListener('resize', fit);
 fit();
 
-const seedParam = new URLSearchParams(location.search).get('seed');
-const scene = new BattleScene();
-if (seedParam) scene.newRun(Number(seedParam));
+// 网址参数：?seed=数字 固定一趟的随机种子；?mode=tutorial 直接打第 1 步的 4 场教学仗；
+// ?speed=数字 动画加速（只用来测试）；?auto=1 开假玩家自动打（只用来测试）。
+const params = new URLSearchParams(location.search);
+const scene = new Flow();
+if (params.get('mode') === 'tutorial') scene.startTutorial();
+else if (params.get('seed')) scene.startTrip(Number(params.get('seed')));
+const speed = Math.max(1, Number(params.get('speed')) || 1);
 window.__game = scene; // 调试用
+if (params.get('auto')) import('./autopilot.js').then(m => m.startAutopilot(scene, params));
 
 const toLayout = e => {
   const r = canvas.getBoundingClientRect();
@@ -31,8 +36,8 @@ const toLayout = e => {
 canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); scene.pointerDown(...toLayout(e)); });
 canvas.addEventListener('pointermove', e => scene.pointerMove(...toLayout(e)));
 canvas.addEventListener('pointerup', e => scene.pointerUp(...toLayout(e)));
-canvas.addEventListener('pointercancel', () => { scene.drag = null; });
-window.addEventListener('blur', () => { scene.drag = null; });
+canvas.addEventListener('pointercancel', () => scene.cancelDrag());
+window.addEventListener('blur', () => scene.cancelDrag());
 window.addEventListener('keydown', e => {
   if (e.key === ' ' || e.key === 'Backspace') e.preventDefault();
   scene.key(e.key);
@@ -42,7 +47,7 @@ let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   try {
-    scene.update(dt);
+    for (let k = 0; k < speed; k++) scene.update(dt);
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
     ctx.clearRect(0, 0, W, H);
     scene.draw(ctx);
