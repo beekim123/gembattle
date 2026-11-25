@@ -17,8 +17,8 @@ const PLAN_4_2 = [
   'scenes/scene_campfire.js', 'scenes/scene_rock_hollow.js', 'scenes/scene_crates_sign.js', 'buildings/building_camp_tent.js', 'buildings/building_stone_gate.js',
 ];
 
-// 已接入的界面与特效包（第 1 段：地面与特效；第 2 段再接另外 4 个）
-const PACKS_NOW = ['art-packs/pack_ground_vfx.js'];
+// 已接入的界面与特效包：UI-01 皮肤、UI-02A 卡牌、UI-02B 图标、UI-03 路线图与页面、UI-04 地面与特效，共 5 个
+const PACKS_NOW = ['art-packs/pack_ui_skin.js', 'art-packs/pack_cards.js', 'art-packs/pack_icons.js', 'art-packs/pack_map_panels.js', 'art-packs/pack_ground_vfx.js'];
 
 export default function (t) {
   t.test('zip 读写：往返一致，坏文件会被发现', () => {
@@ -40,6 +40,7 @@ export default function (t) {
     t.assert.deepEqual([...got].sort(), [...PLAN_4_2].sort());
     t.assert.equal(new Set(all).size, all.length, '没有重复');
     t.assert.deepEqual([...packs].sort(), [...PACKS_NOW].sort());
+    t.assert.equal(packs.length, 5, '5 个美术包全部打进外测包');
   });
 
   t.test('实装库的清单和入口页对得上：31 个资产路径一个不少，接入的包文件都在 art-packs/ 里', () => {
@@ -58,7 +59,7 @@ export default function (t) {
 
   t.test('运行代码从 main.js 顺着 import 找全：含假玩家，不含单测', () => {
     const mods = collectModules('app/main.js');
-    for (const need of ['app/main.js', 'app/flow.js', 'app/autopilot.js', 'app/record.js', 'modules/audio/index.js', 'modules/audio/bgm.js', 'modules/render/workshop-adapter.js', 'modules/render/world-stage.js', 'modules/render/camera.js', 'modules/render/battle-pose.js', 'modules/ui/audio-bar.js', 'modules/run-rules/record.js']) t.assert.ok(mods.includes(need), need);
+    for (const need of ['modules/ui/skin.js', 'app/main.js', 'app/flow.js', 'app/autopilot.js', 'app/record.js', 'modules/audio/index.js', 'modules/audio/bgm.js', 'modules/render/workshop-adapter.js', 'modules/render/world-stage.js', 'modules/render/camera.js', 'modules/render/battle-pose.js', 'modules/ui/audio-bar.js', 'modules/run-rules/record.js']) t.assert.ok(mods.includes(need), need);
     t.assert.ok(!mods.some(m => /\.test\.js$|\/tests\//.test(m)), '不带单测');
     t.assert.ok(!mods.some(m => m.startsWith('tools/')));
   });

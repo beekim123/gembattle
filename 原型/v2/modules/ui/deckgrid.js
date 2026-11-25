@@ -1,5 +1,5 @@
 // 牌组网格：把整副牌按颜色排成 7 行宝石牌，加一行秘术牌 / 废牌。选牌（雕琢、清理行囊）和查看牌组共用。
-import { drawCard, CARD_W, CARD_H } from './cards.js';
+import { drawCard, CARD_W, CARD_H } from './skin.js';
 import { text } from './draw.js';
 import { COLOR_NAMES } from '../shared/index.js';
 import { WHEEL_HEX } from './theme.js';

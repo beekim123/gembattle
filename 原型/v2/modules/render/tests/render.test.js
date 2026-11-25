@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { pickK, sizeFromBox } from '../workshop-adapter.js';
 import { poseOf, applyPose, sample, ZERO_POSE, PROFILES, DURATIONS, ATTACK_T } from '../battle-pose.js';
-import { MONSTERS, ATTACK_FX, BIOMES, HERO_LOOK } from '../../content/index.js';
+import { MONSTERS, ATTACK_FX, BIOMES, BIOME_IDS, BATTLE_VIEW, HERO_LOOK } from '../../content/index.js';
+import { anchor, BATTLE_TH0 } from '../camera.js';
 import { drawAttackFx, ATTACK_FX_KINDS, ATTACK_FX_DUR } from '../../ui/attack-fx.js';
 
 // 一个什么都接得住的假画布上下文：只用来确认绘制代码跑得过去
@@ -88,14 +89,11 @@ export default function (t) {
     t.assert.ok(ATTACK_FX_DUR > 0.3);
   });
 
-  t.test('生态摆件：每个生态 1~3 件，只用方案 4.2 里的摆件，落脚点在画面里', () => {
+  t.test('生态摆件：只用方案 4.2 里的摆件，落脚点在画面里；战斗生态 5~8 件成簇、左右不对称', () => {
     const html = readFileSync(new URL('../../../app/index.html', import.meta.url), 'utf8');
     const scripts = [...html.matchAll(/<script src="\.\.\/art\/([^"]+)"/g)].map(m => m[1]);
-    const want = { forest: 3, swamp: 2, meadow: 3, ruins: 2, canopy: 3, camp: 2, trade: 2, gate: 1 };
-    for (const [id, n] of Object.entries(want)) {
-      const props = BIOMES[id].props;
-      t.assert.equal(props.length, n, id);
-      for (const p of props) {
+    for (const id of BIOME_IDS) {
+      for (const p of BIOMES[id].props) {
         t.assert.ok(scripts.some(s => /^(scenes|buildings)\//.test(s) && s.endsWith('/' + p.id + '.js')), `${id}：${p.id} 不在 4.2 清单里`);
         t.assert.ok(p.x > 0 && p.x < 960 && p.y > 0 && p.y < 540, `${id}：${p.id} 落脚点`);
       }
@@ -103,7 +101,30 @@ export default function (t) {
     t.assert.ok(BIOMES.camp.props.some(p => p.id === 'scene_campfire') && BIOMES.camp.props.some(p => p.id === 'scene_rock_hollow'), '营火 + 树洞石碑');
     t.assert.ok(BIOMES.trade.props.some(p => p.id === 'building_camp_tent') && BIOMES.trade.props.some(p => p.id === 'scene_crates_sign'), '帐篷 + 木牌宝箱');
     t.assert.equal(BIOMES.gate.props[0].id, 'building_stone_gate');
-    // 战场正中（怪和主角）不放摆件：摆件落脚点的 x 不在 330~630
-    for (const id of ['forest', 'swamp', 'meadow', 'canopy']) for (const p of BIOMES[id].props) t.assert.ok(p.x < 330 || p.x > 630, `${id}：${p.id} 不能压在战区中间`);
+    t.assert.ok(BIOMES.camp.props.length <= 6 && BIOMES.trade.props.length <= 6 && BIOMES.gate.props.length <= 6, '非战斗生态也别摆满');
+  });
+
+  t.test('战斗生态的摆件：默认镜头下避开界面和战区（左上仪表、右上名签、右下按钮、中央战区），左右疏密不同，不是左右各 1 棵', () => {
+    // 战斗场景里的镜头设置要和 biomes.js 里换算用的那份一致
+    const src = readFileSync(new URL('../../../app/scenes/battle-scene.js', import.meta.url), 'utf8');
+    const m = /const VIEW_ORIGIN = \[(\d+), (\d+)\]/.exec(src);
+    t.assert.ok(m, '战斗场景里有 VIEW_ORIGIN');
+    t.assert.deepEqual(BATTLE_VIEW.origin, [Number(m[1]), Number(m[2])]);
+    t.assert.equal(BATTLE_VIEW.th0, BATTLE_TH0);
+    for (const id of ['forest', 'swamp', 'meadow', 'ruins', 'canopy']) {
+      const props = BIOMES[id].props;
+      t.assert.ok(props.length >= 5 && props.length <= 8, `${id}：${props.length} 件`);
+      let left = 0, right = 0;
+      for (const p of props) {
+        const [sx, sy] = anchor(BATTLE_VIEW.origin, BATTLE_VIEW.th0, p.x, p.y, 0);      // 默认镜头下的屏幕位置
+        t.assert.ok(sx >= 0 && sx <= 960 && sy >= 30 && sy <= 540, `${id}：${p.id} 在画面里（${sx.toFixed(0)}, ${sy.toFixed(0)}）`);
+        t.assert.ok(sx < 232 || sx > 728, `${id}：${p.id} 不能压在战区中间（x = ${sx.toFixed(0)}）`);
+        if (sx < 130) t.assert.ok(sy >= 250, `${id}：${p.id} 不能压在左上集色仪表下面（y = ${sy.toFixed(0)}）`);
+        t.assert.ok(!(sx > 826 && sy > 402), `${id}：${p.id} 不能压在右下按钮上（${sx.toFixed(0)}, ${sy.toFixed(0)}）`);
+        if (sx < 480) left++; else right++;
+      }
+      t.assert.ok(left !== right, `${id}：左 ${left} 右 ${right}，不对称`);
+      t.assert.ok(new Set(props.filter(p => p.yaw !== undefined).map(p => p.yaw)).size >= 3, `${id}：朝向要错开`);
+    }
   });
 }

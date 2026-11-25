@@ -175,6 +175,7 @@ SYSTEMS.gate = (r, biome) => {
 
 // opts: { fireX, fireY }（营火位置）、props: false（不摆像素摆件，比如路线图背景）。env.setWind(k)：巨木树冠的风速倍数。
 const PROP_DIM = 0.85;           // 摆件压暗 15%，让战区更跳出来；只在摆件第一次实例化时改调色板
+const ANIMATED = new Set(['scene_campfire']);      // 摆件里唯一还在动的：营火跳火苗
 export function createEnv(biomeId, seed = 1, opts = {}) {
   const biome = BIOMES[biomeId] || BIOMES.forest;
   const id = BIOMES[biomeId] ? biomeId : 'forest';
@@ -197,7 +198,8 @@ export function createEnv(biomeId, seed = 1, opts = {}) {
       // 只排队，不画：真正的画在 stage.render（地面 → 暗角 → 摆件和角色按深度 → 微粒 → 特效）
       draw() {
         stage.setScene({ biome: id, wind: env.wind });
-        for (const p of placed) stage.actor(p.id, p.x, p.y, { slot: p.slot, yaw: p.yaw ?? 0, act: p.act, dark: PROP_DIM });
+        // 摆件：只有营火的火苗还在动，别的（树、倒木、石碑、帐篷、石门、树巢……）落稳以后冻结；脚下都带柔和接地暗斑
+        for (const p of placed) stage.actor(p.id, p.x, p.y, { slot: p.slot, yaw: p.yaw ?? 0, act: p.act, dark: PROP_DIM, scale: p.scale, prop: true, still: !ANIMATED.has(p.id) });
         if (art3d && biome.fire) {                          // 营火脚下一圈暖亮晕，随火苗呼吸
           const pulse = 0.85 + 0.15 * Math.sin(env.time * 7) + 0.05 * Math.sin(env.time * 13);
           stage.glowSpot(biome.fire.x, biome.fire.y + 6, 150 * pulse, '255,160,60', 0.5);

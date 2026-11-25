@@ -1,7 +1,7 @@
 import { WHEEL_HEX, WHEEL_DARK } from './theme.js';
 import { text } from './draw.js';
 
-// 集色环：六色按色环顺序从正上方顺时针排，白在圆心。lit = 已集，cursor = 链尾色。
+// 集色环（内置兜底画法）：六色按色环顺序从正上方顺时针排，白在圆心。collected = 已集的位掩码，cursor = 链尾色。下面写一行「集色 n/6」（美术包的集色环自带这块铭牌，所以场景不再另写）。
 export function drawColorRing(ctx, cx, cy, R, collected, cursor, t) {
   const pos = i => { const a = -Math.PI / 2 + i * Math.PI / 3; return [cx + Math.cos(a) * R, cy + Math.sin(a) * R]; };
   ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
@@ -23,5 +23,5 @@ export function drawColorRing(ctx, cx, cy, R, collected, cursor, t) {
     ctx.strokeStyle = '#ffd24a'; ctx.lineWidth = 2.5; ctx.stroke();
   }
   const n = [0, 1, 2, 3, 4, 5].filter(i => (collected >> i) & 1).length;
-  text(ctx, `集色 ${n}/6`, cx, cy + R + 22, { size: 13, align: 'center' });
+  text(ctx, `集色 ${n}/6`, cx, cy + R + 24, { size: 12, align: 'center' });
 }

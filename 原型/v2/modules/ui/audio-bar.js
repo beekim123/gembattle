@@ -1,8 +1,9 @@
 // 顶栏的音乐 / 音效按钮：点一下开关；鼠标放上去，下面落下一根音量滑条，按住拖动调音量。
 // 不依赖 audio 模块本身，只要一个有 getState / toggle / setVolume 的对象（api）。命中判断是纯函数，能在 node 里测。
 import { text, roundRect } from './draw.js';
+import { drawButton, drawPanel } from './skin.js';
 
-export const BAR = { x: 756, y: 3, w: 38, h: 22, gap: 4 };
+export const BAR = { x: 756, y: 5, w: 38, h: 22, gap: 4 };     // 顶栏高 32，按钮垂直居中
 export const SLIDER = { w: 92, h: 32, trackW: 70 };
 
 export class AudioBar {
@@ -48,14 +49,11 @@ export class AudioBar {
     const st = this.api.getState();
     for (const kind of ['music', 'sfx']) {
       const r = this.btnRect(kind), s = st[kind], hov = this.hover === kind;
-      roundRect(ctx, r.x, r.y, r.w, r.h, 6);
-      ctx.fillStyle = s.on ? (hov ? 'rgba(96,128,84,0.98)' : 'rgba(60,92,56,0.95)') : (hov ? 'rgba(70,70,64,0.95)' : 'rgba(40,44,40,0.9)');
-      ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = s.on ? 'rgba(200,255,190,0.7)' : 'rgba(255,255,255,0.2)'; ctx.stroke();
-      text(ctx, kind === 'music' ? '音乐' : '音效', r.x + r.w / 2, r.y + r.h / 2 + 1, { size: 13, align: 'center', color: s.on ? '#f4ffe8' : 'rgba(255,255,255,0.42)', outline: null, weight: 700 });
+      drawButton(ctx, r.x, r.y, r.w, r.h, kind === 'music' ? '音乐' : '音效', { variant: s.on ? 'secondary' : 'ghost', hover: hov, fontSize: 12 });
       if (!s.on) { ctx.save(); ctx.strokeStyle = 'rgba(255,120,110,0.85)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(r.x + 6, r.y + r.h - 5); ctx.lineTo(r.x + r.w - 6, r.y + 5); ctx.stroke(); ctx.restore(); }
       if (hov || (this.drag && this.drag.kind === kind)) {
         const p = this.panelRect(kind), t = this.trackRect(kind);
-        roundRect(ctx, p.x, p.y, p.w, p.h, 6); ctx.fillStyle = 'rgba(10,16,12,0.95)'; ctx.fill(); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.stroke();
+        drawPanel(ctx, p.x, p.y, p.w, p.h, 'tooltip');
         text(ctx, `${kind === 'music' ? '音乐' : '音效'}音量 ${Math.round(s.vol * 100)}%`, p.x + p.w / 2, p.y + 10, { size: 11, align: 'center', color: '#e8e0c8', outline: null, weight: 600 });
         roundRect(ctx, t.x, t.y, t.w, t.h, 3); ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fill();
         roundRect(ctx, t.x, t.y, Math.max(3, t.w * s.vol), t.h, 3); ctx.fillStyle = s.on ? '#9ad88a' : '#7a7a70'; ctx.fill();

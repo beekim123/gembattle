@@ -3,7 +3,7 @@
 //
 // 一帧的流程（跟工坊 renderScene 同一套两阶段批处理）：
 //   场景代码：stage.beginFrame → env.draw / stage.actor(...) 把这一帧要画的东西排进队 → stage.render(ctx) → 再画 2D 界面
-//   render：  地面地砖（随 th 旋转压扁铺满）→ 暗角 → 先把全部角色的贴图解析好（烘焙都在这一步）
+//   render：  地面（无缝大 Tilemap 底纹 + 唯一场景地标，随 th 旋转压扁铺满）→ 暗角 → 先把全部角色的贴图解析好（烘焙都在这一步）
 //             → 按深度从远到近画（脚底暗斑 / 选中环 / 角色 / 角色身上的 3D 粒子）→ 地面微粒 → 技能特效 → 整帧只做 1 次自亮柔化
 //
 // 几条规矩：
@@ -18,14 +18,16 @@
 // 朝向：yaw = 0 面朝画面下方（怪面向主角），yaw = π 背朝画面（主角面向怪）。
 import { applyPose } from './battle-pose.js';
 import { buildFallbackTile, buildVignette } from './ground-fallback.js';
+import { buildGround } from './tilemap-ground.js';
 import { BIOMES } from '../content/biomes.js';
 import { TILT, HS, BAKE_SCALE, camera as sharedCamera, layoutToWorld, anchor as anchorOf, project, depthOf, heightToWorld } from './camera.js';
 const PW = typeof window !== 'undefined' ? window.PixelWorkshop : null;
 
 const SIM_STEP = 1 / 120;       // 逻辑最长一步，跟工坊一致
 const ATLAS_MB = 28;            // 图集上限（超过 32MB 显卡会掉到慢路径）
-const TILE_SIZE = 384;          // 地砖边长（美术像素）。单张 0.56MB，按生态懒构建
+const GROUND_CACHE = 4;         // 同时留着几个生态的地面（每个约 1.3~1.8 MB），多了按最久没用的换掉；重建一个只要十几毫秒
 const PROP_DIM = 0.85;          // 摆件压暗 15%：实例化时改调色板
+const PROP_SHADOW = [[1.75, 0.1], [1.3, 0.13], [0.9, 0.17]];   // 摆件接地暗斑：[半径倍数（乘脚底半径）, 透明度]，由大到小叠三层
 const SOFT_PARAMS = { gaitFreq: 1, tailFlex: 1, springiness: 1, speed: 1, scaleMul: 1 };
 
 // 整数缩放：1 个美术像素取几个设备像素。unit 是「设备像素 / 布局单位」，scale 是「每个美术像素占几个布局单位」。
@@ -91,7 +93,7 @@ export function createStage(canvas, { sizes = {}, lookIds = [], camera = sharedC
   const effects = [];                                // 这一帧的 3D 技能特效 { fn(pack, proj) }
   const overlays = [];                               // 这一帧最后画的 2D 兜底（布局单位）
   const scene = { biome: 'forest', wind: 1 };
-  const grounds = new Map();                         // 生态 id → { canvas, size, fromPack, ms }
+  const grounds = new Map();                         // 生态 id → { block, landmark, src, ms, mb }，按最近用过的顺序排，最多 GROUND_CACHE 个
   const vignettes = new Map();
   const spots = new Map();
   const stats = { drawMs: 0, items: 0, parts: 0, groundBuilds: 0, lastGroundMs: 0 };
@@ -213,16 +215,18 @@ export function createStage(canvas, { sizes = {}, lookIds = [], camera = sharedC
   }
 
   // ---------- 地面 ----------
+  // 无缝大 Tilemap 底纹（一个 576×576 的区块首尾相接）加一个唯一地标，见 tilemap-ground.js。按生态懒构建，跨场景缓存复用。
   function groundOf(biomeId) {
     let g = grounds.get(biomeId);
-    if (g) return g;
-    const t0 = performance.now(), pack = groundPack();
-    let src = null;
-    if (pack) { try { src = pack.buildGroundTile(biomeId, make, TILE_SIZE); } catch { src = null; } }
+    if (g) { grounds.delete(biomeId); grounds.set(biomeId, g); return g; }          // 刷新「最近用过」
     const biome = BIOMES[biomeId] || BIOMES.forest;
-    const cv = (src && src.canvas) || buildFallbackTile(biome, make, TILE_SIZE);
-    g = { canvas: cv, size: cv.width, fromPack: !!(src && src.canvas), ms: performance.now() - t0 };
+    try { g = { ...buildGround(biome, make), src: 'tilemap' }; }
+    catch {                                                                          // 万一画布不支持 putImageData：退回内置兜底砖，不拖垮整帧
+      const t0 = performance.now(), cv = buildFallbackTile(biome, make, 384);
+      g = { block: { canvas: cv, size: cv.width }, landmark: null, src: 'fallback', ms: performance.now() - t0, mb: 384 * 384 * 4 / 1048576 };
+    }
     grounds.set(biomeId, g);
+    while (grounds.size > GROUND_CACHE) grounds.delete(grounds.keys().next().value);
     stats.groundBuilds++; stats.lastGroundMs = g.ms;
     return g;
   }
@@ -231,15 +235,15 @@ export function createStage(canvas, { sizes = {}, lookIds = [], camera = sharedC
     if (!v) { v = buildVignette(BIOMES[biomeId] || BIOMES.forest, make); vignettes.set(biomeId, v); }
     return v;
   }
-  // 地砖随镜头角旋转压扁铺满画布：地砖像素 (u, v) → 屏幕 = 原点 + k·[cos·u − sin·v, TILT·(sin·u + cos·v)]。
-  // 一格一格 drawImage 贴（4K 下十几块，约 1.5 毫秒）。不用 createPattern：整屏 pattern 填充在 4K 下要 17~27 毫秒。
-  // 每块多画 1 个美术像素，盖住旋转时相邻两块边缘的抗锯齿缝。
+  // 底层区块随镜头角旋转压扁铺满画布：区块像素 (u, v) → 屏幕 = 原点 + k·[cos·u − sin·v, TILT·(sin·u + cos·v)]。
+  // 一块一块 drawImage 贴（4K 下十来块，约 1.5 毫秒）。不用 createPattern：整屏 pattern 填充在 4K 下要 17~27 毫秒。
+  // 每块多画 1 个美术像素，盖住旋转时相邻两块边缘的抗锯齿缝。接着把唯一的地标贴在世界里它该在的位置上（同一个旋转压扁变换）。
   function drawGround(d) {
-    const g = groundOf(scene.biome), sz = g.size;
+    const g = groundOf(scene.biome), sz = g.block.size;
     const a = k * cosT, b = k * TILT * sinT, c = -k * sinT, e = k * TILT * cosT;
     const det = a * e - b * c;
     let u0 = 1e9, u1 = -1e9, v0 = 1e9, v1 = -1e9;
-    for (let i = 0; i < 4; i++) {                                  // 屏幕四角反算回地砖像素坐标，得到要贴的格子范围
+    for (let i = 0; i < 4; i++) {                                  // 屏幕四角反算回区块像素坐标，得到要贴的格子范围
       const X = (i & 1 ? canvasW : 0) - oX, Y = (i & 2 ? canvasH : 0) - oY;
       const u = (e * X - c * Y) / det, v = (-b * X + a * Y) / det;
       if (u < u0) u0 = u; if (u > u1) u1 = u; if (v < v0) v0 = v; if (v > v1) v1 = v;
@@ -248,7 +252,13 @@ export function createStage(canvas, { sizes = {}, lookIds = [], camera = sharedC
     if ((iu1 - iu0 + 1) * (iv1 - iv0 + 1) > 400) return;           // 镜头参数出了问题时不要卡死
     d.imageSmoothingEnabled = false;
     d.setTransform(a, b, c, e, oX, oY);
-    for (let iv = iv0; iv <= iv1; iv++) for (let iu = iu0; iu <= iu1; iu++) d.drawImage(g.canvas, 0, 0, sz, sz, iu * sz - 0.5, iv * sz - 0.5, sz + 1, sz + 1);
+    for (let iv = iv0; iv <= iv1; iv++) for (let iu = iu0; iu <= iu1; iu++) d.drawImage(g.block.canvas, 0, 0, sz, sz, iu * sz - 0.5, iv * sz - 0.5, sz + 1, sz + 1);
+    const lm = g.landmark;
+    if (lm) {
+      const p = proj(lm.at[0], lm.at[1], 0);
+      d.setTransform(a, b, c, e, Math.round(p[0]), Math.round(p[1]));
+      d.drawImage(lm.canvas, Math.round(-lm.w / 2), Math.round(-lm.h / 2));
+    }
     d.setTransform(1, 0, 0, 1, 0, 0);
   }
   function drawVignette(d) {
@@ -338,6 +348,7 @@ export function createStage(canvas, { sizes = {}, lookIds = [], camera = sharedC
 
   // o: { slot 位置名, scale 每个美术像素占几个布局单位（默认 1）, yaw, act / actT 动作与时长, flash 0..1 闪白, alpha 淡出,
   //      dark 摆件压暗倍数（只在第一次实例化时生效）, shadow 脚下暗斑（默认开）, wz 离地高度（世界格）,
+  //      prop 是环境摆件（接地暗斑用三层柔边）, still 落稳以后冻结在静止姿势（树、石碑这类不该自己动的）,
   //      pose 战斗姿态参数（battle-pose.js 的 poseOf）, target 怪出手要打的世界点 [x, y, z] }
   function actor(id, lx, ly, o = {}) {
     const r = rec(id, o.slot, o.dark);
@@ -366,7 +377,11 @@ export function createStage(canvas, { sizes = {}, lookIds = [], camera = sharedC
       if (o.act !== undefined || o.actT !== undefined) setAct(r, o.act, o.actT);
       else if (r.act !== 'idle' && !actInfo(r, r.act)?.duration) setAct(r, 'idle');
       if (r.yaw === null) stepRec(r, 0.3, yaw, wx, wy, o.target);          // 第一次出场：先走几步，让弹簧和步态落稳
-      stepRec(r, Math.min(0.05, Math.max(0, now - (r.lastNow ?? now))), yaw, wx, wy, o.target);
+      // 静止的摆件（树、倒木、石碑、帐篷、石门……）落稳以后不再往前模拟：回合制的画面里不该有它们自己晃来晃去。
+      // 位置变了（换了镜头原点）才重新落一次脚。图集也不会再变脏，省烘焙。
+      const moved = r.home[0] !== wx || r.home[1] !== wy;
+      if (!(o.still && r.settled) || moved) stepRec(r, Math.min(0.05, Math.max(0, now - (r.lastNow ?? now))), yaw, wx, wy, o.target);
+      if (o.still) r.settled = true;
     }
     r.lastNow = now;
     r.pose = o.pose || null;
@@ -421,8 +436,18 @@ export function createStage(canvas, { sizes = {}, lookIds = [], camera = sharedC
     const alpha = o.alpha ?? 1;
     if (o.shadow !== false && alpha > 0.02) {                       // 脚下暗斑：压扁的暗椭圆，不是展示台
       const fr = (r.def.footRadius || 10) * it.kk * BAKE;
-      d.globalAlpha = 0.34 * alpha; d.fillStyle = '#000';
-      d.beginPath(); d.ellipse(it.fx, it.fy + 1, fr, fr * 0.85 * TILT, 0, 0, Math.PI * 2); d.fill();
+      d.fillStyle = '#000';
+      if (o.prop) {
+        // 摆件的接地暗斑：三层由大到小、由淡到浓的椭圆叠出柔和的边（不用实时模糊），整体往右下偏一点当树下的暗斑，把模型「种」进地面
+        const ox = fr * 0.3, oy = fr * 0.1 * TILT;
+        for (const [m, aa] of PROP_SHADOW) {
+          d.globalAlpha = aa * alpha;
+          d.beginPath(); d.ellipse(it.fx + ox, it.fy + 1 + oy, fr * m, fr * m * 0.85 * TILT, 0, 0, Math.PI * 2); d.fill();
+        }
+      } else {
+        d.globalAlpha = 0.34 * alpha;
+        d.beginPath(); d.ellipse(it.fx, it.fy + 1, fr, fr * 0.85 * TILT, 0, 0, Math.PI * 2); d.fill();
+      }
       d.globalAlpha = 1;
     }
     R.drawPreparedActor(it.parts);
@@ -539,7 +564,7 @@ export function createStage(canvas, { sizes = {}, lookIds = [], camera = sharedC
     heightToWorld,
     cacheInfo: () => R.cacheInfo(),
     // 性能浮层：图集 MB、已挂载包、地砖构建次数
-    info: () => ({ atlas: R.cacheInfo(), packs: mountedPacks(), grounds: [...grounds.entries()].map(([id, g]) => ({ id, fromPack: g.fromPack, ms: Math.round(g.ms) })), stats: { ...stats }, unit, k, th: camera.th }),
+    info: () => ({ atlas: R.cacheInfo(), packs: mountedPacks(), grounds: [...grounds.entries()].map(([id, g]) => ({ id, src: g.src, ms: Math.round(g.ms * 10) / 10, mb: Math.round(g.mb * 100) / 100 })), stats: { ...stats }, unit, k, th: camera.th }),
     has: id => hasAsset(id),
     actDuration: (id, act) => { const a = ((PW.Assets.byId[id] || {}).actions || []).find(x => x.id === act); return a && a.duration ? a.duration : null; },
     unit: () => unit,

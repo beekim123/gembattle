@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>code00 v2 · 落果密林</title>
+<link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   html, body { margin: 0; height: 100%; background: #0b110c; overflow: hidden; }
@@ -58,8 +59,15 @@
 <script src="../art/buildings/building_camp_tent.js"></script>
 <script src="../art/buildings/building_stone_gate.js"></script>
 
-<!-- 界面与特效包（实装库 art-packs/）：UI-04 旋转像素地面与 3D 特效，挂到 window.Code00ArtPacks.groundVfx。
-     没加载上或网址带 ?art=blocks 时，渲染层用内置兜底地面和特效。 -->
+<!-- 界面与特效包（实装库 art-packs/），都挂在 window.Code00ArtPacks 上：
+     UI-01 皮肤与通用控件 -> uiSkin；UI-02A 宝石与秘术牌、UI-02B 印记 / 雕琢 / 战利品图标 -> 合并挂在 cards；
+     UI-03 卷轴地图与非战斗装饰 -> mapPanels；UI-04 旋转像素地面与 3D 特效 -> groundVfx。
+     modules/ui/skin.js 在首帧前统一初始化前四个，世界舞台用 UI-04。
+     没加载上、缺了某个函数或网址带 ?art=blocks 时，对应的画法自动退回内置色块兜底。 -->
+<script src="../art/art-packs/pack_ui_skin.js"></script>
+<script src="../art/art-packs/pack_cards.js"></script>
+<script src="../art/art-packs/pack_icons.js"></script>
+<script src="../art/art-packs/pack_map_panels.js"></script>
 <script src="../art/art-packs/pack_ground_vfx.js"></script>
 
 <script type="module" src="./main.js"></script>

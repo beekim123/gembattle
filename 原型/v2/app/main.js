@@ -2,6 +2,7 @@
 import { Flow } from './flow.js';
 import { initArt, beginArtFrame, artMode, artInfo, artStats } from '../modules/render/index.js';
 import { audio } from '../modules/audio/index.js';
+import { initSkin, skinInfo } from '../modules/ui/index.js';
 
 const W = 960, H = 540;
 const canvas = document.getElementById('game');
@@ -27,11 +28,17 @@ function perfTick(dtMs, cpuMs) {
     `画布 ${canvas.width}×${canvas.height}  每布局单位 ${(canvas.width / W).toFixed(2)} 像素  美术像素 ${st ? st.k : '-'} 倍`,
     `画法 ${artMode()}  图集 ${info ? info.mb + ' / ' + info.budgetMB + ' MB（' + info.pages + ' 页）' : '无'}  镜头角 ${st ? (st.th * 180 / Math.PI).toFixed(0) + '°' : '-'}`,
     `世界 ${st ? st.stats.items : 0} 件  部件 ${st ? st.stats.parts : 0}  世界绘制 ${st ? st.stats.drawMs.toFixed(2) : '-'} 毫秒`,
-    `地砖 ${st && st.grounds.length ? st.grounds.map(g => g.id + (g.fromPack ? '' : '(兜底)') + ' ' + g.ms + 'ms').join('  ') : '未建'}`,
+    `地面 ${st && st.grounds.length ? st.grounds.map(g => g.id + (g.src === 'tilemap' ? '' : '(兜底)') + ' ' + g.ms + 'ms ' + g.mb + 'MB').join('  ') : '未建'}`,
     `美术包 ${st && st.packs.length ? st.packs.map(p => p.key).join('、') : '没有挂载'}`,
+    `界面皮肤 ${skinLine(skinInfo())}`,
   ];
   perfEl.textContent = lines.join('\n');
   perf.frames = 0; perf.dt = 0; perf.cpu = 0; perf.worst = 0; perf.since = t;
+}
+function skinLine(k) {
+  if (!k.enabled) return '关闭（?art=blocks，内置色块）';
+  const on = [['uiSkin', '皮肤控件'], ['cards', '宝石与秘术牌'], ['icons', '印记图标'], ['mapPanels', '路线图与页面']].filter(([id]) => k[id]).map(([, nm]) => nm);
+  return `${on.length ? on.join('、') : '没有挂载（内置色块）'}  离屏 ${k.mb} MB  初始化 ${k.ms} 毫秒`;
 }
 function togglePerf() { perf.on = !perf.on; perfEl.hidden = !perf.on; perf.since = 0; perf.frames = 0; perf.dt = 0; perf.cpu = 0; perf.worst = 0; }
 
@@ -52,6 +59,8 @@ fit();
 const params = new URLSearchParams(location.search);
 // 画法：默认接工坊的 3D 像素模型；?art=blocks 或工坊没加载成功就用色块。要在建任何场景以前定下来。
 initArt(canvas, params);
+// 界面皮肤：5 个美术包里的 4 个界面包在首帧前统一烘好；?art=blocks 或包缺了就退回内置色块
+initSkin({ enabled: params.get('art') !== 'blocks' });
 const scene = new Flow();
 if (params.get('show')) scene.debugShow(params.get('show'), params.get('biome'));
 else if (params.get('mode') === 'tutorial') scene.startTutorial();

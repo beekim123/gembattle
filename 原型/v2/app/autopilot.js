@@ -46,7 +46,7 @@ export function startAutopilot(flow, params) {
 
   function panelTick(p) {
     const s = p.screen, hooks = p.hooks, trip = flow.trip;
-    if (!s) return;
+    if (!s || p.drawnScreen !== s) return;                           // 画面刚换，还没画出来：按钮区是上一个画面的，等下一帧
     const first = () => { const h = p.hits.find(h => h.fn && h.enabled !== false); if (h) h.fn(); };
     switch (s.kind) {
       case 'title': hooks.onStart(); break;
@@ -72,12 +72,12 @@ export function startAutopilot(flow, params) {
     if (!ids.length) return;
     // 偏好：营火 > 战斗，随机
     const id = ids[Math.floor(rnd() * ids.length)];
-    const [x, y] = m.pos(id);
+    const y = m.pos(id)[1];
     say(`选 ${id}`);
     // 点以前先把镜头摆到这个节点看得见的位置（真人要拖，假玩家直接设）
     m.cam = m.camTarget = m.clampCam(y - 300);
-    const sy = y - m.cam;
-    m.pointerMove(x, sy); m.pointerDown(x, sy); m.pointerUp(x, sy);
+    const [sx, sy] = m.screenPos(id);                                // 屏幕坐标：已经算上了头区（卷轴窗口从 y = 66 开始）
+    m.pointerMove(sx, sy); m.pointerDown(sx, sy); m.pointerUp(sx, sy);
   }
 
   setInterval(() => {
