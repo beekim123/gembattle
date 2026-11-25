@@ -53,8 +53,16 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const args = process.argv.slice(2);
   const pi = args.indexOf('--port');
   const port = pi >= 0 ? Number(args[pi + 1]) : 8200;
-  startServer({ port }).then(() => {
-    const url = `http://localhost:${port}/app/index.html`;
+  // 端口被占了就往后找一个，免得双击没反应
+  const tryStart = async () => {
+    for (let p = port; p < port + 20; p++) {
+      try { return { server: await startServer({ port: p }), port: p }; }
+      catch (err) { if (err.code !== 'EADDRINUSE') throw err; }
+    }
+    throw new Error(`端口 ${port} 到 ${port + 19} 都被占了`);
+  };
+  tryStart().then(({ port: got }) => {
+    const url = `http://localhost:${got}/app/index.html`;
     console.log(`code00 v2 原型已启动：${url}\n（按 Ctrl+C 或关掉窗口停止）`);
     if (args.includes('--open')) spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], { stdio: 'ignore', detached: true }).unref();
   }).catch(err => { console.error('启动失败：', err.message); process.exit(1); });
