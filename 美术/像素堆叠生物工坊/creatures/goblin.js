@@ -4,7 +4,7 @@ window.PixelWorkshop = window.PixelWorkshop || {};
 window.PixelWorkshop.Creatures = window.PixelWorkshop.Creatures || [];
 
 (function (PW) {
-  const { clamp, lerp, smin, localToWorldXY, expSmooth } = PW.Math;
+  const { clamp, lerp, smoothstep, smin, localToWorldXY, expSmooth } = PW.Math;
   const { createPaletteSpec, VoxelModel, recolorAsset } = PW.Voxel;
   const { MultiLegGaitSolver, SpringDamper1D, SocketTracker } = PW.Solvers;
   const { Propulsion, EnvFeedback } = PW.Behaviors;
@@ -258,6 +258,13 @@ window.PixelWorkshop.Creatures = window.PixelWorkshop.Creatures || [];
     useWaterFoam: true,
     spec: SPEC,
     skins: SKINS,
+    actions: [
+      { id: 'patrol',         name: '自由巡游', loop: true,  status: 'done' },
+      { id: 'idle',           name: '原地待机', loop: true,  status: 'done' },
+      { id: 'battle_attack',  name: '抡棒重砸', loop: false, duration: 0.85, status: 'done' },
+      { id: 'battle_stagger', name: '破盾硬直', loop: false, duration: 0.85, status: 'done' },
+      { id: 'battle_hurt',    name: '受击',     loop: false, duration: 0.35, status: 'done' }
+    ],
     blocks: ['双态微蹲/前倾躯干', '紧致连贯 2 足 IK', '滞后颠簸金币包袱', '摆臂甩木棒', '警觉快转头抖耳'],
     soulHabit: '原地微蹲警觉快转头抖耳掂棒 → 压低身子紧致高频小碎步窜跑扬尘',
     defaultParams: { gaitFreq: 1.0, tailFlex: 1.0, springiness: 1.0, speed: 1.0, scaleMul: 1.0 },
@@ -329,6 +336,199 @@ window.PixelWorkshop.Creatures = window.PixelWorkshop.Creatures || [];
           const flex = params.tailFlex ?? 1.0;
           const gFreq = params.gaitFreq ?? 1.0;
           state.habitTimer += dt;
+          const act = eco && eco.action;
+          const isBattle = act === 'battle_attack' || act === 'battle_stagger' || act === 'battle_hurt';
+
+          if (isBattle) {
+            const actT = (eco && eco.actionTime != null) ? eco.actionTime : 0;
+            const isNewAct = act !== state._bAct || actT < (state._bLastT || 0) - 0.04;
+            if (isNewAct) {
+              state._bAct = act;
+              state._bFired = false;
+              state._bFired2 = false;
+              state._bAx = (eco && eco.homeX != null) ? eco.homeX : state.x;
+              state._bAy = (eco && eco.homeY != null) ? eco.homeY : state.y;
+              state._bYaw = (eco && eco.homeYaw != null) ? eco.homeYaw : state.yaw;
+            }
+            state._bLastT = actT;
+            const ax = (eco && eco.homeX != null) ? eco.homeX : state._bAx;
+            const ay = (eco && eco.homeY != null) ? eco.homeY : state._bAy;
+            const hasTgt = eco && Array.isArray(eco.targetPos) && eco.targetPos.length >= 2 && Number.isFinite(eco.targetPos[0]) && Number.isFinite(eco.targetPos[1]);
+            const tx = hasTgt ? eco.targetPos[0] : ax - Math.sin(state._bYaw) * 46 * sMul;
+            const ty = hasTgt ? eco.targetPos[1] : ay + Math.cos(state._bYaw) * 46 * sMul;
+            const tz = (hasTgt && Number.isFinite(eco.targetPos[2])) ? eco.targetPos[2] : 8 * sMul;
+            const dx = tx - ax, dy = ty - ay;
+            const dist = Math.hypot(dx, dy) || 1;
+            const dirX = dx / dist, dirY = dy / dist;
+            const sideX = -dirY, sideY = dirX;
+            const aimYaw = Math.atan2(-dx, dy);
+
+            let armTgt = 0, clubTgt = 0.16, headTgt = 0, earLTgt = 0, earRTgt = 0;
+            let packB = 0, packS = 0;
+
+            if (act === 'battle_attack') {
+              if (actT < 0.28) {
+                const u = smoothstep(0, 1, actT / 0.28);
+                state.x = ax - dirX * 2.6 * u * sMul;
+                state.y = ay - dirY * 2.6 * u * sMul;
+                state.z = 0;
+                state.yaw = aimYaw - 0.52 * u;
+                state.sprintBlend = 0.2 * u;
+                armTgt = -0.78 * u;
+                clubTgt = -0.95 * u;
+                headTgt = 0.36 * u;
+                earLTgt = -0.35 * u; earRTgt = 0.35 * u;
+                packS = -0.28 * u;
+                if (vfx && Math.random() < 0.45) {
+                  vfx.spawnParticle(
+                    state.x + sideX * 5 * sMul, state.y + sideY * 5 * sMul, 16 * sMul,
+                    (Math.random() - 0.5) * 6 * sMul, (Math.random() - 0.5) * 6 * sMul, 10 * sMul,
+                    0.22, 1.35, '#ffe36e', true, 12
+                  );
+                }
+              } else if (actT < 0.50) {
+                const u = (actT - 0.28) / 0.22;
+                const lunge = Math.sin(u * Math.PI * 0.5);
+                state.x = ax + dirX * (-2.6 + 12.6 * lunge) * sMul;
+                state.y = ay + dirY * (-2.6 + 12.6 * lunge) * sMul;
+                state.z = Math.sin(u * Math.PI) * 5.2 * sMul;
+                state.yaw = aimYaw + lerp(-0.52, 0.38, smoothstep(0, 1, u));
+                state.sprintBlend = 1.0;
+                armTgt = lerp(-0.78, 0.85, u);
+                clubTgt = lerp(-0.95, 0.92, u);
+                headTgt = -0.18 * u;
+                earLTgt = -0.48; earRTgt = 0.48;
+                packS = 0.32 * lunge;
+                if (!state._bFired && actT >= 0.36) {
+                  state._bFired = true;
+                  bodyBounce.impulse(-14 * sp);
+                  packBounce.impulse(18 * sp);
+                  if (vfx) {
+                    const flightT = 0.16;
+                    for (let i = 0; i < 12; i++) {
+                      const frac = (i / 11) - 0.5;
+                      const spread = frac * 14 * sMul;
+                      const sx0 = state.x + dirX * 7 * sMul + sideX * spread * 0.45;
+                      const sy0 = state.y + dirY * 7 * sMul + sideY * spread * 0.45;
+                      const sz0 = state.z + (12.5 - Math.abs(frac) * 5) * sMul;
+                      const ttx = tx + sideX * spread;
+                      const tty = ty + sideY * spread;
+                      const col = i % 3 === 0 ? '#fff2b8' : (i % 2 === 0 ? '#ff9e26' : '#ff4d1a');
+                      vfx.spawnParticle(
+                        sx0, sy0, sz0,
+                        (ttx - sx0) / flightT, (tty - sy0) / flightT, (tz - sz0) / flightT,
+                        flightT + 0.08, i % 3 === 0 ? 2.1 : 1.75, col, true, 12
+                      );
+                    }
+                  }
+                }
+                if (!state._bFired2 && actT >= 0.43) {
+                  state._bFired2 = true;
+                  if (vfx) {
+                    vfx.addDecal({
+                      kind: 'crack', x: tx, y: ty, yaw: aimYaw,
+                      rx: 8.5 * sMul, ry: 8.5 * sMul, life: 2.2, alpha: 0.72,
+                      color: '#3d2417', hiColor: '#ff9e26', darkColor: '#1a0f0a'
+                    });
+                    vfx.addRipple(tx, ty, 3 * sMul, 22 * sMul, 0.52, 2.1);
+                    vfx.addRipple(tx, ty, 2 * sMul, 14 * sMul, 0.34, 1.5);
+                    for (let i = 0; i < 18; i++) {
+                      const a = (i / 18) * Math.PI * 2 + Math.random() * 0.25;
+                      const spd = (14 + Math.random() * 22) * sMul;
+                      const isGold = i % 4 === 0;
+                      const isSpark = i % 3 === 0;
+                      const col = isGold ? '#ffe36e' : (isSpark ? '#ff4d1a' : (i % 2 === 0 ? '#ff9e26' : '#b0794d'));
+                      vfx.spawnParticle(
+                        tx, ty, tz + 2 * sMul,
+                        Math.cos(a) * spd + dirX * 8 * sMul, Math.sin(a) * spd + dirY * 8 * sMul, (11 + Math.random() * 14) * sMul,
+                        0.38 + Math.random() * 0.20, isGold ? 1.8 : 1.55, col, isGold || isSpark, 52
+                      );
+                    }
+                  }
+                }
+              } else {
+                const u = clamp((actT - 0.50) / 0.35, 0, 1);
+                const ret = 1 - smoothstep(0, 1, u);
+                state.x = ax + dirX * 10.0 * ret * sMul;
+                state.y = ay + dirY * 10.0 * ret * sMul;
+                state.z = 0;
+                state.yaw = aimYaw + 0.38 * ret;
+                state.sprintBlend = ret * 0.6;
+                armTgt = 0.85 * ret;
+                clubTgt = lerp(0.16, 0.92, ret);
+                packS = 0.32 * ret;
+              }
+            } else if (act === 'battle_stagger') {
+              const p = clamp(actT / 0.85, 0, 1);
+              const decay = 1 - p;
+              const wobble = Math.sin(actT * 36) * 2.1 * decay * sMul;
+              state.x = ax - dirX * 4.5 * Math.sin(p * Math.PI) * sMul + sideX * wobble;
+              state.y = ay - dirY * 4.5 * Math.sin(p * Math.PI) * sMul + sideY * wobble;
+              state.z = 0;
+              state.yaw = aimYaw + Math.sin(actT * 24) * 0.28 * decay;
+              state.sprintBlend = 0;
+              earLTgt = -0.58; earRTgt = 0.58;
+              clubTgt = -0.68;
+              armTgt = -0.42;
+              packB = -1.2 * Math.sin(p * Math.PI);
+              packS = Math.sin(actT * 30) * 0.32 * decay;
+              headTgt = Math.sin(actT * 18) * 0.42 * decay;
+              if (!state._bFired) {
+                state._bFired = true;
+                bodyBounce.impulse(-16 * sp);
+                packBounce.impulse(22 * sp);
+                if (vfx) {
+                  vfx.addRipple(ax, ay, 4 * sMul, 20 * sMul, 0.56, 1.8);
+                  for (let i = 0; i < 13; i++) {
+                    const a = (i / 13) * Math.PI * 2;
+                    const spd = (12 + Math.random() * 14) * sMul;
+                    const col = i < 3 ? '#ffe36e' : (i % 2 === 0 ? '#b8f4ff' : '#ffffff');
+                    vfx.spawnParticle(ax, ay, 11 * sMul, Math.cos(a) * spd, Math.sin(a) * spd, (10 + Math.random() * 13) * sMul, 0.46 + Math.random() * 0.2, 1.65, col, i % 2 === 0, 48);
+                  }
+                }
+              }
+            } else {
+              // battle_hurt (0.35s)
+              const p = clamp(actT / 0.35, 0, 1);
+              const env = Math.sin(p * Math.PI);
+              const vib = Math.sin(actT * 60) * 1.4 * (1 - p) * sMul;
+              state.x = ax - dirX * 4.2 * env * sMul + sideX * vib;
+              state.y = ay - dirY * 4.2 * env * sMul + sideY * vib;
+              state.z = 0;
+              state.yaw = aimYaw + Math.sin(actT * 48) * 0.16 * (1 - p);
+              state.sprintBlend = 0;
+              earLTgt = -0.48 * env; earRTgt = 0.48 * env;
+              clubTgt = -0.36 * env;
+              if (!state._bFired) {
+                state._bFired = true;
+                bodyBounce.impulse(-10 * sp);
+                packBounce.impulse(14 * sp);
+              }
+            }
+
+            state.vx = 0; state.vy = 0;
+            state.tiltX = lerp(state.tiltX || 0, 0, expSmooth(dt, 14));
+            state.tiltY = lerp(state.tiltY || 0, 0, expSmooth(dt, 14));
+            gait.reset(state.x, state.y, state.yaw);
+            for (const leg of gait.legs) {
+              leg.hipWX = state.x + (-Math.sin(state.yaw) * leg.hipY + Math.cos(state.yaw) * leg.hipX) * sMul;
+              leg.hipWY = state.y + ( Math.cos(state.yaw) * leg.hipY + Math.sin(state.yaw) * leg.hipX) * sMul;
+              leg.hipWZ = leg.hipZ * sMul + state.z;
+              leg.footZ = state.z;
+              leg.kneeZ = state.z + leg.hipZ * 0.52 * sMul;
+            }
+            instance.footContacts = gait.legs.map(l => ({ x: l.footX, y: l.footY, z: l.footZ, r: 2.1 * sMul }));
+            headLookSpring.update(dt, headTgt, 180 * sp, 8.2);
+            earLSpring.update(dt, earLTgt, 210 * sp, 6.4);
+            earRSpring.update(dt, earRTgt, 210 * sp, 6.4);
+            bodyBounce.update(dt, 0, 200 * sp, 8.4);
+            packBounce.update(dt, packB, 140 * sp, 5.8);
+            packSway.update(dt, packS, 120 * sp, 6.0);
+            armSpring.update(dt, armTgt, 190 * sp, 7.2);
+            clubSpring.update(dt, clubTgt, 180 * sp, 6.2);
+            return;
+          }
+          state._bAct = '';
 
           Propulsion.multiLegWalk(state, dt, time, { ...params, speed: (params.speed ?? 1.0) * 1.25 }, {
             ...eco, walkStyle: 'scurry', baseLift: 0
@@ -452,24 +652,25 @@ window.PixelWorkshop.Creatures = window.PixelWorkshop.Creatures || [];
             }
           }
 
-          // 2. 躯干（叠加二足左右窜跑摇摆 + 深度嵌合大腿根）
+          // 2. 躯干（叠加二足左右窜跑摇摆 + 深度嵌合大腿根 + 战斗跃起高度 state.z）
+          const zLift = state.z || 0;
           const tId = isRun ? 'torsoRun' : 'torso';
           const [tx, ty] = localToWorldXY(state.x + (state.tiltX || 0), state.y + (state.tiltY || 0), yw, 0, 0.4 * sMul);
           list.push({
             partKey: tId, asset: parts[tId],
-            x: tx, y: ty, lift: 4.4 * sMul + bob, ro: yw, bias: 0.15
+            x: tx, y: ty, lift: 4.4 * sMul + bob + zLift, ro: yw, bias: 0.15
           });
 
           // 3. 背后鼓囊皮包袱
           const [pkX, pkY] = localToWorldXY(tx, ty, yw, 0, (isRun ? -5.8 : -6.2) * sMul);
           list.push({
             partKey: 'pack', asset: parts.pack,
-            x: pkX, y: pkY, lift: 6.2 * sMul + bob + packBob, ro: packRo, bias: -0.25
+            x: pkX, y: pkY, lift: 6.2 * sMul + bob + packBob + zLift, ro: packRo, bias: -0.25
           });
 
           // 4. 头部 + 两侧大尖耳
           const [hx, hy] = localToWorldXY(tx, ty, yw, 0, (isRun ? 2.8 : 1.2) * sMul);
-          const headZ = (isRun ? 13.8 : 14.6) * sMul + bob * 1.05;
+          const headZ = (isRun ? 13.8 : 14.6) * sMul + bob * 1.05 + zLift;
           list.push({
             partKey: 'head', asset: parts.head,
             x: hx, y: hy, lift: headZ, ro: hYaw, bias: 0.4
@@ -488,7 +689,7 @@ window.PixelWorkshop.Creatures = window.PixelWorkshop.Creatures || [];
 
           // 5. 左右臂 + 锁枢轴铁钉木棒
           const shY = (isRun ? 1.6 : 0.2) * sMul;
-          const shZ = 9.4 * sMul + bob;
+          const shZ = 9.4 * sMul + bob + zLift;
           const [lShX, lShY] = localToWorldXY(tx, ty, yw, -4.4 * sMul, shY);
           const [rShX, rShY] = localToWorldXY(tx, ty, yw,  4.4 * sMul, shY);
           const lArmY = yw + armSpring.x;

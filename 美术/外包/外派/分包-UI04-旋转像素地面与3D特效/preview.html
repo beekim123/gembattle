@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UI-04 360° 真 3D 堆叠实景验收台 · 旋转像素地面与战斗特效</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; background: #0d130f; color: #ece8dc; font: 13px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; overflow: hidden; }
+  .wrap { display: flex; width: 100%; height: 100%; }
+  .stage { position: relative; flex: 1; background: #0a100c; cursor: grab; overflow: hidden; }
+  .stage:active { cursor: grabbing; }
+  #cv { width: 100%; height: 100%; display: block; }
+  .hud { position: absolute; left: 12px; top: 10px; padding: 6px 10px; border-radius: 6px; background: rgba(10,16,12,0.82); border: 1px solid rgba(255,255,255,0.14); font-variant-numeric: tabular-nums; pointer-events: none; }
+  .warn { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); max-width: 520px; padding: 16px 20px; border-radius: 8px; background: rgba(140,42,32,0.92); color: #fff; font-size: 14px; display: none; text-align: center; }
+  .side { width: 272px; background: #151c17; border-left: 1px solid rgba(255,255,255,0.1); padding: 14px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+  h2 { font-size: 15px; color: #ffe498; }
+  .sec { font-size: 12px; color: #9db0a0; font-weight: 600; margin-bottom: 5px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  button, select { background: #233026; color: #ece8dc; border: 1px solid rgba(255,255,255,0.15); border-radius: 5px; padding: 6px 8px; cursor: pointer; font-size: 12px; }
+  button.on { background: #70551c; border-color: #ffe498; color: #fff; font-weight: 700; }
+  .tip { font-size: 11px; color: #8da090; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <main class="stage" id="stage">
+    <canvas id="cv"></canvas>
+    <div class="hud" id="hud">初始化中...</div>
+    <div class="warn" id="warn"></div>
+  </main>
+  <aside class="side">
+    <div>
+      <h2>UI-04 · 360° 实景验收台</h2>
+      <div class="tip" style="margin-top:4px">拖动画面 360° 旋转 · Q/E 转 30° · 滚轮缩放 · 真实工坊 3D 角色站立验收</div>
+    </div>
+    <div>
+      <div class="sec">切换 8 套生态地面</div>
+      <select id="biomeSel" style="width:100%"></select>
+    </div>
+    <div>
+      <div class="sec">视角控制</div>
+      <div class="row">
+        <button id="btnSpin" class="on">自动缓转</button>
+        <button id="btnReset">回正 (18°)</button>
+      </div>
+    </div>
+    <div>
+      <div class="sec">主角施法与爆发波（3D 同步旋转）</div>
+      <div class="grid" id="spellBox"></div>
+    </div>
+    <div>
+      <div class="sec">8 只怪 3D 像素出手特效</div>
+      <div class="grid" id="fxBox"></div>
+    </div>
+    <div class="tip" id="meta"></div>
+  </aside>
+</div>
+
+<!-- 本包自带只读工坊内核与 3 个真 3D 像素模型 -->
+<script src="./core/math.js"></script>
+<script src="./core/voxel.js"></script>
+<script src="./core/solvers.js"></script>
+<script src="./core/behaviors.js"></script>
+<script src="./core/renderer.js"></script>
+<script src="./core/registry.js"></script>
+<script src="./core/habitats.js"></script>
+<script src="./references/npc_mage.js"></script>
+<script src="./references/goblin.js"></script>
+<script src="./references/scene_forest_tree.js"></script>
+
+<!-- 外包交付物 -->
+<script src="./bundle/pack_ground_vfx.js"></script>
+<script>
+(function () {
+  const PW = window.PixelWorkshop;
+  const pack = window.Code00ArtPacks && window.Code00ArtPacks.groundVfx;
+  const cv = document.getElementById('cv');
+  const stage = document.getElementById('stage');
+  const hud = document.getElementById('hud');
+  const warn = document.getElementById('warn');
+  const meta = document.getElementById('meta');
+  const biomeSel = document.getElementById('biomeSel');
+
+  const BIOME_LABELS = {
+    forest: '落果浅林 (forest)', swamp: '泽畔浅洼 (swamp)', meadow: '花甸林隙 (meadow)',
+    ruins: '苔石古径 (ruins)', canopy: '巨木树冠 (canopy)', camp: '林间营地 (camp)',
+    trade: '林间土路 (trade)', gate: '青石林道 (gate)'
+  };
+  for (const [id, name] of Object.entries(BIOME_LABELS)) {
+    const o = document.createElement('option'); o.value = id; o.textContent = name; biomeSel.appendChild(o);
+  }
+  let biomeId = 'forest', autoSpin = true;
+  biomeSel.onchange = () => { biomeId = biomeSel.value; };
+
+  if (!pack) {
+    warn.style.display = 'block';
+    warn.textContent = '尚未检测到 ./bundle/pack_ground_vfx.js，请外包方交付后刷新本页验收。';
+    hud.textContent = '等待交付物：./bundle/pack_ground_vfx.js';
+    return;
+  }
+
+  const R = new PW.Renderer.StackRenderer(cv);
+  R.th = 0.32;
+  let thTarget = 0.32;
+  const makeCanvas = PW.Renderer.makeCanvas;
+  if (pack.init) pack.init(makeCanvas);
+
+  // 真实 3D 站位：主角在前 (0, +28)、地精在后 (0, -24)、两棵古树在左右外缘
+  const actors = [];
+  const spawnAt = (id, x, y, yaw) => {
+    const def = PW.Assets.byId[id];
+    if (!def) return null;
+    const inst = PW.Assets.spawn(def, { seed: 42 });
+    inst.reset(x, y, yaw);
+    actors.push(inst);
+    return inst;
+  };
+  spawnAt('npc_mage', 0, 28, Math.PI);
+  spawnAt('goblin_scout', 0, -24, 0);
+  spawnAt('scene_forest_tree', -68, -28, 0.2);
+  spawnAt('scene_forest_tree', 72, -18, 1.1);
+
+  const activeBolts = [], activeWaves = [], activeFx = [];
+  const spellBox = document.getElementById('spellBox');
+  for (const [lbl, fn] of [
+    ['红弹丸', () => activeBolts.push({ from: [4, 26, 14], to: [0, -24, 12], art: 'red', t: 0, dur: 0.45 })],
+    ['绿弹丸', () => activeBolts.push({ from: [4, 26, 14], to: [0, -24, 12], art: 'green', t: 0, dur: 0.45 })],
+    ['蓝弹丸', () => activeBolts.push({ from: [4, 26, 14], to: [0, -24, 12], art: 'blue', t: 0, dur: 0.45 })],
+    ['彩虹大弹', () => activeBolts.push({ from: [4, 26, 14], to: [0, -24, 12], art: 'rainbow', big: true, t: 0, dur: 0.55 })],
+    ['补色合白波', () => activeWaves.push({ kind: 'white_wave', center: [0, -24, 4], t: 0, dur: 0.75 })],
+    ['彩虹爆发', () => activeWaves.push({ kind: 'rainbow_burst', center: [0, -24, 6], t: 0, dur: 0.9 })],
+    ['破盾碎晶', () => activeWaves.push({ kind: 'shield_shatter', center: [0, -24, 12], t: 0, dur: 0.85 })],
+    ['护壁格挡', () => activeWaves.push({ kind: 'ward_block', center: [0, 28, 12], t: 0, dur: 0.75 })],
+  ]) {
+    const b = document.createElement('button'); b.textContent = lbl; b.onclick = fn; spellBox.appendChild(b);
+  }
+  const fxBox = document.getElementById('fxBox');
+  for (const [k, nm] of [['spit','软泥水弹'],['puff','绵羊毛团'],['club','地精木棒'],['petals','灵精花瓣'],['fruit','长臂红果'],['claw','赤豹三爪'],['bite','懒兽巨咬'],['roots','树精地根']]) {
+    const b = document.createElement('button'); b.textContent = nm;
+    b.onclick = () => activeFx.push({ kind: k, from: [0, -24, 12], to: [0, 28, 10], t: 0, dur: 0.85 });
+    fxBox.appendChild(b);
+  }
+
+  let drag = null;
+  cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, th: R.th }; autoSpin = false; document.getElementById('btnSpin').classList.remove('on'); cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', e => { if (drag) R.th = thTarget = drag.th + (e.clientX - drag.x) * 0.01; });
+  cv.addEventListener('pointerup', () => { drag = null; });
+  cv.addEventListener('wheel', e => { e.preventDefault(); R.zoom = Math.max(-2, Math.min(4, R.zoom + (e.deltaY > 0 ? -1 : 1))); fit(); }, { passive: false });
+  window.addEventListener('keydown', e => {
+    if (e.key.toLowerCase() === 'q') thTarget -= Math.PI / 6;
+    if (e.key.toLowerCase() === 'e') thTarget += Math.PI / 6;
+  });
+  document.getElementById('btnSpin').onclick = (e) => { autoSpin = !autoSpin; e.target.classList.toggle('on', autoSpin); };
+  document.getElementById('btnReset').onclick = () => { autoSpin = false; document.getElementById('btnSpin').classList.remove('on'); thTarget = 0.32; };
+
+  function fit() { R.fit(PW.Habitats.HABITAT_MAP.forest, stage.clientWidth, stage.clientHeight); }
+  new ResizeObserver(fit).observe(stage);
+  fit();
+
+  const SOFT = { gaitFreq: 1, tailFlex: 1, springiness: 1, speed: 1, scaleMul: 1 };
+  let last = performance.now(), animT = 0, frames = 0, acc = 0, fps = 0;
+  const proj = (wx, wy, wz = 0) => R.proj(wx, wy, wz);
+
+  function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now; animT += dt;
+    frames++; acc += dt;
+    if (acc >= 0.5) { fps = Math.round(frames / acc); frames = 0; acc = 0; }
+    if (autoSpin) thTarget += dt * 0.35;
+    R.th += (thTarget - R.th) * (1 - Math.exp(-dt * 10));
+
+    const hab = { ...(PW.Habitats.HABITAT_MAP[biomeId] || PW.Habitats.HABITAT_MAP.forest), isWater: false };
+    for (const a of actors) a.update(dt, animT, SOFT, hab, R.vfx, { patrol: false, action: 'idle', actionTime: animT, homeX: a.state.x, homeY: a.state.y, homeYaw: a.state.yaw, maxRadius: 0, seed: 42, self: a, allActors: actors });
+    R.vfx.update(dt);
+
+    // 1. 准备全部 3D 模型（工坊原版两阶段批处理）
+    R.frame++; R.atlas.frame = R.frame; R.scratchIdx = 0; R.updateTint(hab);
+    const c = Math.cos(R.th), s = Math.sin(R.th), SC = R.SCALE, TILT = 0.6;
+    const sorted = actors.map(a => ({ actor: a, ry: s * a.state.x + c * a.state.y, parts: null })).sort((a, b) => a.ry - b.ry);
+    for (const it of sorted) it.parts = R.prepareActor(it.actor, hab, c, s);
+
+    // 2. 绘制 3D 旋转像素地面（铺满视口，零圆台！）
+    const d = R.dctx;
+    d.setTransform(1, 0, 0, 1, 0, 0);
+    d.fillStyle = hab.pal ? hab.pal.deep : '#182c1e';
+    d.fillRect(0, 0, cv.width, cv.height);
+    const tile = pack.buildGroundTile(biomeId, makeCanvas, 384);
+    const span = 260; // 世界格宽，足以覆盖 16:9 任意旋转角
+    d.save();
+    d.imageSmoothingEnabled = false;
+    d.setTransform(c * SC, TILT * s * SC, -s * SC, TILT * c * SC, cv.width / 2, cv.height / 2 + 16 * SC);
+    d.drawImage(tile.canvas, -span / 2, -span / 2, span, span);
+    // 脚底接地暗斑（跟着地面一起 3D 旋转）
+    for (const a of actors) {
+      const fr = (a.def.footRadius || 10);
+      d.fillStyle = 'rgba(0,0,0,0.34)';
+      d.beginPath(); d.ellipse(a.state.x, a.state.y, fr, fr * 0.85, 0, 0, Math.PI * 2); d.fill();
+    }
+    d.restore();
+
+    // 3. 统一远→近画全部 3D 角色与摆件
+    for (const it of sorted) R.drawPreparedActor(it.parts);
+
+    // 4. 3D 生态微粒与 3D 像素战斗特效
+    d.setTransform(1, 0, 0, 1, 0, 0);
+    pack.drawGroundAmbient3D(d, biomeId, proj, animT, 1);
+    for (let i = activeBolts.length - 1; i >= 0; i--) {
+      const b = activeBolts[i]; b.t += dt;
+      if (b.t >= b.dur) activeBolts.splice(i, 1);
+      else pack.drawSpellBolt3D(d, { ...b, k: b.t / b.dur }, proj);
+    }
+    for (let i = activeWaves.length - 1; i >= 0; i--) {
+      const w = activeWaves[i]; w.t += dt;
+      if (w.t >= w.dur) activeWaves.splice(i, 1);
+      else pack.drawImpactWave3D(d, w.kind, w.center, w.t / w.dur, proj);
+    }
+    for (let i = activeFx.length - 1; i >= 0; i--) {
+      const f = activeFx[i]; f.t += dt;
+      if (f.t >= f.dur) activeFx.splice(i, 1);
+      else pack.drawAttackFx3D(d, f.kind, f.t / f.dur, f.from, f.to, proj);
+    }
+
+    const ci = R.cacheInfo();
+    hud.textContent = `UI-04 3D实景 · ${fps} fps · 视角 ${Math.round(((R.th * 180 / Math.PI) % 360 + 360) % 360)}° · 图集 ${ci.mb}MB`;
+    meta.textContent = `交付包：${pack.name || pack.id} v${pack.version} · 画布 ${cv.width}×${cv.height}`;
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

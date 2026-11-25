@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UI-02A 独立预览验收台 · 七色宝石与秘术卡牌</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; background: #101612; color: #ece8dc; font: 13px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; overflow: hidden; }
+  .wrap { display: flex; width: 100%; height: 100%; }
+  .stage { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; background: #0c120e; }
+  canvas { display: block; box-shadow: 0 12px 40px rgba(0,0,0,0.6); }
+  .hud { position: absolute; left: 12px; top: 10px; padding: 6px 10px; border-radius: 6px; background: rgba(12,18,14,0.84); border: 1px solid rgba(255,255,255,0.14); font-variant-numeric: tabular-nums; }
+  .warn { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); max-width: 520px; padding: 16px 20px; border-radius: 8px; background: rgba(140,42,32,0.92); color: #fff; font-size: 14px; display: none; text-align: center; }
+  .side { width: 240px; background: #161d18; border-left: 1px solid rgba(255,255,255,0.1); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  h2 { font-size: 15px; color: #ffe498; }
+  .tip { font-size: 12px; color: #9fb0a2; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  button { background: #263429; color: #ece8dc; border: 1px solid rgba(255,255,255,0.16); border-radius: 5px; padding: 6px 10px; cursor: pointer; font-size: 12px; }
+  button.on { background: #70551c; border-color: #ffe498; color: #fff; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <main class="stage" id="stage">
+    <canvas id="cv"></canvas>
+    <div class="hud" id="hud">初始化中...</div>
+    <div class="warn" id="warn"></div>
+  </main>
+  <aside class="side">
+    <h2>UI-02A · 卡牌验收台</h2>
+    <div class="tip">检查项：7 色切面宝石秒认（无大号黑体字）、8 秘术独立插画、废牌/遮蔽/牌背与链槽清晰锐利。</div>
+    <div>
+      <div class="tip" style="margin-bottom:6px">切换宝石牌高亮态</div>
+      <div class="row" id="frameBtns"></div>
+    </div>
+    <div class="tip" id="meta"></div>
+  </aside>
+</div>
+<script src="./bundle/pack_cards.js"></script>
+<script>
+(function () {
+  const W = 960, H = 540, SCALE = 2;
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const hud = document.getElementById('hud');
+  const warn = document.getElementById('warn');
+  const meta = document.getElementById('meta');
+  const pack = window.Code00ArtPacks && window.Code00ArtPacks.cards;
+
+  function resize() {
+    cv.width = W * SCALE; cv.height = H * SCALE;
+    const maxW = document.getElementById('stage').clientWidth - 24;
+    const maxH = document.getElementById('stage').clientHeight - 24;
+    const k = Math.min(maxW / W, maxH / H);
+    cv.style.width = Math.floor(W * k) + 'px';
+    cv.style.height = Math.floor(H * k) + 'px';
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  let frameMode = 'near';
+  const modes = [['无框', null], ['接上', 'near'], ['合白', 'comp'], ['百搭', 'wild'], ['断色', 'break'], ['施法亮', 'lit']];
+  const fb = document.getElementById('frameBtns');
+  modes.forEach(([lbl, val]) => {
+    const b = document.createElement('button');
+    b.textContent = lbl;
+    if (val === frameMode) b.classList.add('on');
+    b.onclick = () => { frameMode = val; [...fb.children].forEach(x => x.classList.remove('on')); b.classList.add('on'); };
+    fb.appendChild(b);
+  });
+
+  if (!pack || !pack.drawCard) {
+    warn.style.display = 'block';
+    warn.textContent = '尚未检测到 ./bundle/pack_cards.js，请外包方交付后刷新本页验收。';
+    hud.textContent = '等待交付物：./bundle/pack_cards.js';
+    return;
+  }
+
+  let offBytes = 0, offCount = 0;
+  const origCreate = document.createElement.bind(document);
+  function makeCanvas(w, h) { const c = origCreate('canvas'); c.width = w; c.height = h; offCount++; offBytes += w * h * 4; return c; }
+  const t0 = performance.now();
+  if (pack.initCards) pack.initCards(makeCanvas);
+  const initMs = performance.now() - t0;
+  meta.textContent = `初始化 ${initMs.toFixed(1)}ms · 离屏 ${offCount} 张 (${(offBytes/1048576).toFixed(2)} MB)`;
+
+  const ARCANA_LIST = [['spring', -1], ['ward', -1], ['shatter', -1], ['surge', -1], ['resonance', -1], ['refract', 6], ['prism', 0], ['keep', 3]];
+  let frames = 0, acc = 0, last = performance.now(), fps = 0;
+  function loop(now) {
+    const dt = now - last; last = now; frames++; acc += dt;
+    if (acc >= 500) { fps = Math.round(frames * 1000 / acc); frames = 0; acc = 0; }
+    const t = now / 1000;
+    ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+    ctx.fillStyle = '#1d3623'; ctx.fillRect(0, 0, W, H);
+
+    const lbl = (s, x, y) => { ctx.font = '700 13px "PingFang SC", sans-serif'; ctx.fillStyle = '#ffe498'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(s, x, y); };
+    lbl('一、七色切面宝石牌 + 牌背 + 遮蔽 + 缠藤废牌（放大 1.15× 检视切面细节）', 24, 34);
+    for (let c = 0; c < 7; c++) {
+      ctx.save(); ctx.translate(64 + c * 84, 120); ctx.scale(1.15, 1.15);
+      const o = { t };
+      if (frameMode === 'lit') o.lit = true;
+      else if (frameMode) { o.frame = frameMode; o.tag = modes.find(m => m[1] === frameMode)[0]; o.tagColor = '#ffe498'; if (frameMode === 'break') o.dim = true; }
+      pack.drawCard(ctx, { color: c, carve: c === 0 ? ['sharp', 'pierce'] : [] }, o);
+      ctx.restore();
+    }
+    pack.drawCardBack(ctx, 684, 120, 1.15);
+    ctx.save(); ctx.translate(778, 120); ctx.scale(1.15, 1.15); pack.drawCard(ctx, { color: 2 }, { masked: true, t }); ctx.restore();
+    ctx.save(); ctx.translate(872, 120); ctx.scale(1.15, 1.15); pack.drawCard(ctx, { color: -1, junk: true }, { t }); ctx.restore();
+
+    lbl('二、八张秘术牌（5 瞬发银紫框 + 3 入链带色金框）', 24, 232);
+    ARCANA_LIST.forEach(([id, col], i) => {
+      ctx.save(); ctx.translate(72 + i * 112, 316); ctx.scale(1.15, 1.15);
+      pack.drawCard(ctx, { color: col, arcana: id }, { t });
+      ctx.restore();
+    });
+
+    lbl('三、施法链石刻法阵槽（拖拽引导态 / 空槽 / 已填）', 24, 412);
+    for (let s = 0; s < 5; s++) {
+      pack.drawChainSlot(ctx, 180 + s * 110, 476, 54, 76, { isNext: s === 1, dragging: true, index: s, filled: s === 0 });
+    }
+
+    hud.textContent = `UI-02A 实时帧率：${fps} fps · 画布 ${cv.width}×${cv.height}`;
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

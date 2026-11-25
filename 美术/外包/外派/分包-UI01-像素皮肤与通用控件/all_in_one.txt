@@ -1,0 +1,537 @@
+# 外包项目合集（UI-01 像素皮肤与通用控件 · 由 打包发给网页AI.command 自动生成）
+# 目标交付压缩包：bundle_ui01_skin.zip
+# 包含文件清单（开工提示词.md 压轴在最末尾）：
+#   - README.md
+#   - 设计文档-UI像素皮肤与控件.md
+#   - bundle/README.md
+#   - preview.html
+#   - verify.mjs
+#   - 开工提示词.md
+
+
+===== FILE: ./README.md =====
+# 独立外包制作包 UI-01：复古奇幻像素皮肤与通用控件（`uiSkin`）
+
+> **本目录是 100% 自包含的外包制作包**：可直接合并发给**无本地上下文的独立网页端 AI**。设计规格、独立可视化预览验收台、Node 自动化硬校验脚本与交付规范全部内置，无需依赖外部目录。
+
+---
+
+## 一、包内目录说明
+
+```text
+分包-UI01-像素皮肤与通用控件/
+├── README.md                    # 本文件：包内结构、发包与验收流程
+├── 设计文档-UI像素皮肤与控件.md  # 复古奇幻像素风视觉基调、色板、9-slice 规格与全部 10 个导出接口定义
+├── 开工提示词.md                 # 发给网页端 AI 的完整开工提示词（自动置底于 all_in_one.txt）
+├── preview.html                 # 独立可视化验收台（一屏展示全部控件、3 态交互、多尺寸拉伸与像素数字压测）
+├── verify.mjs                   # 零依赖 Node 硬校验脚本（查接口、零禁用字、零 filter/shadowBlur、<=2MB 内存）
+├── 打包发给网页AI.command        # Mac 双击合并全包为单个 all_in_one.txt
+├── 预览验收.command              # Mac 双击先跑 verify.mjs，再自动开浏览器进 preview.html 验收
+├── 交回/                        # 收到的 bundle_ui01_skin.zip 解压放这里
+└── bundle/                      # 【交付区】外包方需产出以下 3 个文件并打包交回
+    ├── README.md                #   交付物清单说明
+    ├── pack_ui_skin.js          #   （外包产出）注册 window.Code00ArtPacks.uiSkin
+    ├── manifest.json            #   （外包产出）控件清单、色板与内存占用数据
+    └── 交付说明.md               #   （外包产出）verify.mjs 实测结果与目检记录
+```
+
+---
+
+## 二、发包与验收 3 步走
+
+1. **发包**：直接把本目录已生成的 **`all_in_one.txt`**（或双击 `打包发给网页AI.command` 重新生成）拖进网页端 AI 对话框，附口令：
+   > 严格按附件末尾的 `开工提示词.md` 开发。务必用单个脚本一次性生成 3 个文件、自检并打包出可下载的 `bundle_ui01_skin.zip`；正文严禁贴任何代码、JSON 或文档内容。
+2. **收包**：把下载的 `bundle_ui01_skin.zip` 放进 `交回/` 解压，把里面的 `pack_ui_skin.js`、`manifest.json`、`交付说明.md` 覆盖到本目录 `bundle/`。
+3. **一键验收与合入**：双击 **`预览验收.command`** —— 自动先跑 `node verify.mjs` 过全部红线，再自动在浏览器打开 `preview.html` 肉眼检视所有面板/按钮/血条/护盾/集色环/像素数字。确认满意后，直接把 `bundle/pack_ui_skin.js` 拷进 `原型/v2/modules/art-packs/` 并在 `app/index.html` 引入即可热插拔生效！
+
+
+===== FILE: ./设计文档-UI像素皮肤与控件.md =====
+# 设计文档：UI-01 复古奇幻像素皮肤与通用控件（`Code00ArtPacks.uiSkin`）
+
+## 一、美术风格与定位（彻底消灭 PPT 黑框感）
+
+- **项目画面语境**：code00 是一款**俯视像素堆叠（Sprite Stacking）伪 3D 卡牌肉鸽**，画面基准为 `1920×1080`（游戏内逻辑坐标使用 `960×540` 布局单位，1 布局单位 = 2 物理像素），角色与建筑均带有硬朗的 `#0c121a` 像素描边与高对比暖奇幻手绘体素色阶。
+- **核心 UI 基调**：**复古奇幻精绘像素风（暗胡桃木 / 暖羊皮纸 / 苔藓青石 / 锻打黄铜铆钉镶边）**，参考《星露谷物语》《八方旅人》《小丑牌》的实体器物触感，与工坊 3D 像素角色、营火、酒馆和青苔石门 100% 融为一体。
+- **反面教材（严禁出现）**：
+  - 严禁画单调的 `rgba(14,22,16,0.95) + 1px solid white` 圆角 PPT 矩形；
+  - 严禁使用大面积高斯模糊阴影（`ctx.shadowBlur`）或滤镜（`ctx.filter`）；
+  - 严禁依赖外部图片、外部字体或网络资源，必须全部用原生 Canvas 2D **像素级程序化绘制并预烘焙到小型离屏图集**，缩放绘制时开启 `ctx.imageSmoothingEnabled = false` 保持像素颗粒锐利。
+
+---
+
+## 二、统一核心色板（与游戏及工坊 100% 同步）
+
+| 材质 / 用途 | 深暗边 / 描边 | 主体底色 | 中间层 / 浮雕 | 高亮沿 / 点缀 |
+|---|---|---|---|---|
+| **硬像素描边** | `#0c121a` | — | — | — |
+| **暗胡桃木框 (`wood`)** | `#18110c` | `#261b13` | `#3d2b1d` | `#694c34` |
+| **黄铜金属边 / 铆钉** | `#5e3d12` | `#a67424` | `#d8a848` | `#fff0b4` |
+| **暖羊皮纸 (`parchment`)** | `#7a6340` | `#cbb68e` | `#e4d5b4` | `#f7eed6`（文字用 `#2b1e14`） |
+| **苔藓青石 (`stone`)** | `#161e1c` | `#24302d` | `#3a4c47` | `#5f8c58`（青苔边缀） |
+| **主钮暖金 (`primary`)** | `#6e420e` | `#c48918` | `#e6b32e` | `#fff2a8` |
+| **次钮林木 (`secondary`)** | `#19291e` | `#2d4a34` | `#436b4b` | `#8ec48a` |
+| **危险朱红 (`danger`)** | `#521614` | `#9e2c26` | `#d6483c` | `#ffaca0` |
+| **色环六色 + 白** | 红 `#e2483c` · 黄 `#efc93f` · 绿 `#4cb050` · 青 `#3fbac4` · 蓝 `#4474dd` · 紫 `#9254cf` · 白 `#f4f0e6` |
+| **宝石三原色** | 红 `#ff5a4a` · 绿 `#52d65a` · 蓝 `#5a8cff` |
+
+---
+
+## 三、技术与性能硬红线（`verify.mjs` 自动查杀）
+
+1. **挂载规范**：脚本运行在浏览器 `<script>` 全局环境中，必须登记到：
+   ```js
+   window.Code00ArtPacks = window.Code00ArtPacks || {};
+   window.Code00ArtPacks.uiSkin = { id: 'uiSkin', version: 1, name: '...', ... };
+   ```
+2. **严禁使用 `ctx.filter`**（源码出现 `.filter` 赋值直接判失败！这是 v2 此前 4K 掉到 25 帧的罪魁祸首）。
+3. **严禁使用 `ctx.shadowBlur`**（发光与层次一律用双层像素色阶描边、阶梯像素高光、半透明同心环实现）。
+4. **严禁加载外部图片 / 字体 / 网络 URL**（不得出现 `new Image()`、`fetch(`、`http://`、`https://`）。
+5. **离屏贴图内存上限 ≤ `2 MB`**（所有预烘焙离屏画布总字节 `sum(w * h * 4) <= 2 * 1024 * 1024`，单张建议 `<= 256×256`）。
+6. **严守全项目零禁用字**：任何字符串字面量中严禁出现十个禁用字及「守×者」「×之×」格式（具体正则见 `verify.mjs`）。
+7. **状态整洁**：每次绘制函数结束前必须恢复 `ctx` 状态（`ctx.save() / ctx.restore()`），不污染调用方的 `fillStyle / strokeStyle / globalAlpha / imageSmoothingEnabled / font`。
+
+---
+
+## 四、必须实现的 10 个导出接口（精确签名）
+
+所有坐标和尺寸均以 **`960×540` 布局单位** 传入（调用方画布已按 `scale` 缩放至 1080p/4K，绘制像素件时注意对齐 1 像素或 0.5 像素阶梯网格并关闭平滑）。
+
+### 1. `init(makeCanvas)`
+- 可选幂等初始化函数（不传 `makeCanvas` 时默认 `document.createElement('canvas')`）；若调用方未手动调 `init`，首次调用任意 `draw*` 时必须自动懒初始化。
+- 在初始化阶段把 9-slice 面板瓦片、按钮瓦片、像素图标精灵预烘焙到少量离屏小画布中（总耗时 ≤ `40ms`）。
+
+### 2. `drawPanel(ctx, x, y, w, h, variant = 'wood', opts = {})`
+- 使用 **像素 9-slice（九宫格切片）** 绘制容器，保证任意宽高的面板四角铜饰/铆钉/切角绝不拉伸变形！
+- `variant` 必须支持全部 5 套：
+  - `'wood'`：暗胡桃木纹底 + 双层深木框 + 四角黄铜折角钉饰（用于主面板、结算、选项底板）
+  - `'parchment'`：暖羊皮纸质地 + 微斑点纸纹 + 压暗折痕边 + 细金内线（用于重要信息卡、卷轴底）
+  - `'stone'`：青苔古石板框 + 阶梯缺口砖角 + 少量像素青苔缀边（用于战斗仪表、路线图卡片）
+  - `'tooltip'`：紧凑深色木石浮框 + 细暖金内描边 + 明确外暗边（用于悬停详情）
+  - `'bar'`：顶栏专用暗木横梁条 + 底部铜线收边（无多余顶边，适合贴屏顶 `y=0, h=32`）
+- `opts`：`{ accentColor?: string, highlight?: boolean, alpha?: number }`（传入 `accentColor` 时在内框边线/四角饰点透出该强调色）。
+
+### 3. `drawButton(ctx, x, y, w, h, label, state = {})`
+- 使用像素 9-slice 绘制 3 态游戏按钮，立体按压感明显（上沿亮像素边 + 下沿厚重暗底；`pressed` 时整体下沉 1~2 布局单位且收起底厚）。
+- `state`：`{ variant?: 'primary'|'secondary'|'danger'|'ghost', hover?: boolean, pressed?: boolean, enabled?: boolean, fontSize?: number }`
+- 文字居中、最小字号不低于 `12`（即 1080p 下 `24px`），带清晰像素暗描边便于阅读。
+
+### 4. `drawHeart(ctx, cx, cy, size, fillState)`
+- 精绘像素风格红心（含清晰深色轮廓、左上角 2 像素白色高点、内部明暗色阶），绝不用平滑贝塞尔矢量心！
+- `fillState`：`1`（满心，鲜红饱满）| `0.5`（左半红心 + 右半空槽，切口整齐清晰）| `0`（空心石槽底）。
+
+### 5. `drawCoin(ctx, cx, cy, size)`
+- 精绘像素黄铜金币徽记（圆润八角像素硬币 + 内圈浮雕菱纹 + 左上高点）。
+
+### 6. `drawHpBar(ctx, cx, y, w, hp, maxHp, bar, barsTotal)`
+- 怪物头顶精致血条（中心 `cx`，顶边 `y`，总宽 `w` 约 `92~116`）：
+  - 外框为锻铁/青铜像素槽，内部鲜红渐变阶梯像素血槽 + 顶沿 1px 高亮；
+  - `barsTotal > 1` 时在血条左/右侧画清晰的多重血条阶梯小晶格或叠层背槽，并标注剩余条数；
+  - 血条正上方/内侧清晰显示纯数字当前血量（调用 `drawPixelNumber`）。
+
+### 7. `drawShield(ctx, cx, y, shield, shieldMax, broken)`
+- `shield` / `shieldMax` 为 `[红, 绿, 蓝]` 三元素数组（如 `[3, 0, 3]`）。
+- 每格护盾画成**棱面菱形/盾形像素晶格**（不再是死板小方框！）：未削的饱满高亮带切面、已削掉的呈碎裂暗框；`broken === true` 时在右侧显示清晰的青色像素「破盾」小签。
+
+### 8. `drawCountdown(ctx, cx, cy, n, t, danger)`
+- 怪物出手倒计时徽章：青铜镶边像素圆章（`danger || n <= 1` 时切换为警示朱红底 + 金白外圈脉冲呼吸，无 `shadowBlur`），中央用 `drawPixelNumber` 绘制大号锐利数字 `n`。
+
+### 9. `drawColorRing(ctx, cx, cy, r, collectedMask, cursor, t)`
+- 战斗左侧「六色集色法环」器物式仪表：
+  - 外圈为精绘青铜雕纹环座，按正上方顺时针 60° 分布红/黄/绿/青/蓝/紫 6 个圆形镶孔；
+  - `(collectedMask >> i) & 1` 为真时对应孔位嵌满明亮切面宝石并泛阶梯微圈；未集齐为深凹空槽；
+  - 圆心为白色晶核（`cursor === 6` 时亮起）；`cursor` 指向 `0..5` 时该孔外圈显示旋转的像素金框/指针；
+  - 环底显示紧凑的 `集色 X/6`。
+
+### 10. `drawGemLevelBar(ctx, x, y, w, channelIdx, level, exp, maxExp)`
+- 战斗左侧红(`0`)/绿(`1`)/蓝(`2`) 宝石等级横条：左侧嵌一颗对应色多面体小像素宝石 + 紧凑级数（如 `1级`）+ 镶边像素进度槽（按 `exp / maxExp` 填充对应色阶梯条）。
+
+### 11. `drawPixelNumber(ctx, str, x, y, opts = {})`
+- **自绘点阵像素数字字体**（支持字符：`0-9`、`+`、`-`、`−`、`×`、`/`、`%`、`!`、`.`、`,`、空格），每个字符基于手工精修的 `5×7` 或 `6×8` 像素位图绘制，带硬朗 1px 像素暗描边与顶部高阶色！
+- `opts`：`{ size?: number, color?: string, strokeColor?: string, align?: 'left'|'center'|'right', crit?: boolean, rainbow?: boolean }`
+  - `crit: true` 时呈现金橙梯度暴击厚重像素字；
+  - `rainbow: true` 时每个数字依次循环着七色环颜色，极具爆发爽感！
+- 必须确保纯数字显示（如 `52381`），绝不做万/亿缩写。
+
+
+===== FILE: ./bundle/README.md =====
+# `bundle/` 交付目录（UI-01 像素皮肤与通用控件）
+
+外包方请将最终产出的 3 个文件放入本目录，并打包成 **`bundle_ui01_skin.zip`** 交回：
+
+1. `pack_ui_skin.js` —— 注册 `window.Code00ArtPacks.uiSkin`，实现设计文档全部 11 个接口
+2. `manifest.json` —— 皮肤元数据、色板与离屏贴图内存清单
+3. `交付说明.md` —— `node verify.mjs` 实测数据与 `preview.html` 目检记录
+
+
+===== FILE: ./preview.html =====
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UI-01 独立预览验收台 · 复古像素皮肤与通用控件</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; background: #101612; color: #ece8dc; font: 13px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; overflow: hidden; }
+  .wrap { display: flex; width: 100%; height: 100%; }
+  .stage { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; background: #0c120e; }
+  canvas { display: block; box-shadow: 0 12px 40px rgba(0,0,0,0.6); }
+  .hud { position: absolute; left: 12px; top: 10px; padding: 6px 10px; border-radius: 6px; background: rgba(12,18,14,0.82); border: 1px solid rgba(255,255,255,0.14); font-variant-numeric: tabular-nums; }
+  .warn { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); max-width: 520px; padding: 16px 20px; border-radius: 8px; background: rgba(140,42,32,0.92); color: #fff; font-size: 14px; display: none; text-align: center; }
+  .side { width: 250px; background: #161d18; border-left: 1px solid rgba(255,255,255,0.1); padding: 14px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+  h2 { font-size: 15px; color: #ffe498; }
+  .tip { font-size: 12px; color: #9fb0a2; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  button { background: #263429; color: #ece8dc; border: 1px solid rgba(255,255,255,0.16); border-radius: 5px; padding: 6px 10px; cursor: pointer; font-size: 12px; }
+  button.on { background: #70551c; border-color: #ffe498; color: #fff; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <main class="stage" id="stage">
+    <canvas id="cv"></canvas>
+    <div class="hud" id="hud">初始化中...</div>
+    <div class="warn" id="warn"></div>
+  </main>
+  <aside class="side">
+    <h2>UI-01 · 控件验收台</h2>
+    <div class="tip">检查项：九宫格四季拉伸四角不变形、像素描边锐利、无 PPT 感、120fps 满帧。</div>
+    <div>
+      <div class="tip" style="margin-bottom:6px">画布倍率（验证清晰度）</div>
+      <div class="row">
+        <button id="b1">1080p (×2)</button>
+        <button id="b2" class="on">1440×810 (×1.5)</button>
+        <button id="b3">4K (×4)</button>
+      </div>
+    </div>
+    <div>
+      <div class="tip" style="margin-bottom:6px">背景底色切换</div>
+      <div class="row">
+        <button id="bgForest" class="on">密林深绿</button>
+        <button id="bgRuins">古径青灰</button>
+        <button id="bgCanopy">树冠暖褐</button>
+      </div>
+    </div>
+    <div class="tip" id="meta"></div>
+  </aside>
+</div>
+<script src="./bundle/pack_ui_skin.js"></script>
+<script>
+(function () {
+  const W = 960, H = 540;
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const hud = document.getElementById('hud');
+  const warn = document.getElementById('warn');
+  const meta = document.getElementById('meta');
+  const pack = window.Code00ArtPacks && window.Code00ArtPacks.uiSkin;
+
+  let scale = 1.5, bgCol = '#24472c';
+  function resize() {
+    cv.width = Math.round(W * scale);
+    cv.height = Math.round(H * scale);
+    const maxW = document.getElementById('stage').clientWidth - 24;
+    const maxH = document.getElementById('stage').clientHeight - 24;
+    const k = Math.min(maxW / W, maxH / H);
+    cv.style.width = Math.floor(W * k) + 'px';
+    cv.style.height = Math.floor(H * k) + 'px';
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  document.getElementById('b1').onclick = () => { scale = 2; resize(); mark('b1'); };
+  document.getElementById('b2').onclick = () => { scale = 1.5; resize(); mark('b2'); };
+  document.getElementById('b3').onclick = () => { scale = 4; resize(); mark('b3'); };
+  function mark(id) { ['b1','b2','b3'].forEach(k => document.getElementById(k).classList.toggle('on', k === id)); }
+  document.getElementById('bgForest').onclick = () => { bgCol = '#24472c'; markBg('bgForest'); };
+  document.getElementById('bgRuins').onclick = () => { bgCol = '#3b4543'; markBg('bgRuins'); };
+  document.getElementById('bgCanopy').onclick = () => { bgCol = '#47301f'; markBg('bgCanopy'); };
+  function markBg(id) { ['bgForest','bgRuins','bgCanopy'].forEach(k => document.getElementById(k).classList.toggle('on', k === id)); }
+
+  if (!pack) {
+    warn.style.display = 'block';
+    warn.textContent = '尚未检测到 ./bundle/pack_ui_skin.js，请外包方交付后刷新本页验收。';
+    hud.textContent = '等待交付物：./bundle/pack_ui_skin.js';
+    return;
+  }
+
+  let offBytes = 0, offCount = 0;
+  const origCreate = document.createElement.bind(document);
+  function makeCanvas(w, h) {
+    const c = origCreate('canvas');
+    c.width = w; c.height = h;
+    offCount++; offBytes += w * h * 4;
+    return c;
+  }
+  const t0 = performance.now();
+  if (pack.init) pack.init(makeCanvas);
+  const initMs = performance.now() - t0;
+  meta.textContent = `皮肤：${pack.name || pack.id} v${pack.version} · 初始化 ${initMs.toFixed(1)}ms · 离屏 ${offCount} 张 (${(offBytes/1048576).toFixed(2)} MB)`;
+
+  let frames = 0, acc = 0, last = performance.now(), fps = 0;
+  function loop(now) {
+    const dt = now - last; last = now;
+    frames++; acc += dt;
+    if (acc >= 500) { fps = Math.round(frames * 1000 / acc); frames = 0; acc = 0; }
+    const t = now / 1000;
+
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.fillStyle = bgCol;
+    ctx.fillRect(0, 0, W, H);
+
+    // 1. 顶栏条
+    pack.drawPanel(ctx, 0, 0, 960, 32, 'bar', {});
+    pack.drawHeart(ctx, 22, 16, 9, 1);
+    pack.drawHeart(ctx, 46, 16, 9, 0.5);
+    pack.drawHeart(ctx, 70, 16, 9, 0);
+    pack.drawCoin(ctx, 118, 16, 8);
+    pack.drawPixelNumber(ctx, '120', 132, 16, { size: 15, color: '#ffd24a', align: 'left' });
+
+    // 2. 四种 9-slice 面板（展示不同宽高拉伸）
+    const pvs = [
+      ['wood', 18, 48, 210, 128, '#d8a848', '暗木铜边 wood'],
+      ['parchment', 244, 48, 210, 128, null, '羊皮卷 parchment'],
+      ['stone', 470, 48, 210, 128, '#7fb078', '苔石框 stone'],
+      ['tooltip', 696, 48, 246, 128, '#ffd24a', '浮窗 tooltip'],
+    ];
+    for (const [v, x, y, w, h, accCol, lbl] of pvs) {
+      pack.drawPanel(ctx, x, y, w, h, v, { accentColor: accCol, highlight: v === 'tooltip' });
+      ctx.font = '700 13px "PingFang SC", sans-serif';
+      ctx.fillStyle = v === 'parchment' ? '#2b1e14' : '#f4efe4';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(lbl, x + w / 2, y + h / 2);
+    }
+
+    // 3. 按钮 4 风格 × 4 态
+    const bvs = ['primary', 'secondary', 'danger', 'ghost'];
+    const sts = [
+      { name: '常态', enabled: true },
+      { name: '悬停', enabled: true, hover: true },
+      { name: '按下', enabled: true, pressed: true },
+      { name: '禁用', enabled: false },
+    ];
+    bvs.forEach((variant, r) => {
+      sts.forEach((st, c) => {
+        pack.drawButton(ctx, 18 + c * 136, 192 + r * 42, 124, 34, `${variant}·${st.name}`, { variant, ...st });
+      });
+    });
+
+    // 4. 战斗仪表：集色环 + 宝石等级 + 血条 + 双色盾 + 倒计时
+    pack.drawPanel(ctx, 578, 192, 146, 224, 'stone', {});
+    const mask = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 4);
+    pack.drawColorRing(ctx, 651, 244, 30, mask, Math.floor(t) % 7, t);
+    for (let ch = 0; ch < 3; ch++) {
+      pack.drawGemLevelBar(ctx, 592, 326 + ch * 26, 118, ch, ch + 2, (ch * 3 + Math.floor(t * 2)) % 10, 10);
+    }
+
+    pack.drawPanel(ctx, 738, 192, 204, 224, 'wood', {});
+    pack.drawCountdown(ctx, 768, 226, 4, t, false);
+    pack.drawCountdown(ctx, 812, 226, 1, t, true);
+    pack.drawHpBar(ctx, 840, 266, 124, 680, 1100, 1, 3);
+    pack.drawShield(ctx, 840, 286, [3, 2, 0], [4, 4, 0], false);
+    pack.drawHpBar(ctx, 840, 340, 124, 210, 460, 0, 1);
+    pack.drawShield(ctx, 840, 360, [0, 0, 0], [3, 0, 0], true);
+
+    // 5. 底部像素数字展示带
+    pack.drawPanel(ctx, 18, 430, 924, 92, 'wood', { accentColor: '#ffd24a' });
+    pack.drawPixelNumber(ctx, '428', 110, 476, { size: 22, color: '#ffffff', align: 'center' });
+    pack.drawPixelNumber(ctx, '×16', 250, 476, { size: 28, color: '#6fe07a', align: 'center' });
+    pack.drawPixelNumber(ctx, '18420!', 450, 476, { size: 32, crit: true, align: 'center' });
+    pack.drawPixelNumber(ctx, '152890', 740, 476, { size: 36, rainbow: true, align: 'center' });
+
+    hud.textContent = `UI-01 实时帧率：${fps} fps · 画布 ${cv.width}×${cv.height}`;
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
+
+
+===== FILE: ./verify.mjs =====
+// 外包交付自动化校验脚本：UI-01 像素皮肤与通用控件（零外部依赖，运行：node verify.mjs）
+import fs from 'node:fs';
+import vm from 'node:vm';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const TARGET = path.join(ROOT, 'bundle', 'pack_ui_skin.js');
+const BUDGET_BYTES = 2 * 1024 * 1024; // 2 MB 硬红线
+
+if (!fs.existsSync(TARGET)) {
+  console.error('❌ 未找到交付文件：./bundle/pack_ui_skin.js');
+  process.exit(1);
+}
+
+const canvases = [];
+function makeCtx() {
+  const grad = { addColorStop() {} };
+  const state = { filter: 'none', shadowBlur: 0, globalAlpha: 1, imageSmoothingEnabled: true, fillStyle: '#000', strokeStyle: '#000', lineWidth: 1, font: '12px sans-serif', textAlign: 'left', textBaseline: 'alphabetic' };
+  let runtimeFilterSet = false, runtimeShadowSet = false;
+  const ctx = new Proxy(state, {
+    get(o, k) {
+      if (k === '__flags') return { runtimeFilterSet, runtimeShadowSet };
+      if (k in o) return o[k];
+      if (k === 'createLinearGradient' || k === 'createRadialGradient') return () => grad;
+      if (k === 'createImageData') return (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(1, w) * Math.max(1, h) * 4) });
+      if (k === 'measureText') return (s) => ({ width: String(s || '').length * 8 });
+      if (k === 'getTransform') return () => ({ a: 2, b: 0, c: 0, d: 2, e: 0, f: 0 });
+      return () => {};
+    },
+    set(o, k, v) {
+      if (k === 'filter' && v && v !== 'none') runtimeFilterSet = true;
+      if (k === 'shadowBlur' && Number(v) > 0) runtimeShadowSet = true;
+      o[k] = v;
+      return true;
+    }
+  });
+  return ctx;
+}
+
+function makeCanvas(w = 1, h = 1) {
+  const c = { width: Math.max(1, Math.round(w)), height: Math.max(1, Math.round(h)), _ctx: null, getContext() { if (!this._ctx) this._ctx = makeCtx(); return this._ctx; } };
+  canvases.push(c);
+  return c;
+}
+
+const sandbox = {
+  window: {},
+  document: { createElement: (tag) => (tag === 'canvas' ? makeCanvas(1, 1) : {}) },
+  performance: { now: () => Number(process.hrtime.bigint()) / 1e6 },
+  console, Math, Array, Object, Number, String, Boolean, Set, Map, WeakMap,
+  Uint8Array, Uint8ClampedArray, Int32Array, Float32Array, Error, TypeError, RangeError
+};
+sandbox.window = sandbox;
+sandbox.globalThis = sandbox;
+vm.createContext(sandbox);
+
+const src = fs.readFileSync(TARGET, 'utf8');
+const errors = [];
+const check = (cond, msg) => { if (!cond) errors.push(msg); };
+
+// 1. 静态红线扫描
+check(!/\.filter\s*=/.test(src), '源码禁止设置 ctx.filter（会拖垮 4K 帧率）');
+check(!/shadowBlur/.test(src), '源码禁止使用 shadowBlur（请用像素阶梯描边或微圈替代）');
+check(!/\bnew\s+Image\b|https?:\/\/|fetch\s*\(/i.test(src), '源码禁止外部图片或网络加载（必须纯 Canvas 2D 离屏程序化绘制）');
+
+const BAD = /[\u706f\u70ec\u5f71\u591c\u9b42\u566c\u5e7d\u6e0a\u661f\u5149]|\u5b88.\u8005|\u4e4b/;
+const lits = src.match(/(['"`])(?:\\.|(?!\1).)*\1/g) || [];
+const badHits = [];
+for (const lit of lits) { const m = lit.match(BAD); if (m) badHits.push(`${m[0]} in ${lit.slice(0, 24)}`); }
+check(badHits.length === 0, `字符串含禁用字：${badHits.slice(0, 5).join('；')}`);
+
+// 2. 加载与初始化校验
+vm.runInContext(src, sandbox, { filename: 'bundle/pack_ui_skin.js' });
+const pack = sandbox.Code00ArtPacks && sandbox.Code00ArtPacks.uiSkin;
+check(!!pack, '未注册 window.Code00ArtPacks.uiSkin');
+
+if (pack) {
+  check(pack.id === 'uiSkin', `pack.id 应为 "uiSkin"，实际为 ${pack.id}`);
+  check(pack.version === 1, `pack.version 应为 1，实际为 ${pack.version}`);
+  const reqFns = [
+    'init', 'drawPanel', 'drawButton', 'drawHeart', 'drawCoin',
+    'drawHpBar', 'drawShield', 'drawCountdown', 'drawColorRing', 'drawGemLevelBar', 'drawPixelNumber'
+  ];
+  for (const fn of reqFns) check(typeof pack[fn] === 'function', `缺少必需方法：${fn}`);
+
+  const t0 = sandbox.performance.now();
+  if (typeof pack.init === 'function') pack.init(makeCanvas);
+  const initMs = sandbox.performance.now() - t0;
+  check(initMs <= 40, `init 预烘焙耗时过长：${initMs.toFixed(1)}ms（上限 40ms）`);
+
+  // 3. 全接口覆盖实跑（0 报错、0 运行期 filter/shadowBlur）
+  const mainCtx = makeCtx();
+  try {
+    for (const v of ['wood', 'parchment', 'stone', 'tooltip', 'bar']) {
+      pack.drawPanel(mainCtx, 10, 10, 240, 120, v, { accentColor: '#ffd24a', highlight: true });
+      pack.drawPanel(mainCtx, 10, 10, 64, 28, v, {});
+    }
+    for (const variant of ['primary', 'secondary', 'danger', 'ghost']) {
+      for (const st of [{ enabled: true }, { enabled: true, hover: true }, { enabled: true, pressed: true }, { enabled: false }]) {
+        pack.drawButton(mainCtx, 20, 20, 140, 34, '测试按钮', { variant, ...st });
+      }
+    }
+    for (const fsVal of [1, 0.5, 0]) pack.drawHeart(mainCtx, 30, 30, 9, fsVal);
+    pack.drawCoin(mainCtx, 50, 30, 9);
+    pack.drawHpBar(mainCtx, 200, 80, 100, 420, 1100, 0, 3);
+    pack.drawHpBar(mainCtx, 200, 80, 100, 280, 280, 0, 1);
+    pack.drawShield(mainCtx, 200, 100, [2, 4, 0], [4, 4, 0], false);
+    pack.drawShield(mainCtx, 200, 100, [0, 0, 0], [3, 0, 3], true);
+    pack.drawCountdown(mainCtx, 120, 60, 4, 1.2, false);
+    pack.drawCountdown(mainCtx, 120, 60, 1, 1.2, true);
+    pack.drawColorRing(mainCtx, 70, 90, 30, 0b101101, 2, 1.5);
+    pack.drawColorRing(mainCtx, 70, 90, 30, 0, 6, 1.5);
+    for (let ch = 0; ch < 3; ch++) pack.drawGemLevelBar(mainCtx, 16, 160 + ch * 24, 104, ch, ch + 1, ch * 3 + 2, 10);
+    pack.drawPixelNumber(mainCtx, '52381', 300, 200, { size: 22, color: '#ffffff', align: 'center' });
+    pack.drawPixelNumber(mainCtx, '×16!', 300, 240, { size: 28, crit: true, align: 'center' });
+    pack.drawPixelNumber(mainCtx, '+99999', 300, 280, { size: 32, rainbow: true, align: 'center' });
+  } catch (e) {
+    errors.push(`接口运行期异常：${e.stack || e.message}`);
+  }
+
+  check(!mainCtx.__flags.runtimeFilterSet, '运行期主画布触发了 ctx.filter');
+  check(!mainCtx.__flags.runtimeShadowSet, '运行期主画布触发了 ctx.shadowBlur');
+
+  // 4. 离屏贴图内存统计
+  const totalBytes = canvases.reduce((s, c) => s + c.width * c.height * 4, 0);
+  const mb = totalBytes / (1024 * 1024);
+  check(totalBytes <= BUDGET_BYTES, `离屏贴图总占用超标：${mb.toFixed(2)} MB（上限 2.00 MB，共 ${canvases.length} 张画布）`);
+
+  console.log('\n[UI-01 像素皮肤与控件 自动化校验报告]');
+  console.log(`- 皮肤名称：${pack.name || pack.id} (v${pack.version})`);
+  console.log(`- 初始化耗时：${initMs.toFixed(2)} ms（上限 40 ms）`);
+  console.log(`- 离屏画布：${canvases.length} 张，合计 ${mb.toFixed(2)} MB（上限 2.00 MB）`);
+}
+
+if (errors.length) {
+  console.error(`\n❌ 校验未通过（${errors.length} 项错误）：\n  - ${errors.join('\n  - ')}`);
+  process.exit(1);
+}
+console.log('\n✅ 全部硬性校验通过！可以打开 preview.html 做实机视觉终检并打包交回 bundle_ui01_skin.zip。');
+
+
+===== FILE: ./开工提示词.md =====
+# 开工提示词（UI-01 像素皮肤与通用控件 · 给无上下文网页端 AI）
+
+```text
+你正在接手一个独立、自包含的像素奇幻 UI 皮肤外包制作任务（UI-01）。你只需要阅读本外包目录内的文件，严禁虚构外部依赖，也不要改动已有验收文件。
+
+请先依次阅读本目录内的以下文件：
+1. ./README.md（包内结构、交付规范与验收流程）
+2. ./设计文档-UI像素皮肤与控件.md（复古奇幻像素风视觉方向、完整色板、硬红线与全部 11 个导出接口精确签名）
+3. ./verify.mjs（自动化硬性校验标准，你的产物必须 100% 跑通它）
+4. ./preview.html（独立可视化验收台，你会清楚看到所有接口如何被调用和展示）
+
+【交付目标】
+请用单个自动化脚本一次性在 ./bundle/ 目录产出以下 3 个文件，并直接打包成可下载的 bundle_ui01_skin.zip（内部包含 bundle/pack_ui_skin.js、bundle/manifest.json、bundle/交付说明.md）：
+
+1. ./bundle/pack_ui_skin.js（核心 UI 皮肤脚本）：
+   - 通过 window.Code00ArtPacks = window.Code00ArtPacks || {}; window.Code00ArtPacks.uiSkin = { ... }; 登记，id 严格为 'uiSkin'，version 为 1；
+   - 完整实现设计文档第四节全部 11 个导出接口：init, drawPanel, drawButton, drawHeart, drawCoin, drawHpBar, drawShield, drawCountdown, drawColorRing, drawGemLevelBar, drawPixelNumber；
+   - 视觉品质硬要求：
+     * 走「复古奇幻精绘像素风」：暗胡桃木纹+黄铜折角铆钉(wood)、暖羊皮纸+折痕微斑(parchment)、青苔石砖+缺角(stone)、深色镶金浮窗(tooltip)、暗木铜边顶栏(bar)，彻底告别单调黑底白边 PPT 矩形！
+     * 面板与按钮全部采用预烘焙 9-slice（九宫格切片）绘制，任意尺寸拉伸四角铆钉/边框绝不变形；
+     * 红心、金币、多面体色盾晶格、倒计时青铜/朱红印章、六色法环器物底座、三原色小宝石全部采用手工像素点阵/块面精绘（带硬描边 #0c121a、明暗三色阶与左上高点），关闭平滑保持像素锐利；
+     * drawPixelNumber 必须自绘手工 5×7 或 6×8 像素位图字形（支持 0-9 + - − × / % ! . ,），完整支持普通、暴击金橙梯度(crit)、逐字七彩(rainbow) 样式；
+   - 性能与合规死红线（verify.mjs 会逐条硬查）：
+     * 源码中绝不允许出现 ctx.filter 或 .filter =；
+     * 源码中绝不允许出现 shadowBlur；
+     * 严禁加载任何外部图片/字体/网络 URL（全靠 Canvas 2D 离屏预烘焙）；
+     * 所有离屏画布总占用内存 <= 2 MB（2,097,152 字节），init 耗时 <= 40 ms；
+     * 全部中文字符串严禁出现禁用字（正则见 verify.mjs，禁止 10 个禁用字以及 守×者、×之×）；
+     * 每次绘制结束必须完整 restore()，不污染外部 ctx 状态。
+
+2. ./bundle/manifest.json：
+   - 列出 id、version、name、色板表、预烘焙离屏画布清单与总字节数、以及 11 个导出接口说明。
+
+3. ./bundle/交付说明.md：
+   - 记录设计思路、verify.mjs 自检结果、离屏内存占用和 preview.html 目检确认项。
+
+【强制交付形式（硬性要求）】
+- 禁止在聊天正文中贴出任何完整源码、JSON 或长文档内容；
+- 务必用脚本一次性生成 ./bundle/ 下 3 个文件，运行 node verify.mjs（若环境无 Node 则用 Python 静态检查禁用字、filter、shadowBlur、语法完整性），全部通过后直接打包输出可下载的 bundle_ui01_skin.zip；
+- 若未打包完成请直接停下汇报进度，不要空谈或分段贴代码。
+```
+

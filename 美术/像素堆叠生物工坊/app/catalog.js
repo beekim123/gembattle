@@ -237,23 +237,23 @@ window.PixelWorkshop.Catalog = {
     "earth1_belly_maw": {
       "file": "creatures/earth1_belly_maw.js",
       "createdAt": 1795445947283,
-      "updatedAt": 1795500605199,
+      "updatedAt": 1795603960658,
       "createdLabel": "11-23 09:59",
-      "updatedLabel": "11-24 01:10"
+      "updatedLabel": "11-25 05:52"
     },
     "earth2_barometz": {
       "file": "creatures/earth2_barometz.js",
       "createdAt": 1795538775883,
-      "updatedAt": 1795538775883,
+      "updatedAt": 1795603352056,
       "createdLabel": "11-24 11:46",
-      "updatedLabel": "11-24 11:46"
+      "updatedLabel": "11-25 05:42"
     },
     "earth3_zheng": {
       "file": "creatures/earth3_zheng.js",
       "createdAt": 1795492858212,
-      "updatedAt": 1795500081100,
+      "updatedAt": 1795603957951,
       "createdLabel": "11-23 23:00",
-      "updatedLabel": "11-24 01:01"
+      "updatedLabel": "11-25 05:52"
     },
     "earth4_shadhavar": {
       "file": "creatures/earth4_shadhavar.js",
@@ -272,9 +272,9 @@ window.PixelWorkshop.Catalog = {
     "earth6_long_arm": {
       "file": "creatures/earth6_long_arm.js",
       "createdAt": 1795526984906,
-      "updatedAt": 1795528676306,
+      "updatedAt": 1795603656698,
       "createdLabel": "11-24 08:29",
-      "updatedLabel": "11-24 08:57"
+      "updatedLabel": "11-25 05:47"
     },
     "earth7_petal_elytra": {
       "file": "creatures/earth7_petal_elytra.js",
@@ -300,9 +300,9 @@ window.PixelWorkshop.Catalog = {
     "fairy_meadow": {
       "file": "creatures/fairy.js",
       "createdAt": 1795447711327,
-      "updatedAt": 1795484445241,
+      "updatedAt": 1795603909691,
       "createdLabel": "11-23 10:28",
-      "updatedLabel": "11-23 20:40"
+      "updatedLabel": "11-25 05:51"
     },
     "feilong_drake": {
       "file": "creatures/feilong.js",
@@ -328,9 +328,9 @@ window.PixelWorkshop.Catalog = {
     "goblin_scout": {
       "file": "creatures/goblin.js",
       "createdAt": 1795447579346,
-      "updatedAt": 1795498684813,
+      "updatedAt": 1795604253938,
       "createdLabel": "11-23 10:26",
-      "updatedLabel": "11-24 00:38"
+      "updatedLabel": "11-25 05:57"
     },
     "marsh1_camahueto": {
       "file": "creatures/marsh1_camahueto.js",
@@ -573,9 +573,9 @@ window.PixelWorkshop.Catalog = {
     "slime_jelly": {
       "file": "creatures/slime.js",
       "createdAt": 1795489900012,
-      "updatedAt": 1795489900015,
+      "updatedAt": 1795603293439,
       "createdLabel": "11-23 22:11",
-      "updatedLabel": "11-23 22:11"
+      "updatedLabel": "11-25 05:41"
     },
     "snake_wyrm": {
       "file": "creatures/snake.js",
@@ -629,9 +629,9 @@ window.PixelWorkshop.Catalog = {
     "tree3_leshy": {
       "file": "creatures/tree3_leshy.js",
       "createdAt": 1795502976265,
-      "updatedAt": 1795503704290,
+      "updatedAt": 1795603962640,
       "createdLabel": "11-24 01:49",
-      "updatedLabel": "11-24 02:01"
+      "updatedLabel": "11-25 05:52"
     },
     "tree4_basan": {
       "file": "creatures/tree4_basan.js",
@@ -1570,9 +1570,9 @@ window.PixelWorkshop.Catalog = {
         "林地落果空坪"
       ],
       "createdAt": 1795445947283,
-      "updatedAt": 1795500605199,
+      "updatedAt": 1795603960658,
       "createdLabel": "11-23 09:59",
-      "updatedLabel": "11-24 01:10"
+      "updatedLabel": "11-25 05:52"
     },
     {
       "code": "地2",
@@ -1591,9 +1591,9 @@ window.PixelWorkshop.Catalog = {
         "林地落果空坪"
       ],
       "createdAt": 1795538775883,
-      "updatedAt": 1795538775883,
+      "updatedAt": 1795603352056,
       "createdLabel": "11-24 11:46",
-      "updatedLabel": "11-24 11:46"
+      "updatedLabel": "11-25 05:42"
     },
     {
       "code": "地3",
@@ -1612,9 +1612,9 @@ window.PixelWorkshop.Catalog = {
         "林地落果空坪"
       ],
       "createdAt": 1795492858212,
-      "updatedAt": 1795500081100,
+      "updatedAt": 1795603957951,
       "createdLabel": "11-23 23:00",
-      "updatedLabel": "11-24 01:01"
+      "updatedLabel": "11-25 05:52"
     },
     {
       "code": "地4",
@@ -1698,9 +1698,9 @@ window.PixelWorkshop.Catalog = {
         "林地落果空坪"
       ],
       "createdAt": 1795502976265,
-      "updatedAt": 1795503704290,
+      "updatedAt": 1795603962640,
       "createdLabel": "11-24 01:49",
-      "updatedLabel": "11-24 02:01"
+      "updatedLabel": "11-25 05:52"
     },
     {
       "code": "树4",
@@ -1993,9 +1993,9 @@ window.PixelWorkshop.Catalog = {
         "沼泽泥潭"
       ],
       "createdAt": 1795489900012,
-      "updatedAt": 1795489900015,
+      "updatedAt": 1795603293439,
       "createdLabel": "11-23 22:11",
-      "updatedLabel": "11-23 22:11"
+      "updatedLabel": "11-25 05:41"
     },
     {
       "code": "特2",
@@ -2035,9 +2035,9 @@ window.PixelWorkshop.Catalog = {
         "花丛草甸"
       ],
       "createdAt": 1795447711327,
-      "updatedAt": 1795484445241,
+      "updatedAt": 1795603909691,
       "createdLabel": "11-23 10:28",
-      "updatedLabel": "11-23 20:40"
+      "updatedLabel": "11-25 05:51"
     },
     {
       "code": "特4",
@@ -2057,9 +2057,9 @@ window.PixelWorkshop.Catalog = {
         "苔藓古石"
       ],
       "createdAt": 1795447579346,
-      "updatedAt": 1795498684813,
+      "updatedAt": 1795604253938,
       "createdLabel": "11-23 10:26",
-      "updatedLabel": "11-24 00:38"
+      "updatedLabel": "11-25 05:57"
     },
     {
       "code": "特5",

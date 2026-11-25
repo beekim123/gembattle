@@ -526,8 +526,12 @@ window.PixelWorkshop.Creatures = window.PixelWorkshop.Creatures || [];
     spec: SPEC,
     skins: SKINS,
     actions: [
-      { id: 'patrol', name: '自由巡游', loop: true, status: 'done' },
-      { id: 'idle',   name: '原地待机', loop: true, status: 'done' }
+      { id: 'patrol',         name: '自由巡游', loop: true,  status: 'done' },
+      { id: 'idle',           name: '原地待机', loop: true,  status: 'done' },
+      { id: 'battle_attack',  name: '地根尖刺', loop: false, duration: 1.05, status: 'done' },
+      { id: 'battle_special', name: '林雾遮牌', loop: false, duration: 1.00, status: 'done' },
+      { id: 'battle_stagger', name: '破盾硬直', loop: false, duration: 0.85, status: 'done' },
+      { id: 'battle_hurt',    name: '受击',     loop: false, duration: 0.35, status: 'done' }
     ],
     blocks: [
       '5 节阶梯伸缩树干', '二阶弹簧身高驱动', '身高耦合双足 IK',
@@ -754,6 +758,190 @@ window.PixelWorkshop.Creatures = window.PixelWorkshop.Creatures || [];
           const flex = clamp(params.tailFlex ?? 1.0, 0.3, 2.0);
           const spdMul = clamp(params.speed ?? 1.0, 0.3, 2.2);
           const dScale = 1 / Math.sqrt(Math.max(0.35, sp));
+          const act = eco && eco.action;
+          const isBattle = act === 'battle_attack' || act === 'battle_special' || act === 'battle_stagger' || act === 'battle_hurt';
+
+          if (isBattle) {
+            const actT = (eco && eco.actionTime != null) ? eco.actionTime : 0;
+            const isNewAct = act !== state._bAct || actT < (state._bLastT || 0) - 0.04;
+            if (isNewAct) {
+              state._bAct = act;
+              state._bFired = false;
+              state._bFired2 = false;
+              state._bFired3 = false;
+              state._bSpikeStep = 0;
+              state._bAx = (eco && eco.homeX != null) ? eco.homeX : state.x;
+              state._bAy = (eco && eco.homeY != null) ? eco.homeY : state.y;
+              state._bYaw = (eco && eco.homeYaw != null) ? eco.homeYaw : state.yaw;
+            }
+            state._bLastT = actT;
+            const ax = (eco && eco.homeX != null) ? eco.homeX : state._bAx;
+            const ay = (eco && eco.homeY != null) ? eco.homeY : state._bAy;
+            const hasTgt = eco && Array.isArray(eco.targetPos) && eco.targetPos.length >= 2 && Number.isFinite(eco.targetPos[0]) && Number.isFinite(eco.targetPos[1]);
+            const tx = hasTgt ? eco.targetPos[0] : ax - Math.sin(state._bYaw) * 46 * sMul;
+            const ty = hasTgt ? eco.targetPos[1] : ay + Math.cos(state._bYaw) * 46 * sMul;
+            const tz = (hasTgt && Number.isFinite(eco.targetPos[2])) ? eco.targetPos[2] : 8 * sMul;
+            const dx = tx - ax, dy = ty - ay;
+            const dist = Math.hypot(dx, dy) || 1;
+            const dirX = dx / dist, dirY = dy / dist;
+            const sideX = -dirY, sideY = dirX;
+            const aimYaw = Math.atan2(-dx, dy);
+
+            const prevX = state.x, prevY = state.y;
+            state.z = 0;
+            let hTgt = 0.96, uArmTgt = -0.10, lArmTgt = -0.10, headTgt = 0;
+
+            if (act === 'battle_attack') {
+              // 1.05s：巨干拔高双臂外展蓄势(0.30s) -> 重砸大地，6 段连环地根尖刺直奔主角脚下轰然破土(0.35s) -> 回稳(0.40s)
+              state.yaw = aimYaw;
+              if (actT < 0.30) {
+                const u = smoothstep(0, 1, actT / 0.30);
+                state.x = ax - dirX * 2.0 * u * sMul;
+                state.y = ay - dirY * 2.0 * u * sMul;
+                hTgt = 1.0;
+                uArmTgt = -0.54 * u;
+                lArmTgt = -0.58 * u;
+              } else if (actT < 0.65) {
+                const u = (actT - 0.30) / 0.35;
+                const slam = Math.sin(u * Math.PI * 0.5);
+                state.x = ax + dirX * (-2.0 + 5.6 * slam) * sMul;
+                state.y = ay + dirY * (-2.0 + 5.6 * slam) * sMul;
+                hTgt = lerp(1.0, 0.78, slam);
+                // 保持手臂外展前挥，绝不内折穿入粗干 trunk0..4
+                uArmTgt = lerp(-0.54, -0.06, slam);
+                lArmTgt = lerp(-0.58, 0.14, slam);
+                if (!state._bFired && actT >= 0.33) {
+                  state._bFired = true;
+                  bodyBobSpring.impulse(14 * sp);
+                  tremorSpring.impulse(14 * sp);
+                  if (vfx) vfx.addRipple(state.x + dirX * 6 * sMul, state.y + dirY * 6 * sMul, 5 * sMul, 26 * sMul, 0.55, 2.2);
+                }
+                const wantStep = clamp(Math.floor(((actT - 0.31) / 0.31) * 6) + 1, 0, 6);
+                while (state._bSpikeStep < wantStep) {
+                  state._bSpikeStep++;
+                  const isFinal = state._bSpikeStep === 6;
+                  const frac = state._bSpikeStep / 6;
+                  const sx = lerp(ax + dirX * 8 * sMul, tx, frac);
+                  const sy = lerp(ay + dirY * 8 * sMul, ty, frac);
+                  if (vfx) {
+                    vfx.addDecal({
+                      kind: 'crack', x: sx, y: sy, yaw: aimYaw,
+                      rx: (isFinal ? 11.5 : 5.5) * sMul, ry: (isFinal ? 11.5 : 5.5) * sMul,
+                      life: isFinal ? 2.6 : 1.4, alpha: isFinal ? 0.80 : 0.58,
+                      color: '#3b2a1c', hiColor: '#73b856', darkColor: '#1a110a'
+                    });
+                    vfx.addRipple(sx, sy, 2 * sMul, (isFinal ? 26 : 12) * sMul, isFinal ? 0.56 : 0.36, isFinal ? 2.4 : 1.5);
+                    const rootCols = ['#4d3623', '#634831', '#8f6c4a', '#73b856', '#9ee060'];
+                    const cnt = isFinal ? 18 : 7;
+                    for (let k = 0; k < cnt; k++) {
+                      const a = (k / cnt) * TAU;
+                      const lat = isFinal ? Math.cos(a) * 5.0 * sMul : ((k % 3) - 1) * 2.5 * sMul;
+                      const vxS = isFinal ? Math.cos(a) * (12 + (k % 3) * 6) * sMul : dirX * 6 * sMul + sideX * lat * 2;
+                      const vyS = isFinal ? Math.sin(a) * (12 + (k % 3) * 6) * sMul : dirY * 6 * sMul + sideY * lat * 2;
+                      const vzS = isFinal ? (18 + (k % 5) * 4.5) * sMul : (15 + k * 2.2) * sMul;
+                      vfx.spawnParticle(sx + sideX * lat * 0.5, sy + sideY * lat * 0.5, 1.5 * sMul,
+                        vxS, vyS, vzS, isFinal ? 0.52 : 0.40, isFinal ? 2.2 : 1.9, rootCols[k % rootCols.length], isFinal && k % 4 === 0, 48);
+                    }
+                  }
+                }
+              } else {
+                const u = clamp((actT - 0.65) / 0.40, 0, 1);
+                const ret = 1 - smoothstep(0, 1, u);
+                state.x = ax + dirX * 3.6 * ret * sMul;
+                state.y = ay + dirY * 3.6 * ret * sMul;
+                hTgt = lerp(0.95, 0.78, ret);
+                uArmTgt = -0.06 * ret;
+                lArmTgt = 0.14 * ret;
+              }
+            } else if (act === 'battle_special') {
+              // 林雾遮牌 (1.0s)：古木剧震，三波全场林雾叶暴席卷整座对阵台并笼罩主角手牌区
+              const p = clamp(actT / 1.0, 0, 1);
+              const env = Math.sin(p * Math.PI);
+              state.x = ax;
+              state.y = ay;
+              state.yaw = wrapAngle(aimYaw + Math.sin(actT * 26) * 0.14 * env);
+              hTgt = 0.98;
+              uArmTgt = -0.46 * env;
+              lArmTgt = -0.36 * env;
+              headTgt = Math.sin(actT * 22) * 0.35 * env;
+              const emitMist = (waveIdx) => {
+                if (!vfx) return;
+                const mistCols = ['#244d25', '#3f7d38', '#5ea33c', '#9ee060', '#c8e8b0'];
+                const z0 = (26 + state.heightLevel * 12) * sMul;
+                vfx.addRipple(ax, ay, 8 * sMul, (44 + waveIdx * 6) * sMul, 0.72, 2.4);
+                vfx.addRipple(tx, ty, 4 * sMul, (24 + waveIdx * 5) * sMul, 0.60, 2.0);
+                for (let i = 0; i < 16; i++) {
+                  const flightT = 0.44 + (i % 4) * 0.06;
+                  const spread = ((i % 8) - 3.5) * 6.5 * sMul;
+                  const sx0 = ax + sideX * spread * 0.5 + dirX * 4 * sMul;
+                  const sy0 = ay + sideY * spread * 0.5 + dirY * 4 * sMul;
+                  const vxP = (tx + sideX * spread - sx0) / flightT;
+                  const vyP = (ty + sideY * spread - sy0) / flightT;
+                  const vzP = (tz + (2 + (i % 3) * 3) * sMul - z0) / flightT;
+                  vfx.spawnParticle(sx0, sy0, z0, vxP, vyP, vzP, flightT + 0.24, 2.4, mistCols[i % mistCols.length], i % 4 === 3, 4);
+                }
+              };
+              if (!state._bFired && actT >= 0.22)  { state._bFired = true;  tremorSpring.impulse(16 * sp);  emitMist(0); }
+              if (!state._bFired2 && actT >= 0.44) { state._bFired2 = true; tremorSpring.impulse(-14 * sp); emitMist(1); }
+              if (!state._bFired3 && actT >= 0.66) { state._bFired3 = true; tremorSpring.impulse(12 * sp);  emitMist(2); }
+            } else if (act === 'battle_stagger') {
+              const p = clamp(actT / 0.85, 0, 1);
+              const decay = 1 - p;
+              const sway = Math.sin(actT * 32) * 2.2 * decay * sMul;
+              state.x = ax - dirX * 4.5 * Math.sin(p * Math.PI) * sMul + sideX * sway;
+              state.y = ay - dirY * 4.5 * Math.sin(p * Math.PI) * sMul + sideY * sway;
+              state.yaw = wrapAngle(aimYaw + Math.sin(actT * 22) * 0.28 * decay);
+              hTgt = lerp(0.95, 0.34, Math.sin(p * Math.PI));
+              uArmTgt = -0.35 * decay;
+              lArmTgt = -0.45 * decay;
+              headTgt = Math.sin(actT * 18) * 0.45 * decay;
+              if (!state._bFired) {
+                state._bFired = true;
+                tremorSpring.impulse(18 * sp);
+                bodyBobSpring.impulse(14 * sp);
+                emitLeafScatter(vfx, ax, ay, 24 * sMul, 10, sMul, 1.2);
+                if (vfx) {
+                  vfx.addRipple(ax, ay, 5 * sMul, 24 * sMul, 0.58, 2.0);
+                  for (let i = 0; i < 14; i++) {
+                    const a = (i / 14) * TAU;
+                    const spd = (12 + Math.random() * 14) * sMul;
+                    vfx.spawnParticle(ax, ay, 18 * sMul, Math.cos(a) * spd, Math.sin(a) * spd, (10 + Math.random() * 12) * sMul, 0.48, 1.75, i % 2 === 0 ? '#b8f4ff' : '#ffffff', true, 40);
+                  }
+                }
+              }
+            } else {
+              // battle_hurt (0.35s)
+              const p = clamp(actT / 0.35, 0, 1);
+              const env = Math.sin(p * Math.PI);
+              const vib = Math.sin(actT * 56) * 1.4 * (1 - p) * sMul;
+              state.x = ax - dirX * 3.8 * env * sMul + sideX * vib;
+              state.y = ay - dirY * 3.8 * env * sMul + sideY * vib;
+              state.yaw = wrapAngle(aimYaw + Math.sin(actT * 44) * 0.16 * (1 - p));
+              hTgt = 0.90;
+              if (!state._bFired) {
+                state._bFired = true;
+                tremorSpring.impulse(12 * sp);
+                emitLeafScatter(vfx, ax, ay, 22 * sMul, 6, sMul, 0.85);
+              }
+            }
+
+            state.vx = (state.x - prevX) / Math.max(dt, 0.001);
+            state.vy = (state.y - prevY) / Math.max(dt, 0.001);
+            state.heightLevel = clamp(heightSpring.update(dt, hTgt, 64 * sp, clamp(7.2 * dScale, 3.6, 12.5)), 0, 1);
+            tremorSpring.update(dt, 0, 220 * sp, clamp(9.5 * dScale, 4.5, 14.0));
+            bodyBobSpring.update(dt, 0, 150 * sp, clamp(8.2 * dScale, 3.8, 12.5));
+            headYawSpring.update(dt, headTgt, 105 * sp, clamp(7.8 * dScale, 3.5, 12.0));
+            armUpperSpring.update(dt, uArmTgt, 115 * sp, clamp(6.8 * dScale, 3.2, 11.0));
+            armLowerSpring.update(dt, lArmTgt, 95 * sp, clamp(5.6 * dScale, 2.4, 9.5));
+            state.tiltX = 0; state.tiltY = 0;
+            if (isNewAct) gait.reset(state.x, state.y, state.yaw, sMul);
+            gait.update(dt, state.x, state.y, 0, state.yaw, state.vx, state.vy, {
+              mode: 'biped', scaleMul: sMul, stepFreq: 1.2, stepDuration: 0.22, stepHeight: 1.8 * sMul, stepThreshold: 3.2 * sMul
+            });
+            instance.footContacts = gait.legs.map(l => ({ x: l.footX, y: l.footY, z: l.footZ, r: 3.1 * sMul }));
+            return;
+          }
+          state._bAct = '';
 
           // 严格同时兼容 eco.action === 'idle' 与 eco.patrol === false
           const isIdle = !!(eco && (eco.action === 'idle' || eco.patrol === false));

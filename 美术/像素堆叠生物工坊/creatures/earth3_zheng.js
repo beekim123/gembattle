@@ -818,8 +818,11 @@ window.PixelWorkshop.Creatures = window.PixelWorkshop.Creatures || [];
     spec: SPEC,
     skins: SKINS,
     actions: [
-      { id: 'patrol', name: '自由巡游', loop: true, status: 'done' },
-      { id: 'idle',   name: '原地待机', loop: true, status: 'done' }
+      { id: 'patrol',         name: '自由巡游', loop: true,  status: 'done' },
+      { id: 'idle',           name: '原地待机', loop: true,  status: 'done' },
+      { id: 'battle_attack',  name: '赤爪三连', loop: false, duration: 0.85, status: 'done' },
+      { id: 'battle_stagger', name: '破盾硬直', loop: false, duration: 0.85, status: 'done' },
+      { id: 'battle_hurt',    name: '受击',     loop: false, duration: 0.35, status: 'done' }
     ],
     blocks: [
       '胸肩/腰胯/豹首分节脊柱',
@@ -1041,6 +1044,223 @@ window.PixelWorkshop.Creatures = window.PixelWorkshop.Creatures || [];
           const flex = clamp(params.tailFlex ?? 1.0, 0.3, 2.0);
           const spdMul = clamp(params.speed ?? 1.0, 0.3, 2.2);
           const dScale = 1 / Math.sqrt(Math.max(0.35, sp));
+          const act = eco && eco.action;
+          const isBattle = act === 'battle_attack' || act === 'battle_stagger' || act === 'battle_hurt';
+
+          if (isBattle) {
+            const actT = (eco && eco.actionTime != null) ? eco.actionTime : 0;
+            const isNewAct = act !== state._bAct || actT < (state._bLastT || 0) - 0.04;
+            if (isNewAct) {
+              state._bAct = act;
+              state._bFired = false;
+              state._bFired2 = false;
+              state._bAx = (eco && eco.homeX != null) ? eco.homeX : state.x;
+              state._bAy = (eco && eco.homeY != null) ? eco.homeY : state.y;
+              state._bYaw = (eco && eco.homeYaw != null) ? eco.homeYaw : state.yaw;
+            }
+            state._bLastT = actT;
+            const ax = (eco && eco.homeX != null) ? eco.homeX : state._bAx;
+            const ay = (eco && eco.homeY != null) ? eco.homeY : state._bAy;
+            const hasTgt = eco && Array.isArray(eco.targetPos) && eco.targetPos.length >= 2 && Number.isFinite(eco.targetPos[0]) && Number.isFinite(eco.targetPos[1]);
+            const tx = hasTgt ? eco.targetPos[0] : ax - Math.sin(state._bYaw) * 46 * sMul;
+            const ty = hasTgt ? eco.targetPos[1] : ay + Math.cos(state._bYaw) * 46 * sMul;
+            const tz = (hasTgt && Number.isFinite(eco.targetPos[2])) ? eco.targetPos[2] : 8 * sMul;
+            const dx = tx - ax, dy = ty - ay;
+            const dist = Math.hypot(dx, dy) || 1;
+            const dirX = dx / dist, dirY = dy / dist;
+            const sideX = -dirY, sideY = dirX;
+            const aimYaw = Math.atan2(-dx, dy);
+
+            // 对阵时将青苔界石与林蝶安放在身侧后方，彻底杜绝扑击穿石
+            state.stoneX = ax + sideX * 28 * sMul - dirX * 10 * sMul;
+            state.stoneY = ay + sideY * 28 * sMul - dirY * 10 * sMul;
+            for (const bf of butterflies) {
+              bf.x = state.stoneX + bf.perchOffX * sMul;
+              bf.y = state.stoneY + bf.perchOffY * sMul;
+              bf.z = bf.perchOffZ * sMul;
+            }
+
+            let crouchTgt = 0, flareTgt = 0, swatTgt = 0;
+            state.vx = 0; state.vy = 0;
+
+            if (act === 'battle_attack') {
+              state.yaw = aimYaw;
+              state.pelvisYaw = aimYaw;
+              if (actT < 0.25) {
+                const u = smoothstep(0, 1, actT / 0.25);
+                state.x = ax - dirX * 3.5 * u * sMul;
+                state.y = ay - dirY * 3.5 * u * sMul;
+                state.z = 7.4 * sMul;
+                crouchTgt = 1.0 * u;
+                flareTgt = 1.2 * u;
+                state.chestPose = u > 0.35 ? 'crouch' : 'normal';
+                state.headPose = 'alert';
+                if (vfx && Math.random() < 0.5) {
+                  vfx.spawnParticle(
+                    state.x - dirX * 8 * sMul + sideX * (Math.random() - 0.5) * 14 * sMul,
+                    state.y - dirY * 8 * sMul + sideY * (Math.random() - 0.5) * 14 * sMul,
+                    12 * sMul, 0, 0, 10 * sMul, 0.25, 1.5, '#ff8c42', true, 4
+                  );
+                }
+              } else if (actT < 0.50) {
+                const u = (actT - 0.25) / 0.25;
+                const lunge = Math.sin(u * Math.PI * 0.5);
+                state.x = ax + dirX * (-3.5 + 14.5 * lunge) * sMul;
+                state.y = ay + dirY * (-3.5 + 14.5 * lunge) * sMul;
+                state.z = (7.4 + Math.sin(u * Math.PI) * 3.6) * sMul;
+                crouchTgt = 0.55;
+                flareTgt = 1.2;
+                swatTgt = 1.1;
+                state.chestPose = 'crouch';
+                state.headPose = 'earsBack';
+                if (!state._bFired && actT >= 0.32) {
+                  state._bFired = true;
+                  swatSpring.impulse(36 * sp);
+                  if (vfx) {
+                    vfx.addRipple(tx, ty, 3 * sMul, 22 * sMul, 0.48, 2.0);
+                    // 前两道巨型斜掠赤焰爪痕（横扫主角）
+                    for (let claw = -1; claw <= 1; claw++) {
+                      for (let k = 0; k < 6; k++) {
+                        const frac = (k / 5) - 0.5;
+                        const px0 = tx + sideX * (claw * 3.6 + frac * 11.0) * sMul + dirX * (frac * 5.0) * sMul;
+                        const py0 = ty + sideY * (claw * 3.6 + frac * 11.0) * sMul + dirY * (frac * 5.0) * sMul;
+                        const pz0 = tz + (5.5 - frac * 7.0) * sMul;
+                        const col = k % 2 === 0 ? '#ff3b1f' : (claw === 0 ? '#fff0a6' : '#ff8c42');
+                        vfx.spawnParticle(px0, py0, pz0, sideX * 20 * sMul, sideY * 20 * sMul, -6 * sMul, 0.34, 2.1, col, true, 6);
+                      }
+                    }
+                  }
+                }
+                if (!state._bFired2 && actT >= 0.41) {
+                  state._bFired2 = true;
+                  if (vfx) {
+                    // 第三道交叉重撕裂 + 地面裂印 + 爆裂赤火星
+                    vfx.addDecal({
+                      kind: 'crack', x: tx, y: ty, yaw: aimYaw,
+                      rx: 9.0 * sMul, ry: 9.0 * sMul, life: 2.2, alpha: 0.72,
+                      color: '#4f181c', hiColor: '#ff5930', darkColor: '#1a080a'
+                    });
+                    vfx.addRipple(tx, ty, 2 * sMul, 16 * sMul, 0.36, 1.6);
+                    for (let k = 0; k < 9; k++) {
+                      const frac = (k / 8) - 0.5;
+                      const px0 = tx - sideX * (frac * 12.0) * sMul + dirX * (frac * 5.0) * sMul;
+                      const py0 = ty - sideY * (frac * 12.0) * sMul + dirY * (frac * 5.0) * sMul;
+                      const pz0 = tz + (6.0 - frac * 6.5) * sMul;
+                      vfx.spawnParticle(px0, py0, pz0, -sideX * 22 * sMul, -sideY * 22 * sMul, -5 * sMul, 0.36, 2.2, k % 2 === 0 ? '#fff0a6' : '#ff3b1f', true, 6);
+                    }
+                    for (let i = 0; i < 14; i++) {
+                      const a = (i / 14) * TAU;
+                      const spd = (14 + Math.random() * 18) * sMul;
+                      vfx.spawnParticle(tx, ty, tz + 3 * sMul, Math.cos(a) * spd, Math.sin(a) * spd, (10 + Math.random() * 12) * sMul, 0.40, 1.65, i % 2 === 0 ? '#ff4a2e' : '#ffe082', true, 44);
+                    }
+                  }
+                }
+              } else {
+                const u = clamp((actT - 0.50) / 0.35, 0, 1);
+                const ret = 1 - smoothstep(0, 1, u);
+                state.x = ax + dirX * 11.0 * ret * sMul;
+                state.y = ay + dirY * 11.0 * ret * sMul;
+                state.z = (7.4 + Math.sin(u * Math.PI) * 1.4) * sMul;
+                crouchTgt = 0.4 * ret;
+                flareTgt = 0.8 * ret;
+                state.chestPose = ret > 0.5 ? 'crouch' : 'normal';
+                state.headPose = 'alert';
+              }
+            } else if (act === 'battle_stagger') {
+              const p = clamp(actT / 0.85, 0, 1);
+              const decay = 1 - p;
+              const jit = Math.sin(actT * 36) * 2.2 * decay * sMul;
+              state.x = ax - dirX * 4.2 * Math.sin(p * Math.PI) * sMul + sideX * jit;
+              state.y = ay - dirY * 4.2 * Math.sin(p * Math.PI) * sMul + sideY * jit;
+              state.z = lerp(7.4, 5.2, Math.sin(p * Math.PI)) * sMul;
+              state.yaw = wrapAngle(aimYaw + Math.sin(actT * 24) * 0.24 * decay);
+              state.pelvisYaw = wrapAngle(state.yaw - Math.sin(actT * 24) * 0.16 * decay);
+              crouchTgt = 1.0;
+              flareTgt = 0;
+              state.chestPose = 'crouch';
+              state.headPose = 'earsBack';
+              if (!state._bFired) {
+                state._bFired = true;
+                bodyBounce.impulse(-16 * sMul);
+                if (vfx) {
+                  vfx.addRipple(ax, ay, 5 * sMul, 22 * sMul, 0.56, 1.8);
+                  for (let i = 0; i < 14; i++) {
+                    const a = (i / 14) * TAU;
+                    const spd = (12 + Math.random() * 14) * sMul;
+                    vfx.spawnParticle(ax, ay, 9 * sMul, Math.cos(a) * spd, Math.sin(a) * spd, (10 + Math.random() * 12) * sMul, 0.46, 1.65, i % 2 === 0 ? '#b8f4ff' : '#ffffff', true, 42);
+                  }
+                }
+              }
+            } else {
+              // battle_hurt (0.35s)
+              const p = clamp(actT / 0.35, 0, 1);
+              const env = Math.sin(p * Math.PI);
+              const vib = Math.sin(actT * 60) * 1.4 * (1 - p) * sMul;
+              state.x = ax - dirX * 4.5 * env * sMul + sideX * vib;
+              state.y = ay - dirY * 4.5 * env * sMul + sideY * vib;
+              state.z = (7.4 - 1.0 * env) * sMul;
+              state.yaw = wrapAngle(aimYaw + Math.sin(actT * 48) * 0.16 * (1 - p));
+              state.pelvisYaw = state.yaw;
+              state.chestPose = 'normal';
+              state.headPose = 'earsBack';
+              if (!state._bFired) {
+                state._bFired = true;
+                bodyBounce.impulse(-10 * sMul);
+              }
+            }
+
+            const crouchVal = clamp(crouchSpring.update(dt, crouchTgt, 120 * sp, clamp(8.2 * dScale, 3.5, 12.0)), -0.1, 1.15);
+            const flareVal = clamp(tailFlareSpring.update(dt, flareTgt, 128 * sp, clamp(6.6 * dScale, 3.0, 11.0)), 0, 1.25);
+            swatSpring.update(dt, swatTgt, 150 * sp, clamp(8.4 * dScale, 3.6, 12.5));
+            headYawSpring.update(dt, 0, 100 * sp, clamp(7.4 * dScale, 3.2, 11.5));
+            headNodSpring.update(dt, 0, 125 * sp, clamp(8.4 * dScale, 3.5, 12.0));
+            bodyBounce.update(dt, 0, 132 * sp, clamp(8.0 * dScale, 3.4, 12.0));
+            state.tiltX = 0; state.tiltY = 0; state.frontBob = 0; state.rearBob = 0;
+
+            const crouchDrop = clamp(crouchVal, 0, 1.1) * 1.45 * sMul;
+            const bodyLift = state.z - crouchDrop + clamp(bodyBounce.x * 0.13, -1.8, 1.8);
+            const [pJointX, pJointY] = localToWorldXY(state.x, state.y, state.yaw, 0, -4.4 * sMul);
+            const [pelvisCX, pelvisCY] = pivotToWorldXY(pJointX, pJointY, state.pelvisYaw, PELVIS_PIVOT.x * sMul, PELVIS_PIVOT.y * sMul);
+            const leapLift = Math.max(0, state.z - 7.4 * sMul);
+            for (const leg of gait.legs) {
+              const isRear = !leg.isFront;
+              const ancX = isRear ? pelvisCX : state.x;
+              const ancY = isRear ? pelvisCY : state.y;
+              const ancYaw = isRear ? state.pelvisYaw : state.yaw;
+              const [hx, hy] = localToWorldXY(ancX, ancY, ancYaw, leg.hipX * sMul, leg.hipY * sMul);
+              const [rx, ry] = localToWorldXY(ancX, ancY, ancYaw, leg.restX * sMul, (leg.restY + (leg.isFront ? leapLift * 0.35 : -leapLift * 0.25)) * sMul);
+              leg.anchorYaw = ancYaw;
+              leg.hipWX = hx; leg.hipWY = hy;
+              leg.hipWZ = bodyLift + (isRear ? 0.3 * sMul : 0) + leg.hipZ * sMul;
+              leg.footX = rx; leg.footY = ry;
+              leg.footZ = leg.isFront ? leapLift * 0.85 : leapLift * 0.45;
+              const ik = solveSagittalLegIK(leg.hipWX, leg.hipWY, leg.hipWZ, leg.footX, leg.footY, leg.footZ, ancYaw, leg.L1 * sMul, leg.L2 * sMul, leg.kneeSign, sMul);
+              leg.kneeX = ik.kx; leg.kneeY = ik.ky; leg.kneeZ = ik.kz;
+            }
+            instance.footContacts = gait.legs.map(l => ({ x: l.footX, y: l.footY, z: l.footZ, r: 2.3 * sMul }));
+            for (const ts of tailSolvers) {
+              const cfg = ts.cfg;
+              const [rx, ry] = localToWorldXY(pelvisCX, pelvisCY, state.pelvisYaw, cfg.lx * sMul, cfg.ly * sMul);
+              const rz = bodyLift + cfg.lz * sMul;
+              const fanAngle = lerp(cfg.restFan, cfg.flareFan, flareVal);
+              ts.solver.update(dt, rx, ry, rz, state.pelvisYaw, time, {
+                segLen: 2.28 * sMul,
+                flexibility: flex * lerp(0.95, 1.25, flareVal),
+                maxAngle: lerp(0.52, 0.72, flareVal),
+                fanAngle,
+                waveFreq: (4.0 + flareVal * 2.6) * freq,
+                waveAmp: lerp(0.18, 0.52, flareVal),
+                wavePhaseStep: 0.48,
+                phaseOffset: cfg.phase,
+                restAlign: lerp(0.14, 0.34, flareVal),
+                zTargetFn: (u) => Math.max(2.0 * sMul, rz + lerp(cfg.liftBase * (1 - u * 0.7), cfg.liftBase + u * 8.0, flareVal) * sMul),
+                zFollowSpeed: 14.0
+              });
+            }
+            sockets.setLocal('horn', state.x, state.y, bodyLift, state.yaw, 0, 14.5, 13.5, sMul);
+            return;
+          }
+          state._bAct = '';
 
           // 同时兼容 eco.action === 'idle' 与 eco.patrol === false 判定原地待机
           const isIdle = !eco || eco.action === 'idle' || eco.patrol === false;

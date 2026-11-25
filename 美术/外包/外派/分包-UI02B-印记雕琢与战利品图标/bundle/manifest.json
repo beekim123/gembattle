@@ -1,0 +1,50 @@
+{
+  "id": "ui-02b-icons",
+  "name": "像素印记与战利品图标包",
+  "version": "1.0.0",
+  "iconsVersion": 1,
+  "iconsCount": 20,
+  "fallbackCount": 3,
+  "canvasSize": 24,
+  "entry": "bundle/pack_icons.js",
+  "mountTarget": "window.Code00ArtPacks.cards",
+  "mountMode": "Object.assign",
+  "compatibleWith": [
+    "UI-02A"
+  ],
+  "author": "UI-02B Pixel Art Delivery",
+  "exports": [
+    "initIcons",
+    "drawSealIcon",
+    "drawLootBadge",
+    "drawCarveBadge"
+  ],
+  "icons": {
+    "seals": [
+      "shatter_tide",
+      "desperate",
+      "double_white",
+      "white_echo",
+      "rainbow_bridge",
+      "ring_keep",
+      "wide_bag",
+      "hold_edge",
+      "leap",
+      "chain_surge"
+    ],
+    "loots": [
+      "carve",
+      "seal",
+      "arcana",
+      "hand",
+      "heal",
+      "attr"
+    ],
+    "carves": [
+      "sharp",
+      "twin",
+      "pierce",
+      "overflow"
+    ]
+  }
+}

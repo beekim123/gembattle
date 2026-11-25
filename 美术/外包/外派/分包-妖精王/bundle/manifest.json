@@ -1,0 +1,274 @@
+{
+  "id": "boss_fairy_king",
+  "name": "妖精王",
+  "code": "BOSS3",
+  "category": "creature",
+  "status": "done",
+  "defaultHabitat": "meadow",
+  "habitats": [
+    "meadow",
+    "canopy"
+  ],
+  "paletteCount": 39,
+  "paletteLimit": 42,
+  "glowKeys": [
+    "emissiveMid",
+    "emissiveHot",
+    "emissiveCore"
+  ],
+  "footRadius": 9.2,
+  "headZ": 48,
+  "centerZ": 24,
+  "parts": [
+    {
+      "id": "legs",
+      "w": 10,
+      "d": 10,
+      "h": 12,
+      "bias": -2.2,
+      "note": "悬空微曲双腿与金边精灵靴，微收腿根防背视角穿裙"
+    },
+    {
+      "id": "skirt",
+      "w": 20,
+      "d": 20,
+      "h": 13,
+      "bias": -0.1,
+      "note": "8 瓣立体层叠王者长裙与金腰带"
+    },
+    {
+      "id": "torso",
+      "w": 14,
+      "d": 12,
+      "h": 13,
+      "bias": 0.15,
+      "note": "纤细挺拔上身、花萼高领与胸前金纹"
+    },
+    {
+      "id": "head",
+      "w": 16,
+      "d": 15,
+      "h": 15,
+      "bias": 0.45,
+      "note": "精雕 2×2 大眼、长尖耳与抬高刘海（0.6 俯视 0 遮挡）"
+    },
+    {
+      "id": "antlerCrown",
+      "w": 22,
+      "d": 14,
+      "h": 14,
+      "bias": 0.7,
+      "note": "分叉金边鹿角枝冠与盛开顶花"
+    },
+    {
+      "id": "hairSegL",
+      "w": 6,
+      "d": 8,
+      "h": 7,
+      "bias": -0.35,
+      "note": "3 束局部坐标系背面零穿模后发上段复用"
+    },
+    {
+      "id": "hairSegS",
+      "w": 5,
+      "d": 6,
+      "h": 6,
+      "bias": -0.4,
+      "note": "3 束局部坐标系背面零穿模后发尾段复用"
+    },
+    {
+      "id": "arm",
+      "w": 6,
+      "d": 11,
+      "h": 6,
+      "bias": 0.3,
+      "note": "左右对称复用修长双臂，pivotToWorldXY 锁死肩枢轴"
+    },
+    {
+      "id": "scepterHold",
+      "w": 10,
+      "d": 10,
+      "h": 32,
+      "bias": 0.6,
+      "note": "古藤金环长权杖与杖顶自亮花冠核（常态）"
+    },
+    {
+      "id": "scepterCast",
+      "w": 10,
+      "d": 16,
+      "h": 30,
+      "bias": 0.6,
+      "note": "古藤金环长权杖前指施法态（握柄枢轴锁死）"
+    },
+    {
+      "id": "wingTop",
+      "w": 24,
+      "d": 8,
+      "h": 22,
+      "bias": -0.6,
+      "note": "上对金边扇贝巨翼，左右镜像复用，锁死后背枢轴"
+    },
+    {
+      "id": "wingMid",
+      "w": 20,
+      "d": 8,
+      "h": 17,
+      "bias": -0.8,
+      "note": "中对叠彩金边巨翼，相位滞后 0.45 rad，左右复用"
+    },
+    {
+      "id": "wingBot",
+      "w": 15,
+      "d": 8,
+      "h": 14,
+      "bias": -1.0,
+      "note": "下对曳尾蝶翼，相位滞后 0.90 rad，左右复用"
+    },
+    {
+      "id": "orbitBudR",
+      "w": 7,
+      "d": 7,
+      "h": 8,
+      "bias": 0.5,
+      "note": "红色悬浮花苞法核（symDeg: 90）"
+    },
+    {
+      "id": "orbitBudG",
+      "w": 7,
+      "d": 7,
+      "h": 8,
+      "bias": 0.5,
+      "note": "绿色悬浮花苞法核（symDeg: 90）"
+    },
+    {
+      "id": "orbitBudB",
+      "w": 7,
+      "d": 7,
+      "h": 8,
+      "bias": 0.5,
+      "note": "蓝色悬浮花苞法核（symDeg: 90）"
+    },
+    {
+      "id": "petalBlade",
+      "w": 7,
+      "d": 13,
+      "h": 5,
+      "bias": 0.65,
+      "note": "旋转立体晶瓣刃弹道道具（symDeg: 180，技能 2/4 复用）"
+    },
+    {
+      "id": "miniSprite",
+      "w": 10,
+      "d": 10,
+      "h": 11,
+      "bias": 0.35,
+      "note": "迷你伴生花灵（技能 3 召出 3 只共享复用）"
+    }
+  ],
+  "skins": [
+    {
+      "id": "spring_bloom",
+      "name": "春华翠金",
+      "theme": "花甸经典",
+      "robe": "#46b85a",
+      "emissive": "#96ff5e",
+      "outline": "#0d1a14"
+    },
+    {
+      "id": "summer_crimson",
+      "name": "盛夏绯樱",
+      "theme": "炽花款",
+      "robe": "#d64062",
+      "emissive": "#ff7896",
+      "outline": "#1e0c14"
+    },
+    {
+      "id": "autumn_amber",
+      "name": "深秋枫琥",
+      "theme": "落枫款",
+      "robe": "#c96228",
+      "emissive": "#ffbf47",
+      "outline": "#1c100a"
+    },
+    {
+      "id": "winter_frost",
+      "name": "凛冬冰莲",
+      "theme": "霜花款",
+      "robe": "#3d8ec9",
+      "emissive": "#7ae8ff",
+      "outline": "#0b1624"
+    }
+  ],
+  "actions": [
+    {
+      "id": "patrol",
+      "name": "凌空巡舞",
+      "loop": true,
+      "duration": null,
+      "visual": "8 字形柔缓凌空穿飞、六翼 0.45 rad 逐级相位浪振翅、三色花苞绕身盘旋并洒落花粉微粒",
+      "combatMechanic": "常态战场游弋与待机节奏"
+    },
+    {
+      "id": "idle",
+      "name": "花环悬停",
+      "loop": true,
+      "duration": null,
+      "visual": "优雅低幅悬停呼吸、头部弹簧微环视、三色花苞匀速环绕",
+      "combatMechanic": "回合间隙待命悬停态"
+    },
+    {
+      "id": "stagger",
+      "name": "折翼失衡",
+      "loop": false,
+      "duration": 1.5,
+      "visual": "六翼骤垂乱扑、悬空高度骤降 5 格险些坠地、权杖斜垂、三色花苞散乱偏轨并冒出晕眩碎粒，1.5s 末振翼重升",
+      "combatMechanic": "击破终极大招全部红/绿/蓝三色护盾后触发的打断硬直"
+    },
+    {
+      "id": "skill_pollen_veil",
+      "name": "迷彩花粉",
+      "loop": false,
+      "duration": 2.4,
+      "visual": "0~0.6s 展翼聚粉与花苞收拢 -> 0.6~1.8s 六翼高频猛振向前扇形吹出彩粉粒子雾并调用 addDecal 铺开地面花粉环 -> 1.8~2.4s 收势回稳",
+      "combatMechanic": "遮蔽玩家手牌中 2 张牌的颜色（只标已遮蔽），并指定本回合 1 种抵制色令该色伤害减半"
+    },
+    {
+      "id": "skill_petal_lance",
+      "name": "晶瓣穿刺",
+      "loop": false,
+      "duration": 2.4,
+      "visual": "0~0.7s 升空 +3.2 格举起前指权杖蓄力 -> 0.7~1.8s 从 scepterTip 正向运动学挂点依次直线连射 5 枚旋转立体 petalBlade 晶瓣刃并在落点爆碎屑 -> 1.8~2.4s 收杖降落",
+      "combatMechanic": "精准重击扣主角 1 颗心（若玩家上回合触发过断色，本次攻击提前 1 回合出手）"
+    },
+    {
+      "id": "skill_sprite_waltz",
+      "name": "唤灵花舞",
+      "loop": false,
+      "duration": 3.0,
+      "visual": "0~0.7s 权杖头顶划圆并绽开地面涟漪 -> 0.7~2.5s 召出 3 只复用 miniSprite 伴生花灵 8 字穿飞洒治愈微粒、Boss 浮起上升回春粒子 -> 2.5~3.0s 盘旋升空化粒消散",
+      "combatMechanic": "召唤伴生花灵为 Boss 持续补充护盾与回血，引导玩家使用补色合白或彩虹清场"
+    },
+    {
+      "id": "skill_prism_tempest",
+      "name": "六翼彩岚",
+      "loop": false,
+      "duration": 3.4,
+      "visual": "0~1.05s 六翼竖展拔升 +5.2 格、三色花苞升至冠顶高速公转并爆发红/绿/蓝 3 次亮脉冲 -> 1.05~2.45s 权杖前指倾泻 9 枚三色抛物线 petalBlade 晶弹 -> 2.45~3.0s 落点连锁花环爆裂与地面印痕 -> 3.0~3.4s 优雅落回",
+      "combatMechanic": "蓄力 2 回合终极大招，亮出红+绿+蓝三色护盾各 3 格，全部击破即可打断并触发 stagger 折翼失衡"
+    }
+  ],
+  "sockets": [
+    {
+      "id": "head",
+      "desc": "头部世界坐标与朝向（含头颈弹簧偏角）"
+    },
+    {
+      "id": "crown",
+      "desc": "鹿角花冠挂点（用于受击晕眩粒子与大招顶聚参照）"
+    },
+    {
+      "id": "scepterTip",
+      "desc": "右手古藤权杖顶端自亮花冠核单一真源 FK 坐标（花粉与晶瓣齐射起点）"
+    }
+  ]
+}

@@ -1,0 +1,414 @@
+# 外包项目合集（UI-02A 七色宝石与秘术卡牌 · 轻量包）
+# 目标交付压缩包：bundle_ui02a_cards.zip
+# 包含文件清单（开工提示词.md 压轴在最末尾）：
+#   - README.md
+#   - 设计文档-宝石与秘术卡牌.md
+#   - bundle/README.md
+#   - preview.html
+#   - verify.mjs
+#   - 开工提示词.md
+
+
+===== FILE: ./README.md =====
+# 独立外包制作包 UI-02A：七色宝石牌与 8 张秘术牌（`cards` 牌面部分）
+
+> **轻量拆分子包**：从原 UI-02 拆分出的**纯卡牌部分**（仅负责牌面与链槽，印记/战利品/雕琢小图标已拆到 UI-02B），大幅缩减单次代码量，确保网页端 AI 在 5~10 分钟内稳定打包交回。
+
+---
+
+## 一、包内目录说明
+
+```text
+分包-UI02A-七色宝石与秘术卡牌/
+├── README.md                    # 本文件
+├── 设计文档-宝石与秘术卡牌.md    # 7 色切面宝石牌、8 张秘术牌、废牌/牌背与链槽规格
+├── 开工提示词.md                 # 发给网页端 AI 的完整提示词（置底于 all_in_one.txt）
+├── preview.html                 # 独立可视化验收台（一屏展示 7 色牌×6态 + 8 秘术 + 废牌/牌背/链槽）
+├── verify.mjs                   # 零依赖 Node 硬校验脚本（查接口、零禁用字、零 filter/shadowBlur、<=2MB）
+├── 打包发给网页AI.command        # Mac 双击生成 all_in_one.txt
+├── 预览验收.command              # Mac 双击先跑 verify.mjs，再自动开浏览器进 preview.html 验收
+├── 交回/                        # 收到的 bundle_ui02a_cards.zip 放这里
+└── bundle/                      # 【交付区】产出以下 3 个文件并打包为 bundle_ui02a_cards.zip
+    ├── README.md
+    ├── pack_cards.js            #   合并注册到 window.Code00ArtPacks.cards
+    ├── manifest.json            #   卡牌清单与离屏内存统计
+    └── 交付说明.md               #   verify.mjs 实测与目检记录
+```
+
+---
+
+## 二、发包与验收 3 步走
+
+1. **发包**：把 `all_in_one.txt` 拖进网页端 AI 对话框，附口令：
+   > 严格按附件末尾的 `开工提示词.md` 开发。务必用单个脚本一次性生成 3 个文件、自检并打包出可下载的 `bundle_ui02a_cards.zip`；正文严禁贴任何代码、JSON 或文档内容，若未打包完成直接停下汇报进度。
+2. **收包**：把 `bundle_ui02a_cards.zip` 放进 `交回/` 解压覆盖到 `bundle/`。
+3. **验收与双库交付**：双击 `预览验收.command` 跑校验并目检，通过后优先交一份进 `美术/像素堆叠生物工坊/art-packs/`，再同步一份进 `美术/游戏实装美术库/art-packs/`（并拷入 `原型/v2/modules/art-packs/`）。
+
+
+===== FILE: ./设计文档-宝石与秘术卡牌.md =====
+# 设计文档：UI-02A 七色宝石牌与 8 张秘术牌（`Code00ArtPacks.cards` 牌面部分）
+
+## 一、定位与轻量化原则
+
+- 本包**只负责卡牌牌面与施法链槽**（不画 10 个印记和 6 种战利品图标，那些已独立拆给 UI-02B）。
+- **复古奇幻精绘像素风**：硬朗 `#0c121a` 像素描边、锻铁/黄铜像素牌框、高对比三阶明暗宝石切面；绘制采用**简洁高效的几何多边形/像素块面离屏预烘焙**（单文件精炼在 ~500~800 行内即可达到极高质感，绝不为单个图标堆砌冗余点阵数组）。
+
+---
+
+## 二、完整资产清单
+
+### 1. 七色宝石牌（`color: 0..6`，牌面基准 `CARD_W = 62, CARD_H = 88`）
+- **彻底弃用大号黑体字「红/黄/紫」**！牌面中央是精绘多面体切面像素宝石，顶部固定 3 颗三原色晶孔（按色环混色点亮红 `#ff5a4a` / 绿 `#52d65a` / 蓝 `#5a8cff` 对应晶珠）：
+
+| `color` | 含三原色点 `[红,绿,蓝]` | 主色 / 暗面 / 亮面 | 独特切面轮廓（形+色双重秒认） |
+|---|---|---|---|
+| `0` 红 | `[1, 0, 0]` | `#e2483c` / `#8e1f18` / `#ff9e8e` | 竖长红曜菱尖晶 |
+| `1` 黄 | `[1, 1, 0]` | `#efc93f` / `#9a7a10` / `#fff6b0` | 宽面琥珀八角盾晶 |
+| `2` 绿 | `[0, 1, 0]` | `#4cb050` / `#1f6a24` / `#a6f2a0` | 祖母绿长方阶梯切面晶 |
+| `3` 青 | `[0, 1, 1]` | `#3fbac4` / `#14727c` / `#aef6fa` | 碧海泪滴尖顶晶 |
+| `4` 蓝 | `[0, 0, 1]` | `#4474dd` / `#1f3f9a` / `#9cc4ff` | 深蓝风筝盾钻 |
+| `5` 紫 | `[1, 0, 1]` | `#9254cf` / `#561e8c` / `#dfb0ff` | 紫晶主尖+两侧小晶簇 |
+| `6` 白 | `[1, 1, 1]` | `#f4f0e6` / `#9a9684` / `#ffffff` | 百搭六角棱白晶核（带微红绿蓝切边） |
+
+### 2. 八张秘术牌（`card.arcana`）+ 缠藤废牌 + 遮蔽牌背 + 常规牌背 + 施法链槽
+- **5 张瞬发秘术（无色，银紫深框 `#6a5ab8`/`#342a68` + 顶沿菱形瞬发徽记 + 牌底清晰 4 字卡名）**：
+  1. `spring`（涌泉抽牌）：蓝白涌泉与飞出的两枚卡牌剪影
+  2. `ward`（护身结界）：青白六边形晶盾结界
+  3. `shatter`（震裂破甲）：晶锥击碎裂纹盾牌
+  4. `surge`（魔力沸腾）：沸腾橘红晶焰向上翻涌
+  5. `resonance`（双色共鸣）：两道弧形色环节点共振连线
+- **3 张入链秘术（带色，按 `card.color` 着底色 + 华丽暖金边框 + 顶部三原色晶孔 + 牌底 4 字卡名）**：
+  6. `refract`（逆色折射，白）：白晶棱柱折出补色双芒
+  7. `prism`（倍增棱镜，红/绿/蓝）：嵌套菱镜映出 `×2`
+  8. `keep`（凝色留存，黄/青/紫）：黄铜沙漏封存稳固宝石
+- **`junk`（缠藤废牌）**：枯褐破旧木牌缠满暗绿棘藤，无宝石孔。
+- **`masked`（被遮蔽）**：青苔暗石板牌背 + 浮雕 `?` + 底部「已遮蔽」。
+- **`drawCardBack`**：深靛蓝木纹牌背 + 黄铜四角饰 + 中央六色罗盘暗纹。
+- **`drawChainSlot`**：石刻法阵镶嵌牌槽（替代虚线框；拖拽中 `isNext` 槽位亮起金色四角引导标）。
+
+---
+
+## 三、合并挂载规范与硬红线（`verify.mjs` 自动查杀）
+
+**必须使用合并挂载（绝不覆盖同对象上 UI-02B 注册的图标方法！）**：
+```js
+window.Code00ArtPacks = window.Code00ArtPacks || {};
+const target = window.Code00ArtPacks.cards = window.Code00ArtPacks.cards || {};
+Object.assign(target, {
+  id: 'cards', version: 1, cardsName: '七色宝石与秘术卡牌',
+  CARD_W: 62, CARD_H: 88,
+  init: initCards, initCards, drawCard, drawCardBack, drawChainSlot
+});
+```
+*(提示：`drawCard` 画牌底雕琢角标 `card.carve` 时，若 `target.drawCarveBadge` 已存在则优先调用它；未挂载时画简洁的对应色带字小方徽兜底。)*
+
+- **必须实现的方法**：`initCards(makeCanvas)`（同时导出为 `init`）、`drawCard(ctx, card, opts = {})`、`drawCardBack(ctx, x, y, scale = 1)`、`drawChainSlot(ctx, x, y, w, h, state = {})`；
+- `drawCard` 参数：`opts = { frame: 'near'|'comp'|'wild'|'break'|null, lit: bool, dim: bool, masked: bool, tag: string, tagColor: string, t: number }`；
+- **硬红线**：零 `ctx.filter`、零 `shadowBlur`、零外部图片/网络 URL、零禁用字、离屏画布总内存 `<= 2 MB`、`initCards` 耗时 `<= 40 ms`、绘制结束必须 `restore()` 且像素绘制关平滑 `imageSmoothingEnabled = false`。
+
+
+===== FILE: ./bundle/README.md =====
+# `bundle/` 交付目录（UI-02A 七色宝石与秘术卡牌）
+
+外包方请将最终产出的 3 个文件放入本目录，并打包成 **`bundle_ui02a_cards.zip`** 交回：
+
+1. `pack_cards.js` —— 合并挂载到 `window.Code00ArtPacks.cards`，实现 `initCards / drawCard / drawCardBack / drawChainSlot`
+2. `manifest.json` —— 7 色牌、8 秘术牌、废牌/牌背/链槽清单与内存统计
+3. `交付说明.md` —— `node verify.mjs` 自检结果与 `preview.html` 目检记录
+
+
+===== FILE: ./preview.html =====
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UI-02A 独立预览验收台 · 七色宝石与秘术卡牌</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; background: #101612; color: #ece8dc; font: 13px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; overflow: hidden; }
+  .wrap { display: flex; width: 100%; height: 100%; }
+  .stage { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; background: #0c120e; }
+  canvas { display: block; box-shadow: 0 12px 40px rgba(0,0,0,0.6); }
+  .hud { position: absolute; left: 12px; top: 10px; padding: 6px 10px; border-radius: 6px; background: rgba(12,18,14,0.84); border: 1px solid rgba(255,255,255,0.14); font-variant-numeric: tabular-nums; }
+  .warn { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); max-width: 520px; padding: 16px 20px; border-radius: 8px; background: rgba(140,42,32,0.92); color: #fff; font-size: 14px; display: none; text-align: center; }
+  .side { width: 240px; background: #161d18; border-left: 1px solid rgba(255,255,255,0.1); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  h2 { font-size: 15px; color: #ffe498; }
+  .tip { font-size: 12px; color: #9fb0a2; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  button { background: #263429; color: #ece8dc; border: 1px solid rgba(255,255,255,0.16); border-radius: 5px; padding: 6px 10px; cursor: pointer; font-size: 12px; }
+  button.on { background: #70551c; border-color: #ffe498; color: #fff; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <main class="stage" id="stage">
+    <canvas id="cv"></canvas>
+    <div class="hud" id="hud">初始化中...</div>
+    <div class="warn" id="warn"></div>
+  </main>
+  <aside class="side">
+    <h2>UI-02A · 卡牌验收台</h2>
+    <div class="tip">检查项：7 色切面宝石秒认（无大号黑体字）、8 秘术独立插画、废牌/遮蔽/牌背与链槽清晰锐利。</div>
+    <div>
+      <div class="tip" style="margin-bottom:6px">切换宝石牌高亮态</div>
+      <div class="row" id="frameBtns"></div>
+    </div>
+    <div class="tip" id="meta"></div>
+  </aside>
+</div>
+<script src="./bundle/pack_cards.js"></script>
+<script>
+(function () {
+  const W = 960, H = 540, SCALE = 2;
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const hud = document.getElementById('hud');
+  const warn = document.getElementById('warn');
+  const meta = document.getElementById('meta');
+  const pack = window.Code00ArtPacks && window.Code00ArtPacks.cards;
+
+  function resize() {
+    cv.width = W * SCALE; cv.height = H * SCALE;
+    const maxW = document.getElementById('stage').clientWidth - 24;
+    const maxH = document.getElementById('stage').clientHeight - 24;
+    const k = Math.min(maxW / W, maxH / H);
+    cv.style.width = Math.floor(W * k) + 'px';
+    cv.style.height = Math.floor(H * k) + 'px';
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  let frameMode = 'near';
+  const modes = [['无框', null], ['接上', 'near'], ['合白', 'comp'], ['百搭', 'wild'], ['断色', 'break'], ['施法亮', 'lit']];
+  const fb = document.getElementById('frameBtns');
+  modes.forEach(([lbl, val]) => {
+    const b = document.createElement('button');
+    b.textContent = lbl;
+    if (val === frameMode) b.classList.add('on');
+    b.onclick = () => { frameMode = val; [...fb.children].forEach(x => x.classList.remove('on')); b.classList.add('on'); };
+    fb.appendChild(b);
+  });
+
+  if (!pack || !pack.drawCard) {
+    warn.style.display = 'block';
+    warn.textContent = '尚未检测到 ./bundle/pack_cards.js，请外包方交付后刷新本页验收。';
+    hud.textContent = '等待交付物：./bundle/pack_cards.js';
+    return;
+  }
+
+  let offBytes = 0, offCount = 0;
+  const origCreate = document.createElement.bind(document);
+  function makeCanvas(w, h) { const c = origCreate('canvas'); c.width = w; c.height = h; offCount++; offBytes += w * h * 4; return c; }
+  const t0 = performance.now();
+  if (pack.initCards) pack.initCards(makeCanvas);
+  const initMs = performance.now() - t0;
+  meta.textContent = `初始化 ${initMs.toFixed(1)}ms · 离屏 ${offCount} 张 (${(offBytes/1048576).toFixed(2)} MB)`;
+
+  const ARCANA_LIST = [['spring', -1], ['ward', -1], ['shatter', -1], ['surge', -1], ['resonance', -1], ['refract', 6], ['prism', 0], ['keep', 3]];
+  let frames = 0, acc = 0, last = performance.now(), fps = 0;
+  function loop(now) {
+    const dt = now - last; last = now; frames++; acc += dt;
+    if (acc >= 500) { fps = Math.round(frames * 1000 / acc); frames = 0; acc = 0; }
+    const t = now / 1000;
+    ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+    ctx.fillStyle = '#1d3623'; ctx.fillRect(0, 0, W, H);
+
+    const lbl = (s, x, y) => { ctx.font = '700 13px "PingFang SC", sans-serif'; ctx.fillStyle = '#ffe498'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(s, x, y); };
+    lbl('一、七色切面宝石牌 + 牌背 + 遮蔽 + 缠藤废牌（放大 1.15× 检视切面细节）', 24, 34);
+    for (let c = 0; c < 7; c++) {
+      ctx.save(); ctx.translate(64 + c * 84, 120); ctx.scale(1.15, 1.15);
+      const o = { t };
+      if (frameMode === 'lit') o.lit = true;
+      else if (frameMode) { o.frame = frameMode; o.tag = modes.find(m => m[1] === frameMode)[0]; o.tagColor = '#ffe498'; if (frameMode === 'break') o.dim = true; }
+      pack.drawCard(ctx, { color: c, carve: c === 0 ? ['sharp', 'pierce'] : [] }, o);
+      ctx.restore();
+    }
+    pack.drawCardBack(ctx, 684, 120, 1.15);
+    ctx.save(); ctx.translate(778, 120); ctx.scale(1.15, 1.15); pack.drawCard(ctx, { color: 2 }, { masked: true, t }); ctx.restore();
+    ctx.save(); ctx.translate(872, 120); ctx.scale(1.15, 1.15); pack.drawCard(ctx, { color: -1, junk: true }, { t }); ctx.restore();
+
+    lbl('二、八张秘术牌（5 瞬发银紫框 + 3 入链带色金框）', 24, 232);
+    ARCANA_LIST.forEach(([id, col], i) => {
+      ctx.save(); ctx.translate(72 + i * 112, 316); ctx.scale(1.15, 1.15);
+      pack.drawCard(ctx, { color: col, arcana: id }, { t });
+      ctx.restore();
+    });
+
+    lbl('三、施法链石刻法阵槽（拖拽引导态 / 空槽 / 已填）', 24, 412);
+    for (let s = 0; s < 5; s++) {
+      pack.drawChainSlot(ctx, 180 + s * 110, 476, 54, 76, { isNext: s === 1, dragging: true, index: s, filled: s === 0 });
+    }
+
+    hud.textContent = `UI-02A 实时帧率：${fps} fps · 画布 ${cv.width}×${cv.height}`;
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
+
+
+===== FILE: ./verify.mjs =====
+// 外包交付自动化校验脚本：UI-02A 七色宝石与秘术卡牌（运行：node verify.mjs）
+import fs from 'node:fs';
+import vm from 'node:vm';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const TARGET = path.join(ROOT, 'bundle', 'pack_cards.js');
+const BUDGET_BYTES = 2 * 1024 * 1024; // 2 MB 硬红线
+
+if (!fs.existsSync(TARGET)) {
+  console.error('❌ 未找到交付文件：./bundle/pack_cards.js');
+  process.exit(1);
+}
+
+const canvases = [];
+function makeCtx() {
+  const grad = { addColorStop() {} };
+  const state = { filter: 'none', shadowBlur: 0, globalAlpha: 1, imageSmoothingEnabled: true, fillStyle: '#000', strokeStyle: '#000', lineWidth: 1, font: '12px sans-serif', textAlign: 'left', textBaseline: 'alphabetic' };
+  let runtimeFilterSet = false, runtimeShadowSet = false;
+  return new Proxy(state, {
+    get(o, k) {
+      if (k === '__flags') return { runtimeFilterSet, runtimeShadowSet };
+      if (k in o) return o[k];
+      if (k === 'createLinearGradient' || k === 'createRadialGradient') return () => grad;
+      if (k === 'createImageData') return (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(1, w) * Math.max(1, h) * 4) });
+      if (k === 'measureText') return (s) => ({ width: String(s || '').length * 8 });
+      return () => {};
+    },
+    set(o, k, v) {
+      if (k === 'filter' && v && v !== 'none') runtimeFilterSet = true;
+      if (k === 'shadowBlur' && Number(v) > 0) runtimeShadowSet = true;
+      o[k] = v;
+      return true;
+    }
+  });
+}
+function makeCanvas(w = 1, h = 1) {
+  const c = { width: Math.max(1, Math.round(w)), height: Math.max(1, Math.round(h)), _ctx: null, getContext() { if (!this._ctx) this._ctx = makeCtx(); return this._ctx; } };
+  canvases.push(c);
+  return c;
+}
+
+const sandbox = {
+  window: { Code00ArtPacks: { cards: { __keepSentinel: true } } }, // 校验不覆盖 UI-02B
+  document: { createElement: (tag) => (tag === 'canvas' ? makeCanvas(1, 1) : {}) },
+  performance: { now: () => Number(process.hrtime.bigint()) / 1e6 },
+  console, Math, Array, Object, Number, String, Boolean, Set, Map, WeakMap,
+  Uint8Array, Uint8ClampedArray, Int32Array, Float32Array, Error, TypeError, RangeError
+};
+sandbox.Code00ArtPacks = sandbox.window.Code00ArtPacks;
+sandbox.window = sandbox;
+sandbox.globalThis = sandbox;
+vm.createContext(sandbox);
+
+const src = fs.readFileSync(TARGET, 'utf8');
+const errors = [];
+const check = (cond, msg) => { if (!cond) errors.push(msg); };
+
+check(!/\.filter\s*=/.test(src), '源码禁止设置 ctx.filter');
+check(!/shadowBlur/.test(src), '源码禁止使用 shadowBlur');
+check(!/\bnew\s+Image\b|https?:\/\/|fetch\s*\(/i.test(src), '源码禁止外部图片或网络加载');
+
+const BAD = /[\u706f\u70ec\u5f71\u591c\u9b42\u566c\u5e7d\u6e0a\u661f\u5149]|\u5b88.\u8005|\u4e4b/;
+const lits = src.match(/(['"`])(?:\\.|(?!\1).)*\1/g) || [];
+const badHits = [];
+for (const lit of lits) { const m = lit.match(BAD); if (m) badHits.push(`${m[0]} in ${lit.slice(0, 24)}`); }
+check(badHits.length === 0, `字符串含禁用字：${badHits.slice(0, 5).join('；')}`);
+
+vm.runInContext(src, sandbox, { filename: 'bundle/pack_cards.js' });
+const pack = sandbox.Code00ArtPacks && sandbox.Code00ArtPacks.cards;
+check(!!pack, '未注册 window.Code00ArtPacks.cards');
+
+if (pack) {
+  check(pack.__keepSentinel === true, '必须使用 Object.assign 合并挂载到 Code00ArtPacks.cards，不得直接覆盖清空原有字段（否则会覆盖 UI-02B）');
+  check(pack.CARD_W === 62 && pack.CARD_H === 88, 'CARD_W/CARD_H 必须为 62×88');
+  for (const fn of ['initCards', 'drawCard', 'drawCardBack', 'drawChainSlot']) {
+    check(typeof pack[fn] === 'function', `缺少必需方法：${fn}`);
+  }
+
+  const t0 = sandbox.performance.now();
+  if (typeof pack.initCards === 'function') pack.initCards(makeCanvas);
+  const initMs = sandbox.performance.now() - t0;
+  check(initMs <= 40, `initCards 耗时过长：${initMs.toFixed(1)}ms（上限 40ms）`);
+
+  const ctx = makeCtx();
+  try {
+    for (let c = 0; c < 7; c++) {
+      pack.drawCard(ctx, { color: c, carve: c === 0 ? ['sharp', 'pierce'] : [] }, { frame: ['near', 'comp', 'wild', 'break', null][c % 5], tag: '接上', tagColor: '#6fe07a', t: 1.2 });
+    }
+    for (const [id, col] of [['spring', -1], ['ward', -1], ['shatter', -1], ['surge', -1], ['resonance', -1], ['refract', 6], ['prism', 0], ['keep', 3]]) {
+      pack.drawCard(ctx, { color: col, arcana: id }, { lit: id === 'prism', t: 1.2 });
+    }
+    pack.drawCard(ctx, { color: -1, junk: true }, { dim: true });
+    pack.drawCard(ctx, { color: 2 }, { masked: true });
+    pack.drawCardBack(ctx, 100, 100, 1);
+    for (const st of [{ isNext: true, dragging: true, index: 0, filled: false }, { isNext: false, dragging: false, index: 1, filled: true }]) {
+      pack.drawChainSlot(ctx, 200, 200, 45, 64, st);
+    }
+  } catch (e) {
+    errors.push(`接口运行期异常：${e.stack || e.message}`);
+  }
+
+  check(!ctx.__flags.runtimeFilterSet, '运行期触发了 ctx.filter');
+  check(!ctx.__flags.runtimeShadowSet, '运行期触发了 ctx.shadowBlur');
+
+  const totalBytes = canvases.reduce((s, c) => s + c.width * c.height * 4, 0);
+  const mb = totalBytes / (1024 * 1024);
+  check(totalBytes <= BUDGET_BYTES, `离屏贴图超标：${mb.toFixed(2)} MB（上限 2.00 MB）`);
+
+  console.log('\n[UI-02A 七色宝石与秘术卡牌 自动化校验报告]');
+  console.log(`- 初始化耗时：${initMs.toFixed(2)} ms（上限 40 ms）`);
+  console.log(`- 离屏画布：${canvases.length} 张，合计 ${mb.toFixed(2)} MB（上限 2.00 MB）`);
+}
+
+if (errors.length) {
+  console.error(`\n❌ 校验未通过（${errors.length} 项错误）：\n  - ${errors.join('\n  - ')}`);
+  process.exit(1);
+}
+console.log('\n✅ 全部硬性校验通过！可以打开 preview.html 目检并打包 bundle_ui02a_cards.zip。');
+
+
+===== FILE: ./开工提示词.md =====
+# 开工提示词（UI-02A 七色宝石与秘术卡牌 · 轻量包 · 给无上下文网页端 AI）
+
+```text
+你正在接手一个轻量、独立、自包含的像素奇幻卡牌外包任务（UI-02A，仅负责卡牌牌面与链槽，不含印记与战利品图标）。你只需要阅读本目录文件，严禁虚构外部依赖。
+
+请先依次阅读：
+1. ./README.md
+2. ./设计文档-宝石与秘术卡牌.md（7 色切面宝石牌、8 张秘术牌、废牌/遮蔽/牌背、施法链槽规格与合并挂载规范）
+3. ./verify.mjs（自动化硬校验红线）
+4. ./preview.html（独立验收展示台）
+
+【交付目标】
+请用单个脚本一次性在 ./bundle/ 目录产出以下 3 个文件，并直接打包为可下载的 bundle_ui02a_cards.zip（内含 bundle/pack_cards.js、bundle/manifest.json、bundle/交付说明.md）：
+
+1. ./bundle/pack_cards.js：
+   - 必须通过 Object.assign 合并挂载到 window.Code00ArtPacks.cards（绝不覆盖已有的 drawSealIcon/drawLootBadge/drawCarveBadge）：
+     导出 id:'cards', version:1, CARD_W:62, CARD_H:88, init, initCards, drawCard, drawCardBack, drawChainSlot；
+   - 视觉品质与精炼度要求：
+     * 7 色宝石牌彻底去掉大号黑体字「红/黄/紫」，用简洁锐利的几何多面体像素块面画出 7 种各具轮廓的切面宝石，配复古像素牌框与顶部 3 颗三原色晶孔；
+     * 8 张秘术牌（spring, ward, shatter, surge, resonance, refract, prism, keep）每张用清晰辨识的几何像素法术插画 + 瞬发银紫框 / 入链带色金纹框 + 底部 4 字卡名；
+     * 缠藤废牌、遮蔽石板牌背、罗盘牌背、石刻法阵施法链槽质感鲜明；4 种高亮框（near/comp/wild/break）与 lit 施法亮边清晰锐利；
+     * 请保持代码精炼高效（建议 450~850 行），用离屏预烘焙底图 + 复用的像素多边形辅助函数，不要手写冗长点阵导致超时；
+   - 硬红线（verify.mjs 逐条查杀）：
+     * 绝不出现 ctx.filter 或 .filter =；
+     * 绝不出现 shadowBlur；
+     * 绝不加载外部图片/字体/网络 URL；
+     * 离屏画布总占用 <= 2 MB，initCards 耗时 <= 40 ms；
+     * 全部字符串零禁用字（正则见 verify.mjs）；
+     * 绘制后完整 save()/restore()，关平滑保持像素锐利。
+
+2. ./bundle/manifest.json：列出全部卡牌、牌背、链槽与离屏内存字节数。
+3. ./bundle/交付说明.md：记录 verify.mjs 自检结果与 preview.html 目检确认。
+
+【强制交付形式】
+- 禁止在聊天正文中贴任何完整源码、JSON 或长文档；
+- 务必用单个脚本一次性生成 3 个文件、自检并打包输出可下载的 bundle_ui02a_cards.zip；若未打包完成请直接停下汇报进度。
+```
+

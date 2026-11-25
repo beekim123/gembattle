@@ -1,0 +1,975 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>游戏实装美术库 · 落果密林</title>
+<link rel="stylesheet" href="app/style.css">
+<style>
+  .act-row.battle-atk { border-left: 3px solid #d94848; }
+  .act-row.battle-spc { border-left: 3px solid #d9822b; }
+  .act-row.battle-stg { border-left: 3px solid #2b8fd6; }
+  .act-row.battle-hrt { border-left: 3px solid #7c8594; }
+  .act-row.hero-cast  { border-left: 3px solid #2b6fd6; background: #f4f8ff; }
+  .act-row.hero-cast:hover { background: var(--accent-soft); }
+  .lib-item.no-cb { grid-template-columns: minmax(0, 1fr) auto; }
+  .mode-pill { font-size: 11px; color: var(--done); background: var(--done-soft); padding: 2px 8px; border-radius: 99px; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- 顶栏（与总工坊浅色主题完全一致） -->
+  <header class="topbar">
+    <div class="brand">游戏实装美术库<small>落果密林 · 36 实装资产（2 NPC · 8 怪 · 14 摆件/建筑 · 5 UI/特效包）</small></div>
+    <div class="seg" id="topModeSeg" title="一键切换图鉴待机 / 回合制对阵演练（空格）">
+      <button data-m="gallery">图鉴待机</button>
+      <button data-m="battle" class="on">回合制对阵演练</button>
+    </div>
+    <span class="mode-pill" id="modeBadge">上怪下主角 · 3D 指向 eco.targetPos</span>
+    <div class="spacer"></div>
+    <span class="hint">按 <b>P</b> 切性能浮层 · <b>空格</b> 切模式</span>
+  </header>
+
+  <!-- 左：游戏实装资产目录 -->
+  <aside class="lib panel">
+    <div class="lib-head">
+      <div class="cat-tabs" id="catTabs"></div>
+      <input type="search" id="libSearch" placeholder="搜名称、id、标签…">
+      <div class="lib-row">
+        <span class="hint" id="libDesc">仅展示游戏现役已实装资产</span>
+        <span class="chip" id="libCount">24/24</span>
+      </div>
+    </div>
+    <div class="lib-list" id="libList"></div>
+    <div class="lib-foot">数据真源：总工坊单向同步 · <code>node tools/sync-from-workshop.js</code></div>
+  </aside>
+
+  <!-- 中：预览台（完全复用工坊渲染优化与 PerfHud） -->
+  <main class="stage" id="stage">
+    <canvas id="view"></canvas>
+    <div class="uipack-stage" id="uiPackStage"></div>
+    <div class="stage-top">
+      <div class="float">
+        <select id="habSelect" title="切换生态地台"></select>
+        <div class="sep"></div>
+        <label class="hint" title="切换资产时自动切到它的默认生境"><input type="checkbox" id="autoHab"> 跟着资产换生境</label>
+      </div>
+      <div class="float">
+        <span class="chip" id="stageCount">对阵 2 只</span>
+        <button class="btn sm" id="btnQuickCombo" title="顺序连播当前怪物的全部回合制技能">连播技能</button>
+      </div>
+    </div>
+    <div class="perf-hud" id="perfHud" data-mode="mini"></div>
+    <div class="banner" id="banner"></div>
+    <div class="stage-bar">
+      <div class="float">
+        <div class="seg" id="modeSeg" title="渲染方式（M）">
+          <button data-mode="cached" class="on">游戏缓存</button>
+          <button data-mode="crisp">高清逐层</button>
+          <button data-mode="retro">复古低分</button>
+        </div>
+        <div class="sep"></div>
+        <button class="btn sm on" id="btnOutline">描边</button>
+        <button class="btn sm" id="btnSpin">自动转</button>
+        <button class="btn sm" id="btnResetView">回正</button>
+        <div class="sep"></div>
+        <button class="btn sm" id="btnZoomOut" title="缩小（滚轮）">－</button>
+        <span class="hint" id="zoomLabel">×4</span>
+        <button class="btn sm" id="btnZoomIn" title="放大（滚轮）">＋</button>
+        <div class="sep"></div>
+        <span class="hint"><b>拖动</b> 360° 旋转 · <b>Q/E</b> 转 45° · <b>S</b> 巡游/待机 · <b>C</b> 换色 · <b>P</b> 性能浮层</span>
+      </div>
+    </div>
+    <button class="edge-toggle l" id="toggleLib" title="收起/展开资产库">‹</button>
+    <button class="edge-toggle r" id="toggleInsp" title="收起/展开右栏">›</button>
+  </main>
+
+  <!-- 右：属性 · 回合制动作 / 图鉴动作 · 换色 · 调参 · 贴图预算 -->
+  <aside class="inspector panel">
+    <div class="insp-body">
+      <section class="sec" id="secFocus"></section>
+      <section class="sec" id="secActions"></section>
+      <section class="sec" id="secSkin"></section>
+      <section class="sec" id="secParams">
+        <div class="sec-t">调参（全局）<button class="btn sm" id="btnResetParams">恢复默认</button></div>
+        <div class="slider"><span>步频/拍频</span><input type="range" id="slGaitFreq" min="0.4" max="2.2" step="0.05"><span class="v" id="vGaitFreq"></span></div>
+        <div class="slider"><span>尾巴柔韧</span><input type="range" id="slTailFlex" min="0.3" max="2.0" step="0.05"><span class="v" id="vTailFlex"></span></div>
+        <div class="slider"><span>弹簧弹性</span><input type="range" id="slSpring" min="0.4" max="2.2" step="0.05"><span class="v" id="vSpring"></span></div>
+        <div class="slider"><span>移动速度</span><input type="range" id="slSpeed" min="0.3" max="2.2" step="0.05"><span class="v" id="vSpeed"></span></div>
+        <div class="slider"><span>体型倍率</span><input type="range" id="slScale" min="0.65" max="1.45" step="0.05"><span class="v" id="vScale"></span></div>
+      </section>
+      <section class="sec" id="secPerf">
+        <div class="sec-t">贴图缓存 <span class="key">实时性能在左上角（P）</span></div>
+        <div class="row">
+          <label class="hint">图集预算
+            <select id="atlasBudget">
+              <option value="16">16MB</option>
+              <option value="24">24MB</option>
+              <option value="28" selected>28MB</option>
+              <option value="32">32MB</option>
+            </select>
+          </label>
+          <button class="btn sm" id="btnClearCache" title="手动清空烘焙图集释放冷数据">清缓存</button>
+        </div>
+      </section>
+    </div>
+  </aside>
+</div>
+
+<!-- 工坊内核（6） -->
+<script src="core/math.js"></script>
+<script src="core/voxel.js"></script>
+<script src="core/solvers.js"></script>
+<script src="core/behaviors.js"></script>
+<script src="core/renderer.js"></script>
+<script src="core/registry.js"></script>
+<!-- 地貌色板（1） -->
+<script src="scenes/habitats.js"></script>
+<!-- 主角与行商（2） -->
+<script src="npc/npc_mage.js"></script>
+<script src="npc/npc_gear_smith.js"></script>
+<!-- 落果密林怪物（8） -->
+<script src="creatures/slime.js"></script>
+<script src="creatures/earth2_barometz.js"></script>
+<script src="creatures/goblin.js"></script>
+<script src="creatures/fairy.js"></script>
+<script src="creatures/earth6_long_arm.js"></script>
+<script src="creatures/earth3_zheng.js"></script>
+<script src="creatures/earth1_belly_maw.js"></script>
+<script src="creatures/tree3_leshy.js"></script>
+<!-- 生态摆件（11） -->
+<script src="scenes/scene_forest_tree.js"></script>
+<script src="scenes/scene_t09_fallen_fruit_log.js"></script>
+<script src="scenes/scene_t17_swamp_cypress.js"></script>
+<script src="scenes/scene_flora_cluster.js"></script>
+<script src="scenes/scene_t10_giant_bud.js"></script>
+<script src="scenes/scene_t16_moss_obelisk.js"></script>
+<script src="scenes/scene_t11_canopy_bough.js"></script>
+<script src="scenes/scene_t11_epiphyte_nest.js"></script>
+<script src="scenes/scene_campfire.js"></script>
+<script src="scenes/scene_rock_hollow.js"></script>
+<script src="scenes/scene_crates_sign.js"></script>
+<!-- 建筑（3） -->
+<script src="buildings/building_ruin_arch.js"></script>
+<script src="buildings/building_camp_tent.js"></script>
+<script src="buildings/building_stone_gate.js"></script>
+<!-- 工坊性能浮层与 UI 贴图预览器 -->
+<script src="app/perf-hud.js"></script>
+<script src="app/uipack-viewer.js"></script>
+<!-- 外派 UI 与 3D 特效包（5） -->
+<script src="art-packs/pack_ui_skin.js"></script>
+<script src="art-packs/pack_cards.js"></script>
+<script src="art-packs/pack_icons.js"></script>
+<script src="art-packs/pack_map_panels.js"></script>
+<script src="art-packs/pack_ground_vfx.js"></script>
+
+<script>
+(function initGameArtLib() {
+  'use strict';
+  const PW = window.PixelWorkshop;
+  const { TAU, clamp } = PW.Math;
+  const { HABITAT_MAP, buildHabitatPlatform } = PW.Habitats;
+  const { makeCanvas, StackRenderer } = PW.Renderer;
+  const Assets = PW.Assets;
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const SIM_STEP = 1 / 120; // 与工坊完全一致的 1/120s 物理子步，60Hz/120Hz 手感一致
+  const HAB_PRESETS = ['forest', 'meadow', 'swamp', 'canopy', 'ruins', 'tavern'];
+
+  const GAME_NAMES = {
+    npc_mage: '宝石卡牌法师（主角）',
+    npc_gear_smith: '林地行商铁匠',
+    slime_jelly: '水滴软泥',
+    earth2_barometz: '草茎绵羊',
+    goblin_scout: '拾荒地精',
+    fairy_meadow: '花甸灵精',
+    earth6_long_arm: '摇果长臂猿',
+    earth3_zheng: '五尾赤豹',
+    earth1_belly_maw: '腹口懒兽',
+    tree3_leshy: '千丈古树精'
+  };
+
+  const BATTLE_MONSTER_POS = [0, -24];
+  const BATTLE_HERO_POS = [0, 24];
+
+  const UI_PACKS = (PW.UiPackViewer && PW.UiPackViewer.UI_PACKS) || [];
+  const UI_PACK_BY_ID = (PW.UiPackViewer && PW.UiPackViewer.UI_PACK_BY_ID) || {};
+  let activeUiPack = null;
+
+  const cv = $('view');
+  const renderer = new StackRenderer(cv);
+  const params = { gaitFreq: 1, tailFlex: 1, springiness: 1, speed: 1, scaleMul: 1 };
+
+  const ui = {
+    mode: 'battle',       // 'gallery' | 'battle'
+    catFilter: 'all',     // 'all' | 'npc' | 'creature' | 'props'
+    search: '',
+    autoHabitat: false,
+    autoSpin: false,
+    perfHud: 'mini'
+  };
+
+  let habitatId = 'forest';
+  let selectedId = 'slime_jelly';
+  let thTarget = 0.0;
+  renderer.th = thTarget;
+  let drag = null;
+  let bannerTimer = 0;
+
+  // 与工坊一致的部件模板共享池：同一种资产只建一次体素模型、共用烘焙图集缓存，切模式/切怪绝不重烘！
+  const templates = new Map();
+  const skinIdx = Object.create(null);
+
+  function getOrSpawn(def) {
+    let inst = templates.get(def.id);
+    if (!inst) {
+      inst = Assets.spawn(def, { seed: 19 });
+      templates.set(def.id, inst);
+    }
+    return inst;
+  }
+
+  let focusActor = null;
+  let heroActor = null;
+
+  // 动作播放态
+  let curAction = 'idle';
+  let curActionTime = 0;
+  let curActionLoop = true;
+  let curActionDur = 0;
+  let comboQueue = [];
+
+  let heroAction = 'idle';
+  let heroActionTime = 0;
+  let heroActionDur = 0;
+
+  // 命中受击反馈 + 屏震 + 机制技全屏特效配置
+  const BATTLE_FX_CUES = {
+    'slime_jelly:battle_attack':      { hitAt: 0.44, shake: 5.5, recoil: 4.5, flash: '#7be8ff', sparks: ['#c4f8ff', '#58c7f3', '#ffffff'] },
+    'earth2_barometz:battle_attack':  { hitAt: 0.44, shake: 5.0, recoil: 4.0, flash: '#ffe7b3', sparks: ['#fff8e7', '#ffd166', '#ffffff'] },
+    'goblin_scout:battle_attack':     { hitAt: 0.43, shake: 7.5, recoil: 6.0, flash: '#ff9e26', sparks: ['#ffe36e', '#ff9e26', '#ff4d1a'] },
+    'fairy_meadow:battle_attack':     { hitAt: 0.50, shake: 4.5, recoil: 3.8, flash: '#ff88b8', sparks: ['#ff88b8', '#ffd6e8', '#ffe67a'] },
+    'fairy_meadow:battle_special':    { hitAt: 0.38, shake: 6.0, recoil: 3.5, flash: '#ffd166', sparks: ['#ff5e7e', '#46d67a', '#4da8ff', '#c87cff'], screenFx: 'prism', screenDur: 0.90 },
+    'earth6_long_arm:battle_attack':  { hitAt: 0.58, shake: 8.5, recoil: 6.5, flash: '#ff5247', sparks: ['#ff7a6b', '#e3242b', '#ffe36e'] },
+    'earth6_long_arm:battle_special': { hitAt: 0.42, shake: 9.0, recoil: 5.0, flash: '#f59b3d', sparks: ['#f59b3d', '#ffe5a8', '#68b851'], screenFx: 'quake', screenDur: 0.90 },
+    'earth3_zheng:battle_attack':     { hitAt: 0.34, shake: 8.0, recoil: 6.2, flash: '#ff4a2e', sparks: ['#ff3b1f', '#ff8c42', '#fff0a6'] },
+    'earth1_belly_maw:battle_attack': { hitAt: 0.38, shake: 9.5, recoil: 7.0, flash: '#ff8a2b', sparks: ['#f7f1e3', '#ff8a2b', '#fff2b0'] },
+    'earth1_belly_maw:battle_special':{ hitAt: 0.48, shake: 6.5, recoil: 4.5, flash: '#48a856', sparks: ['#367d4b', '#62ad6f', '#b5f246'], screenFx: 'vines', screenDur: 1.00 },
+    'tree3_leshy:battle_attack':      { hitAt: 0.58, shake: 10.0, recoil: 7.2, flash: '#73b856', sparks: ['#8f6c4a', '#73b856', '#9ee060'] },
+    'tree3_leshy:battle_special':     { hitAt: 0.30, shake: 5.5, recoil: 4.0, flash: '#5ea33c', sparks: ['#3f7d38', '#9ee060', '#c8e8b0'], screenFx: 'mist', screenDur: 1.08 }
+  };
+  let battleFxFired = false;
+  let heroHitTimer = 0;
+  let heroHitAmp = 0;
+  let heroHitFlash = '#ffffff';
+  let shakeTimer = 0;
+  let shakeAmp = 0;
+  let screenFx = null;
+
+  function renderBattleOverlay(ctx, w, h) {
+    if (screenFx && screenFx.t < screenFx.dur) {
+      const p = clamp(screenFx.t / screenFx.dur, 0, 1);
+      const env = Math.sin(p * Math.PI);
+      const cx = w * 0.5, cy = h * 0.5;
+      const maxR = Math.hypot(cx, cy);
+      ctx.save();
+      if (screenFx.kind === 'prism') {
+        const cols = ['#ff5e7e', '#ffd166', '#46d67a', '#4da8ff', '#c87cff'];
+        for (let i = 0; i < cols.length; i++) {
+          const r = maxR * clamp(p * 1.35 - i * 0.08, 0, 1.2);
+          if (r <= 4) continue;
+          ctx.globalAlpha = 0.28 * (1 - p * 0.65);
+          ctx.strokeStyle = cols[i];
+          ctx.lineWidth = Math.max(2, 10 - i * 1.4);
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, TAU);
+          ctx.stroke();
+        }
+        const g = ctx.createRadialGradient(cx, cy, maxR * 0.25, cx, cy, maxR);
+        g.addColorStop(0, 'rgba(255,255,255,0)');
+        g.addColorStop(1, `rgba(255, 168, 210, ${(0.22 * env).toFixed(3)})`);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, w, h);
+      } else if (screenFx.kind === 'quake') {
+        for (let k = 0; k < 3; k++) {
+          const lp = clamp((p - k * 0.18) / 0.64, 0, 1);
+          if (lp <= 0 || lp >= 1) continue;
+          ctx.globalAlpha = 0.34 * (1 - lp);
+          ctx.strokeStyle = k % 2 === 0 ? '#f59b3d' : '#ffe5a8';
+          ctx.lineWidth = 6 * (1 - lp * 0.5);
+          ctx.beginPath();
+          ctx.arc(cx, cy * 0.92, maxR * 0.15 + maxR * 0.95 * lp, 0, TAU);
+          ctx.stroke();
+        }
+        const g = ctx.createRadialGradient(cx, cy, maxR * 0.32, cx, cy, maxR);
+        g.addColorStop(0, 'rgba(0,0,0,0)');
+        g.addColorStop(1, `rgba(180, 72, 18, ${(0.26 * env).toFixed(3)})`);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, w, h);
+      } else if (screenFx.kind === 'vines') {
+        const g = ctx.createRadialGradient(cx, cy * 0.85, maxR * 0.35, cx, cy, maxR);
+        g.addColorStop(0, 'rgba(20, 60, 28, 0)');
+        g.addColorStop(1, `rgba(22, 74, 34, ${(0.38 * env).toFixed(3)})`);
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, w, h);
+        ctx.strokeStyle = '#367d4b';
+        ctx.globalAlpha = 0.42 * env;
+        ctx.lineWidth = 4;
+        for (let i = 0; i < 6; i++) {
+          const bx = (w / 5) * i;
+          const reach = h * 0.24 * env;
+          ctx.beginPath();
+          ctx.moveTo(bx, h);
+          ctx.quadraticCurveTo(bx + Math.sin(screenFx.t * 8 + i) * 32, h - reach * 0.55, bx + (i % 2 ? 26 : -26), h - reach);
+          ctx.stroke();
+        }
+      } else if (screenFx.kind === 'mist') {
+        const g = ctx.createLinearGradient(0, 0, 0, h);
+        g.addColorStop(0, `rgba(42, 92, 52, ${(0.16 * env).toFixed(3)})`);
+        g.addColorStop(0.55, `rgba(168, 214, 160, ${(0.28 * env).toFixed(3)})`);
+        g.addColorStop(1, `rgba(34, 74, 42, ${(0.42 * env).toFixed(3)})`);
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, w, h);
+        ctx.globalAlpha = 0.22 * env;
+        ctx.fillStyle = '#dff2d8';
+        for (let i = 0; i < 5; i++) {
+          const mx = ((w * 0.25 * i + screenFx.t * (95 + i * 24)) % (w + 260)) - 130;
+          const my = h * (0.28 + i * 0.14);
+          ctx.beginPath();
+          ctx.ellipse(mx, my, 120 + i * 18, 26 + i * 6, 0, 0, TAU);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+
+    if (heroHitTimer > 0) {
+      const hp = clamp(heroHitTimer / 0.34, 0, 1);
+      ctx.save();
+      const g = ctx.createRadialGradient(w * 0.5, h * 0.64, 18, w * 0.5, h * 0.64, Math.min(w, h) * 0.42);
+      g.addColorStop(0, heroHitFlash);
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.globalAlpha = 0.34 * hp;
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+    }
+  }
+
+  function banner(msg, dur = 1.3) {
+    const b = $('banner');
+    b.textContent = msg;
+    b.classList.add('show');
+    bannerTimer = dur;
+  }
+
+  function getGroupedAssets() {
+    const npcs = Assets.list.filter(d => d.category === 'npc');
+    const creatures = Assets.list.filter(d => d.category === 'creature');
+    const props = Assets.list.filter(d => d.category === 'scene' || d.category === 'building');
+    return { npcs, creatures, props };
+  }
+
+  function setHabitat(id, announce = true) {
+    if (!HABITAT_MAP[id]) return;
+    habitatId = id;
+    $('habSelect').value = id;
+    renderer.renderSky(HABITAT_MAP[id]);
+    renderer.vfx.clear();
+    if (announce) banner(`生境 · ${HABITAT_MAP[id].code} ${HABITAT_MAP[id].name}`);
+  }
+
+  // 换色：仅在用户主动切换皮肤时调用 recolorAsset，绝不在切换资产时无谓清空图集缓存！
+  function applySkinToDef(def, idx) {
+    const n = def.skins ? def.skins.length : 0;
+    if (!n) return;
+    const si = ((idx % n) + n) % n;
+    if ((skinIdx[def.id] || 0) === si) return;
+    skinIdx[def.id] = si;
+    const inst = templates.get(def.id);
+    let sk = null;
+    if (inst && inst.applySkin) sk = inst.applySkin(si);
+    syncInspector();
+    if (sk) banner(`换色 · ${GAME_NAMES[def.id] || def.name} · ${sk.name}`);
+  }
+
+  function triggerAction(actId) {
+    const def = Assets.byId[selectedId];
+    if (!def) return;
+    const act = (def.actions || []).find(a => a.id === actId);
+    if (!act) return;
+    curAction = act.id;
+    curActionTime = 0;
+    curActionLoop = act.loop !== false;
+    curActionDur = act.duration || 1.0;
+    battleFxFired = false;
+    const cue = ui.mode === 'battle' ? BATTLE_FX_CUES[`${selectedId}:${actId}`] : null;
+    screenFx = (cue && cue.screenFx) ? { kind: cue.screenFx, t: 0, dur: cue.screenDur || 0.9 } : null;
+    renderer.vfx.clear();
+    syncActionHighlight();
+  }
+
+  function triggerHeroCast() {
+    heroAction = 'cast';
+    heroActionTime = 0;
+    heroActionDur = 2.2;
+    banner('主角 · 挥杖施法', 0.9);
+  }
+
+  function playCombo() {
+    const def = Assets.byId[selectedId];
+    if (!def || def.category !== 'creature') return;
+    if (ui.mode !== 'battle') setMode('battle');
+    const ids = ['battle_hurt', 'battle_stagger', 'battle_attack', 'battle_special']
+      .filter(id => (def.actions || []).some(a => a.id === id));
+    if (!ids.length) return;
+    comboQueue = ids.slice(1);
+    triggerAction(ids[0]);
+    banner(`连播 · ${GAME_NAMES[def.id] || def.name}（${ids.length} 个回合制动作）`);
+  }
+
+  function renderUiPackPreview(pack) {
+    if (PW.UiPackViewer) PW.UiPackViewer.renderPack($('uiPackStage'), pack, makeCanvas);
+  }
+
+  function selectUiPack(id) {
+    const pack = UI_PACK_BY_ID[id];
+    if (!pack) return;
+    activeUiPack = pack;
+    selectedId = id;
+    comboQueue = [];
+    battleFxFired = false;
+    heroHitTimer = 0;
+    shakeTimer = 0;
+    screenFx = null;
+    cv.style.transform = '';
+    renderUiPackPreview(pack);
+    renderLib();
+    $('secFocus').innerHTML = `
+      <div class="sec-t">当前选中 <span class="key">UI / 特效包</span></div>
+      <div class="focus-title"><span class="code">${esc(pack.code)}</span><h2>${esc(pack.name)}</h2><span class="st done">已入双库</span></div>
+      <div class="focus-sub">${esc(pack.tag)}</div>
+      <dl class="kv">
+        <dt>挂载路径</dt><dd><span class="code">${esc(pack.file)}</span></dd>
+        <dt>全局接口</dt><dd><span class="code">window.Code00ArtPacks.${esc(pack.key)}</span></dd>
+        <dt>校验状态</dt><dd>verify.mjs 全部硬性校验通过</dd>
+      </dl>
+    `;
+    $('secActions').innerHTML = `
+      <div class="sec-t">完整独立验收页</div>
+      <div class="row"><a class="btn primary sm" href="${esc(pack.preview)}" target="_blank">打开 ${esc(pack.code)} 独立 preview.html</a></div>
+    `;
+    $('secSkin').style.display = 'none';
+    banner(`已加载 ${pack.code} · ${pack.name}`);
+  }
+
+  function selectAsset(id, announce = true) {
+    if (UI_PACK_BY_ID[id]) { selectUiPack(id); return; }
+    const def = Assets.byId[id];
+    if (!def) return;
+    activeUiPack = null;
+    if (PW.UiPackViewer) PW.UiPackViewer.stopAnim();
+    $('uiPackStage').classList.remove('show');
+    selectedId = id;
+    comboQueue = [];
+    battleFxFired = false;
+    heroHitTimer = 0;
+    shakeTimer = 0;
+    screenFx = null;
+    cv.style.transform = '';
+    renderer.vfx.clear();
+
+    if (ui.mode === 'battle' && def.category !== 'creature') {
+      ui.mode = 'gallery';
+      thTarget = 0.56;
+    }
+
+    if (ui.autoHabitat && def.defaultHabitat && HABITAT_MAP[def.defaultHabitat]) {
+      setHabitat(def.defaultHabitat, false);
+    }
+
+    focusActor = getOrSpawn(def);
+    if (ui.mode === 'battle') {
+      focusActor.reset(BATTLE_MONSTER_POS[0], BATTLE_MONSTER_POS[1], 0);
+      const mageDef = Assets.byId['npc_mage'];
+      heroActor = getOrSpawn(mageDef);
+      heroActor.reset(BATTLE_HERO_POS[0], BATTLE_HERO_POS[1], Math.PI);
+      heroAction = 'idle';
+      heroActionTime = 0;
+    } else {
+      focusActor.reset(0, 0, 0);
+      heroActor = null;
+    }
+
+    const defAct = (ui.mode === 'gallery' && def.actions && def.actions[0]) ? def.actions[0] : null;
+    curAction = defAct ? defAct.id : 'idle';
+    curActionLoop = defAct ? (defAct.loop !== false) : true;
+    curActionDur = defAct ? (defAct.duration || 1.0) : 0;
+    curActionTime = 0;
+
+    syncAll();
+    if (announce) banner(`${GAME_NAMES[def.id] || def.name}（${ui.mode === 'battle' ? '回合制对阵' : '图鉴待机'}）`);
+  }
+
+  function setMode(nextMode) {
+    if (ui.mode === nextMode && !activeUiPack) return;
+    ui.mode = nextMode;
+    activeUiPack = null;
+    if (PW.UiPackViewer) PW.UiPackViewer.stopAnim();
+    $('uiPackStage').classList.remove('show');
+    const def = Assets.byId[selectedId];
+    if (ui.mode === 'battle') {
+      thTarget = 0.0;
+      if (!def || def.category !== 'creature') selectedId = 'slime_jelly';
+    } else {
+      thTarget = 0.56;
+      if (!def) selectedId = 'slime_jelly';
+    }
+    selectAsset(selectedId, true);
+  }
+
+  // ---------------------------------------------------------------- UI 渲染
+  function renderCatTabs() {
+    const { npcs, creatures, props } = getGroupedAssets();
+    const tabs = [
+      { id: 'all',      name: '全部',     cnt: npcs.length + creatures.length + props.length + UI_PACKS.length },
+      { id: 'npc',      name: '主角NPC',  cnt: npcs.length },
+      { id: 'creature', name: '怪物',     cnt: creatures.length },
+      { id: 'props',    name: '摆件建筑', cnt: props.length },
+      { id: 'uipacks',  name: 'UI/特效',  cnt: UI_PACKS.length }
+    ];
+    $('catTabs').innerHTML = tabs.map(t =>
+      `<button data-cat="${t.id}" class="${ui.catFilter === t.id ? 'on' : ''}"><b>${t.name}</b><span>${t.cnt}</span></button>`
+    ).join('');
+    $('catTabs').querySelectorAll('button').forEach(b => {
+      b.onclick = () => {
+        ui.catFilter = b.dataset.cat;
+        if (ui.catFilter === 'uipacks' && UI_PACKS.length && !activeUiPack) {
+          selectUiPack(UI_PACKS[0].id);
+          return;
+        }
+        renderLib();
+      };
+    });
+  }
+
+  function renderLib() {
+    renderCatTabs();
+    const { npcs, creatures, props } = getGroupedAssets();
+    const q = ui.search.trim().toLowerCase();
+    const match = (d) => !q || `${d.id} ${d.name} ${GAME_NAMES[d.id] || ''} ${d.tag || ''} ${d.code || ''}`.toLowerCase().includes(q);
+
+    const groups = [];
+    if (ui.catFilter === 'all' || ui.catFilter === 'npc') groups.push({ title: '主角与 NPC', list: npcs.filter(match) });
+    if (ui.catFilter === 'all' || ui.catFilter === 'creature') groups.push({ title: '落果密林怪物', list: creatures.filter(match) });
+    if (ui.catFilter === 'all' || ui.catFilter === 'props') groups.push({ title: '生态摆件与建筑', list: props.filter(match) });
+
+    let html = '';
+    let shown = 0;
+    const total = npcs.length + creatures.length + props.length + UI_PACKS.length;
+
+    for (const g of groups) {
+      if (!g.list.length) continue;
+      shown += g.list.length;
+      html += `<div class="lib-group"><div class="lib-group-title"><span>${esc(g.title)}</span><span>${g.list.length}</span></div>`;
+      for (const d of g.list) {
+        const displayName = GAME_NAMES[d.id] || d.name;
+        const focused = d.id === selectedId;
+        const battleActs = (d.actions || []).filter(a => a.id.startsWith('battle_'));
+        const hasSpec = battleActs.some(a => a.id === 'battle_special');
+        const stBadge = d.category === 'creature'
+          ? (hasSpec ? '<span class="st draft">含机制技</span>' : '<span class="st done">标准3技</span>')
+          : `<span class="st done">${d.category === 'npc' ? 'NPC' : (d.category === 'building' ? '建筑' : '摆件')}</span>`;
+        const chipsHtml = d.category === 'creature'
+          ? `<div class="li-acts">${battleActs.map(a => `<span class="li-act ${a.id === 'battle_special' ? 'draft' : ''}">${esc(a.name)}</span>`).join('')}</div>`
+          : '';
+        html += `<div class="lib-item no-cb done${focused ? ' focused' : ''}" data-id="${esc(d.id)}">
+          <div class="li-main">
+            <div class="li-name"><span class="code">${esc(d.code || d.category)}</span><span class="nm">${esc(displayName)}</span></div>
+            <div class="li-sub">${esc(d.id)}</div>
+            ${chipsHtml}
+          </div>
+          <div class="li-right">${stBadge}</div>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+
+    if (ui.catFilter === 'all' || ui.catFilter === 'uipacks') {
+      const matchedPacks = UI_PACKS.filter(p => !q || `${p.id} ${p.code} ${p.name} ${p.tag}`.toLowerCase().includes(q));
+      if (matchedPacks.length) {
+        shown += matchedPacks.length;
+        html += `<div class="lib-group"><div class="lib-group-title"><span>UI 皮肤与 3D 特效包</span><span>${matchedPacks.length}</span></div>`;
+        for (const p of matchedPacks) {
+          const focused = p.id === selectedId;
+          html += `<div class="lib-item no-cb done${focused ? ' focused' : ''}" data-id="${esc(p.id)}">
+            <div class="li-main">
+              <div class="li-name"><span class="code">${esc(p.code)}</span><span class="nm">${esc(p.name)}</span></div>
+              <div class="li-sub">${esc(p.file)}</div>
+            </div>
+            <div class="li-right"><span class="st done">UI包</span></div>
+          </div>`;
+        }
+        html += `</div>`;
+      }
+    }
+
+    $('libList').innerHTML = html || '<div class="lib-empty">没有匹配的实装资产。</div>';
+    $('libCount').textContent = `${shown}/${total}`;
+    $('libList').querySelectorAll('.lib-item').forEach(row => {
+      row.onclick = () => selectAsset(row.dataset.id);
+    });
+  }
+
+  function syncActionHighlight() {
+    $('secActions').querySelectorAll('.act-row[data-act]').forEach(el => {
+      el.classList.toggle('on', el.dataset.act === curAction);
+    });
+  }
+
+  function syncInspector() {
+    const def = Assets.byId[selectedId];
+    if (!def) return;
+    const displayName = GAME_NAMES[def.id] || def.name;
+    const partCount = focusActor && focusActor.parts ? Object.keys(focusActor.parts).length : 0;
+
+    $('secFocus').innerHTML = `
+      <div class="sec-t">当前选中 <span class="key">${ui.mode === 'battle' ? '回合制对阵' : '图鉴待机'}</span></div>
+      <div class="focus-title"><span class="code">${esc(def.code || def.category)}</span><h2>${esc(displayName)}</h2><span class="st done">已实装</span></div>
+      <div class="focus-sub">${esc(def.tag || '')}</div>
+      <div class="note">${esc(def.summary || '')}${def.soulHabit ? `<br><b>生态习性：</b>${esc(def.soulHabit)}` : ''}</div>
+      <dl class="kv">
+        <dt>资产 ID</dt><dd><span class="code">${esc(def.id)}</span></dd>
+        <dt>部件数</dt><dd>${partCount} 件 · 占地半径 ${def.footRadius || 10}</dd>
+        <dt>默认生境</dt><dd>${HABITAT_MAP[def.defaultHabitat] ? `${HABITAT_MAP[def.defaultHabitat].code} ${HABITAT_MAP[def.defaultHabitat].name}` : '通用'}</dd>
+        ${ui.mode === 'battle' ? `<dt>3D 指向</dt><dd><span class="code">eco.targetPos=[0,24,8]</span></dd>` : ''}
+      </dl>
+    `;
+
+    const allActs = def.actions || [];
+    if (ui.mode === 'battle' && def.category === 'creature') {
+      const order = ['battle_hurt', 'battle_stagger', 'battle_attack', 'battle_special'];
+      const clsMap = { battle_attack: 'battle-atk', battle_special: 'battle-spc', battle_stagger: 'battle-stg', battle_hurt: 'battle-hrt' };
+      const battleActs = allActs.filter(a => a.id.startsWith('battle_'))
+        .sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+
+      $('secActions').innerHTML = `
+        <div class="sec-t">回合制战斗动作 <span class="key">点击立即点放</span></div>
+        <div class="actions">
+          ${battleActs.map(a => `
+            <div class="act-row ${clsMap[a.id] || ''}${curAction === a.id ? ' on' : ''}" data-act="${esc(a.id)}">
+              <div><div class="nm">${esc(a.name)}</div><div class="meta">单次 ${(a.duration || 0.85).toFixed(2)} 秒 · ${esc(a.id)}</div></div>
+              <span class="st ${a.id === 'battle_special' ? 'draft' : 'done'}">${a.id === 'battle_special' ? '机制技' : '必有'}</span>
+            </div>
+          `).join('')}
+          <div class="act-row hero-cast" id="btnHeroCast">
+            <div><div class="nm">主角 · 挥杖施法 (npc_mage)</div><div class="meta">单次 2.20 秒 · 朝上方怪物发射三色宝石弹</div></div>
+            <span class="st done">主角</span>
+          </div>
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn primary sm" id="btnCombo">一键连播全部回合制技能</button>
+          <button class="btn sm" id="btnBackIdle">回待机</button>
+        </div>
+      `;
+      $('secActions').querySelectorAll('.act-row[data-act]').forEach(r => {
+        r.onclick = () => { comboQueue = []; triggerAction(r.dataset.act); };
+      });
+      $('btnHeroCast').onclick = triggerHeroCast;
+      $('btnCombo').onclick = playCombo;
+      $('btnBackIdle').onclick = () => { comboQueue = []; triggerAction('idle'); };
+    } else {
+      const galleryActs = allActs.filter(a => !a.id.startsWith('battle_'));
+      $('secActions').innerHTML = `
+        <div class="sec-t">图鉴展示动作 <span class="key">S 切巡游/待机</span></div>
+        <div class="actions">
+          ${galleryActs.map(a => `
+            <div class="act-row${curAction === a.id ? ' on' : ''}" data-act="${esc(a.id)}">
+              <div><div class="nm">${esc(a.name)}</div><div class="meta">${a.loop === false ? `单次 ${(a.duration || 1.5).toFixed(2)} 秒` : '循环'} · ${esc(a.id)}</div></div>
+              <span class="st done">原版</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+      $('secActions').querySelectorAll('.act-row[data-act]').forEach(r => {
+        r.onclick = () => triggerAction(r.dataset.act);
+      });
+    }
+
+    const skins = def.skins || [];
+    const si = skinIdx[def.id] || 0;
+    $('secSkin').style.display = skins.length ? '' : 'none';
+    if (skins.length) {
+      $('secSkin').innerHTML = `
+        <div class="sec-t">换色 <span class="key">C</span></div>
+        <div class="row">${skins.map((sk, i) =>
+          `<button class="btn sm${i === si ? ' on' : ''}" data-skin="${i}"><span class="swatch" style="background:${sk.dot}"></span>${esc(sk.name)}</button>`
+        ).join('')}</div>
+      `;
+      $('secSkin').querySelectorAll('[data-skin]').forEach(b => {
+        b.onclick = () => applySkinToDef(def, Number(b.dataset.skin));
+      });
+    }
+  }
+
+  const SLIDERS = [['slGaitFreq', 'vGaitFreq', 'gaitFreq'], ['slTailFlex', 'vTailFlex', 'tailFlex'], ['slSpring', 'vSpring', 'springiness'], ['slSpeed', 'vSpeed', 'speed'], ['slScale', 'vScale', 'scaleMul']];
+  function syncSliders() {
+    for (const [sl, v, k] of SLIDERS) { $(sl).value = params[k]; $(v).textContent = params[k].toFixed(2); }
+  }
+
+  function syncStageBar() {
+    const sel = $('habSelect');
+    if (!sel.options.length) {
+      sel.innerHTML = HAB_PRESETS.filter(id => HABITAT_MAP[id]).map(id => {
+        const h = HABITAT_MAP[id];
+        return `<option value="${h.id}">${h.code} ${esc(h.name)}</option>`;
+      }).join('');
+      sel.onchange = () => setHabitat(sel.value);
+    }
+    sel.value = habitatId;
+    $('autoHab').checked = ui.autoHabitat;
+    $('topModeSeg').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.m === ui.mode));
+    $('modeBadge').textContent = ui.mode === 'battle' ? '上怪下主角 · 3D 指向 eco.targetPos' : '图鉴模式 · 保留原版待机与巡游';
+    $('stageCount').textContent = ui.mode === 'battle' ? '对阵 2 只' : '单件展示';
+    $('btnQuickCombo').style.display = ui.mode === 'battle' ? '' : 'none';
+    $('modeSeg').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.mode === renderer.getRenderMode()));
+    $('btnOutline').classList.toggle('on', renderer.useOutline);
+    $('btnSpin').classList.toggle('on', ui.autoSpin);
+    $('zoomLabel').textContent = `×${renderer.artPx}`;
+  }
+
+  function syncAll() {
+    renderLib();
+    syncInspector();
+    syncStageBar();
+  }
+
+  // ---------------------------------------------------------------- 事件绑定
+  $('topModeSeg').querySelectorAll('button').forEach(b => { b.onclick = () => setMode(b.dataset.m); });
+  $('libSearch').oninput = (e) => { ui.search = e.target.value; renderLib(); };
+  $('autoHab').onchange = (e) => { ui.autoHabitat = e.target.checked; };
+  $('btnQuickCombo').onclick = playCombo;
+  $('modeSeg').querySelectorAll('button').forEach(b => {
+    b.onclick = () => {
+      renderer.setRenderMode(b.dataset.mode, HABITAT_MAP[habitatId]);
+      syncStageBar();
+      banner(`渲染 · ${renderer.getRenderModeLabel()}`);
+    };
+  });
+  $('btnOutline').onclick = () => { renderer.useOutline = !renderer.useOutline; syncStageBar(); };
+  $('btnSpin').onclick = () => { ui.autoSpin = !ui.autoSpin; syncStageBar(); };
+  $('btnResetView').onclick = () => {
+    thTarget = ui.mode === 'battle' ? 0.0 : 0.56;
+    renderer.th = thTarget + (((renderer.th - thTarget + Math.PI) % TAU + TAU) % TAU - Math.PI);
+    renderer.zoom = 0;
+    ui.autoSpin = false;
+    fitStage();
+    syncStageBar();
+  };
+  const zoomBy = (d) => { renderer.zoom = clamp(renderer.zoom + d, -3, 8); fitStage(); syncStageBar(); };
+  $('btnZoomIn').onclick = () => zoomBy(1);
+  $('btnZoomOut').onclick = () => zoomBy(-1);
+  $('toggleLib').onclick = () => { $('app').classList.toggle('no-lib'); fitStage(); };
+  $('toggleInsp').onclick = () => { $('app').classList.toggle('no-insp'); fitStage(); };
+
+  for (const [sl, v, k] of SLIDERS) {
+    $(sl).oninput = () => { params[k] = Number($(sl).value); $(v).textContent = params[k].toFixed(2); };
+  }
+  $('btnResetParams').onclick = () => {
+    Object.assign(params, { gaitFreq: 1, tailFlex: 1, springiness: 1, speed: 1, scaleMul: 1 });
+    syncSliders();
+    banner('调参已恢复默认');
+  };
+  $('atlasBudget').onchange = (e) => {
+    renderer.atlas.setBudgetMB(Number(e.target.value));
+    banner(`图集预算 ${e.target.value}MB`, 1.6);
+  };
+  $('btnClearCache').onclick = () => {
+    renderer.clearCache();
+    banner('已清空烘焙图集缓存');
+  };
+
+  // 拖动 360° 旋转、滚轮缩放、快捷键（与工坊完全一致）
+  cv.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, th: renderer.th }; cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', (e) => { if (drag) renderer.th = thTarget = drag.th + (e.clientX - drag.x) * 0.01; });
+  cv.addEventListener('pointerup', () => { drag = null; });
+  cv.addEventListener('wheel', (e) => { zoomBy(e.deltaY > 0 ? -1 : 1); e.preventDefault(); }, { passive: false });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
+    const k = e.key.toLowerCase();
+    if (k === 'q') thTarget -= Math.PI / 4;
+    if (k === 'e') thTarget += Math.PI / 4;
+    if (k === 'p') { hud.cycle(); banner(`性能浮层 · ${{ mini: '折叠', full: '展开', off: '隐藏' }[hud.mode]}`); }
+    if (k === 'c' && focusActor) applySkinToDef(focusActor.def, (skinIdx[focusActor.def.id] || 0) + 1);
+    if (k === 'm') { renderer.setRenderMode(renderer.modeIdx + 1, HABITAT_MAP[habitatId]); syncStageBar(); banner(`渲染 · ${renderer.getRenderModeLabel()}`); }
+    if (k === 's' && ui.mode === 'gallery' && focusActor) {
+      const next = curAction === 'idle' ? 'patrol' : 'idle';
+      triggerAction(next);
+      banner(next === 'idle' ? '原地待机' : '自由巡游');
+    }
+    if (e.key === ' ') { e.preventDefault(); setMode(ui.mode === 'battle' ? 'gallery' : 'battle'); }
+  });
+
+  function fitStage() { renderer.fit(HABITAT_MAP[habitatId]); }
+  new ResizeObserver(() => fitStage()).observe($('stage'));
+
+  // ---------------------------------------------------------------- 主循环（与工坊同源优化）
+  const hud = PW.PerfHud.create({
+    root: $('perfHud'), renderer, canvas: cv, mode: ui.perfHud,
+    onMode: (m) => { ui.perfHud = m; }
+  });
+
+  let last = 0, animTime = 0;
+
+  function simulate(dt) {
+    const hab = HABITAT_MAP[habitatId];
+    if (screenFx) {
+      screenFx.t += dt;
+      if (screenFx.t >= screenFx.dur) screenFx = null;
+    }
+    if (heroHitTimer > 0) heroHitTimer = Math.max(0, heroHitTimer - dt);
+    if (shakeTimer > 0) shakeTimer = Math.max(0, shakeTimer - dt);
+
+    if (focusActor) {
+      curActionTime += dt;
+      if (ui.mode === 'battle' && !battleFxFired) {
+        const cue = BATTLE_FX_CUES[`${selectedId}:${curAction}`];
+        if (cue && curActionTime >= cue.hitAt) {
+          battleFxFired = true;
+          heroHitTimer = 0.34;
+          heroHitAmp = cue.recoil || 4.5;
+          heroHitFlash = cue.flash || '#ffffff';
+          shakeTimer = 0.28;
+          shakeAmp = cue.shake || 5.5;
+          const spCols = cue.sparks || ['#ffffff'];
+          for (let i = 0; i < 12; i++) {
+            const a = (i / 12) * TAU + Math.random() * 0.25;
+            const spd = 12 + Math.random() * 18;
+            renderer.vfx.spawnParticle(
+              BATTLE_HERO_POS[0], BATTLE_HERO_POS[1], 10,
+              Math.cos(a) * spd, Math.sin(a) * spd, 10 + Math.random() * 12,
+              0.36 + Math.random() * 0.12, 1.7, spCols[i % spCols.length], true, 42
+            );
+          }
+        }
+      }
+      if (!curActionLoop && curActionDur > 0 && curActionTime >= curActionDur) {
+        if (comboQueue.length > 0) {
+          triggerAction(comboQueue.shift());
+        } else {
+          curAction = 'idle';
+          curActionLoop = true;
+          curActionTime = 0;
+          syncActionHighlight();
+        }
+      }
+      const eco = ui.mode === 'battle'
+        ? {
+            action: curAction, actionTime: curActionTime,
+            patrol: false,
+            homeX: BATTLE_MONSTER_POS[0], homeY: BATTLE_MONSTER_POS[1], homeYaw: 0,
+            maxRadius: 46,
+            seed: 19, avoidX: 0, avoidY: 0,
+            self: focusActor, allActors: heroActor ? [focusActor, heroActor] : [focusActor],
+            targetPos: [BATTLE_HERO_POS[0], BATTLE_HERO_POS[1], 8]
+          }
+        : {
+            action: curAction, actionTime: curActionTime,
+            patrol: curAction !== 'idle',
+            homeX: 0, homeY: 0, homeYaw: 0,
+            maxRadius: 48,
+            seed: 19, avoidX: 0, avoidY: 0,
+            self: focusActor, allActors: [focusActor]
+          };
+      focusActor.update(dt, animTime, params, hab, renderer.vfx, eco);
+    }
+
+    if (ui.mode === 'battle' && heroActor) {
+      if (heroAction !== 'idle') {
+        heroActionTime += dt;
+        if (heroActionTime >= heroActionDur) {
+          heroAction = 'idle';
+          heroActionTime = 0;
+        }
+      }
+      const hp = heroHitTimer > 0 ? clamp(heroHitTimer / 0.34, 0, 1) : 0;
+      const recoilY = Math.sin(hp * Math.PI) * heroHitAmp;
+      const jitterX = hp > 0 ? Math.sin(heroHitTimer * 78) * 1.6 * hp : 0;
+      const hitYaw = Math.PI + (hp > 0 ? Math.sin(heroHitTimer * 62) * 0.22 * hp : 0);
+      heroActor.update(dt, animTime, params, hab, renderer.vfx, {
+        action: heroAction, actionTime: heroActionTime,
+        patrol: false,
+        homeX: BATTLE_HERO_POS[0] + jitterX, homeY: BATTLE_HERO_POS[1] + recoilY, homeYaw: hitYaw,
+        maxRadius: 46,
+        targetPos: [BATTLE_MONSTER_POS[0], BATTLE_MONSTER_POS[1], 8]
+      });
+    }
+
+    renderer.vfx.update(dt);
+  }
+
+  function tick(ms) {
+    requestAnimationFrame(tick);
+    const t = ms / 1000;
+    const frameDt = last ? t - last : 1 / 60;
+    last = t;
+    const dt = Math.min(0.05, frameDt);
+
+    if (bannerTimer > 0) { bannerTimer -= dt; if (bannerTimer <= 0) $('banner').classList.remove('show'); }
+    if (ui.autoSpin && !drag) thTarget += dt * 0.55;
+    if (!drag) {
+      const dTh = thTarget - renderer.th;
+      renderer.th = Math.abs(dTh) < 1e-4 ? thTarget : renderer.th + dTh * Math.min(1, dt * 8);
+    }
+
+    // 逻辑按不超过 1/120 秒子步推进（与工坊完全一致）
+    const t0 = performance.now();
+    let rem = dt;
+    while (rem > 1e-6) {
+      const h = Math.min(SIM_STEP, rem);
+      animTime += h;
+      simulate(h);
+      rem -= h;
+    }
+
+    const actors = [];
+    if (focusActor) actors.push(focusActor);
+    if (ui.mode === 'battle' && heroActor) actors.push(heroActor);
+
+    const t1 = performance.now();
+    const platform = buildHabitatPlatform(habitatId, makeCanvas, 200);
+    renderer.renderScene(platform, actors, animTime);
+    if (ui.mode === 'battle' && (screenFx || heroHitTimer > 0)) {
+      renderBattleOverlay(renderer.ctx, cv.width, cv.height);
+    }
+    if (shakeTimer > 0) {
+      const sp = shakeTimer / 0.28;
+      const sx = (Math.sin(animTime * 95) * shakeAmp * sp).toFixed(1);
+      const sy = (Math.cos(animTime * 112) * shakeAmp * 0.7 * sp).toFixed(1);
+      cv.style.transform = `translate(${sx}px, ${sy}px)`;
+    } else if (cv.style.transform) {
+      cv.style.transform = '';
+    }
+    const t2 = performance.now();
+
+    hud.frame(frameDt * 1000, t1 - t0, t2 - t1);
+    // 与工坊一致：切怪时不触发 60ms GPU 同步测帧，仅在模式/生境/渲染/缩放/画布尺寸变化时测一次
+    hud.maybeMeasure(t2, `${ui.mode}|${habitatId}|${renderer.getRenderMode()}|${renderer.zoom}|${cv.width}x${cv.height}`,
+      () => renderer.renderScene(platform, actors, animTime));
+    hud.update(t2, { count: actors.length, renderMode: renderer.getRenderMode() });
+  }
+
+  syncSliders();
+  fitStage();
+  renderer.renderSky(HABITAT_MAP[habitatId]);
+  selectAsset('slime_jelly', false);
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

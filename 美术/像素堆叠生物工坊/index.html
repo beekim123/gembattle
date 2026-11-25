@@ -11,7 +11,7 @@
 
   <!-- 顶栏 -->
   <header class="topbar">
-    <div class="brand">像素堆叠工坊<small>怪物 · NPC · 建筑 · 场景环境</small></div>
+    <div class="brand">像素堆叠工坊<small>怪物 · NPC · 建筑 · 场景环境 · UI贴图</small></div>
     <div class="spacer"></div>
     <a class="btn sm" href="ecology.html" title="异世界生态：生态地图、每个生境的食物网、每只生物的设计">生态总览</a>
   </header>
@@ -57,6 +57,7 @@
   <!-- 中：预览台 -->
   <main class="stage" id="stage">
     <canvas id="view"></canvas>
+    <div class="uipack-stage" id="uiPackStage"></div>
     <div class="stage-top">
       <div class="float">
         <select id="habSelect" title="生境地台"></select>
@@ -284,10 +285,18 @@
 <script src="buildings/building_stone_gate.js"></script>
 <script src="buildings/building_ruin_arch.js"></script>
 
+<!-- 外派 UI 与 3D 特效贴图包（5） -->
+<script src="art-packs/pack_ui_skin.js"></script>
+<script src="art-packs/pack_cards.js"></script>
+<script src="art-packs/pack_icons.js"></script>
+<script src="art-packs/pack_map_panels.js"></script>
+<script src="art-packs/pack_ground_vfx.js"></script>
+
 <!-- 工坊界面 -->
 <script src="app/catalog.js"></script>
 <script src="tools/bench.js"></script>
 <script src="app/perf-hud.js"></script>
+<script src="app/uipack-viewer.js"></script>
 <script src="app/app.js"></script>
 </body>
 </html>

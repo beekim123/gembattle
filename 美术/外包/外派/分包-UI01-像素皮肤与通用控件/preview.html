@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UI-01 独立预览验收台 · 复古像素皮肤与通用控件</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; background: #101612; color: #ece8dc; font: 13px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; overflow: hidden; }
+  .wrap { display: flex; width: 100%; height: 100%; }
+  .stage { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; background: #0c120e; }
+  canvas { display: block; box-shadow: 0 12px 40px rgba(0,0,0,0.6); }
+  .hud { position: absolute; left: 12px; top: 10px; padding: 6px 10px; border-radius: 6px; background: rgba(12,18,14,0.82); border: 1px solid rgba(255,255,255,0.14); font-variant-numeric: tabular-nums; }
+  .warn { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); max-width: 520px; padding: 16px 20px; border-radius: 8px; background: rgba(140,42,32,0.92); color: #fff; font-size: 14px; display: none; text-align: center; }
+  .side { width: 250px; background: #161d18; border-left: 1px solid rgba(255,255,255,0.1); padding: 14px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+  h2 { font-size: 15px; color: #ffe498; }
+  .tip { font-size: 12px; color: #9fb0a2; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  button { background: #263429; color: #ece8dc; border: 1px solid rgba(255,255,255,0.16); border-radius: 5px; padding: 6px 10px; cursor: pointer; font-size: 12px; }
+  button.on { background: #70551c; border-color: #ffe498; color: #fff; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <main class="stage" id="stage">
+    <canvas id="cv"></canvas>
+    <div class="hud" id="hud">初始化中...</div>
+    <div class="warn" id="warn"></div>
+  </main>
+  <aside class="side">
+    <h2>UI-01 · 控件验收台</h2>
+    <div class="tip">检查项：九宫格四季拉伸四角不变形、像素描边锐利、无 PPT 感、120fps 满帧。</div>
+    <div>
+      <div class="tip" style="margin-bottom:6px">画布倍率（验证清晰度）</div>
+      <div class="row">
+        <button id="b1">1080p (×2)</button>
+        <button id="b2" class="on">1440×810 (×1.5)</button>
+        <button id="b3">4K (×4)</button>
+      </div>
+    </div>
+    <div>
+      <div class="tip" style="margin-bottom:6px">背景底色切换</div>
+      <div class="row">
+        <button id="bgForest" class="on">密林深绿</button>
+        <button id="bgRuins">古径青灰</button>
+        <button id="bgCanopy">树冠暖褐</button>
+      </div>
+    </div>
+    <div class="tip" id="meta"></div>
+  </aside>
+</div>
+<script src="./bundle/pack_ui_skin.js"></script>
+<script>
+(function () {
+  const W = 960, H = 540;
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const hud = document.getElementById('hud');
+  const warn = document.getElementById('warn');
+  const meta = document.getElementById('meta');
+  const pack = window.Code00ArtPacks && window.Code00ArtPacks.uiSkin;
+
+  let scale = 1.5, bgCol = '#24472c';
+  function resize() {
+    cv.width = Math.round(W * scale);
+    cv.height = Math.round(H * scale);
+    const maxW = document.getElementById('stage').clientWidth - 24;
+    const maxH = document.getElementById('stage').clientHeight - 24;
+    const k = Math.min(maxW / W, maxH / H);
+    cv.style.width = Math.floor(W * k) + 'px';
+    cv.style.height = Math.floor(H * k) + 'px';
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  document.getElementById('b1').onclick = () => { scale = 2; resize(); mark('b1'); };
+  document.getElementById('b2').onclick = () => { scale = 1.5; resize(); mark('b2'); };
+  document.getElementById('b3').onclick = () => { scale = 4; resize(); mark('b3'); };
+  function mark(id) { ['b1','b2','b3'].forEach(k => document.getElementById(k).classList.toggle('on', k === id)); }
+  document.getElementById('bgForest').onclick = () => { bgCol = '#24472c'; markBg('bgForest'); };
+  document.getElementById('bgRuins').onclick = () => { bgCol = '#3b4543'; markBg('bgRuins'); };
+  document.getElementById('bgCanopy').onclick = () => { bgCol = '#47301f'; markBg('bgCanopy'); };
+  function markBg(id) { ['bgForest','bgRuins','bgCanopy'].forEach(k => document.getElementById(k).classList.toggle('on', k === id)); }
+
+  if (!pack) {
+    warn.style.display = 'block';
+    warn.textContent = '尚未检测到 ./bundle/pack_ui_skin.js，请外包方交付后刷新本页验收。';
+    hud.textContent = '等待交付物：./bundle/pack_ui_skin.js';
+    return;
+  }
+
+  let offBytes = 0, offCount = 0;
+  const origCreate = document.createElement.bind(document);
+  function makeCanvas(w, h) {
+    const c = origCreate('canvas');
+    c.width = w; c.height = h;
+    offCount++; offBytes += w * h * 4;
+    return c;
+  }
+  const t0 = performance.now();
+  if (pack.init) pack.init(makeCanvas);
+  const initMs = performance.now() - t0;
+  meta.textContent = `皮肤：${pack.name || pack.id} v${pack.version} · 初始化 ${initMs.toFixed(1)}ms · 离屏 ${offCount} 张 (${(offBytes/1048576).toFixed(2)} MB)`;
+
+  let frames = 0, acc = 0, last = performance.now(), fps = 0;
+  function loop(now) {
+    const dt = now - last; last = now;
+    frames++; acc += dt;
+    if (acc >= 500) { fps = Math.round(frames * 1000 / acc); frames = 0; acc = 0; }
+    const t = now / 1000;
+
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.fillStyle = bgCol;
+    ctx.fillRect(0, 0, W, H);
+
+    // 1. 顶栏条
+    pack.drawPanel(ctx, 0, 0, 960, 32, 'bar', {});
+    pack.drawHeart(ctx, 22, 16, 9, 1);
+    pack.drawHeart(ctx, 46, 16, 9, 0.5);
+    pack.drawHeart(ctx, 70, 16, 9, 0);
+    pack.drawCoin(ctx, 118, 16, 8);
+    pack.drawPixelNumber(ctx, '120', 132, 16, { size: 15, color: '#ffd24a', align: 'left' });
+
+    // 2. 四种 9-slice 面板（展示不同宽高拉伸）
+    const pvs = [
+      ['wood', 18, 48, 210, 128, '#d8a848', '暗木铜边 wood'],
+      ['parchment', 244, 48, 210, 128, null, '羊皮卷 parchment'],
+      ['stone', 470, 48, 210, 128, '#7fb078', '苔石框 stone'],
+      ['tooltip', 696, 48, 246, 128, '#ffd24a', '浮窗 tooltip'],
+    ];
+    for (const [v, x, y, w, h, accCol, lbl] of pvs) {
+      pack.drawPanel(ctx, x, y, w, h, v, { accentColor: accCol, highlight: v === 'tooltip' });
+      ctx.font = '700 13px "PingFang SC", sans-serif';
+      ctx.fillStyle = v === 'parchment' ? '#2b1e14' : '#f4efe4';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(lbl, x + w / 2, y + h / 2);
+    }
+
+    // 3. 按钮 4 风格 × 4 态
+    const bvs = ['primary', 'secondary', 'danger', 'ghost'];
+    const sts = [
+      { name: '常态', enabled: true },
+      { name: '悬停', enabled: true, hover: true },
+      { name: '按下', enabled: true, pressed: true },
+      { name: '禁用', enabled: false },
+    ];
+    bvs.forEach((variant, r) => {
+      sts.forEach((st, c) => {
+        pack.drawButton(ctx, 18 + c * 136, 192 + r * 42, 124, 34, `${variant}·${st.name}`, { variant, ...st });
+      });
+    });
+
+    // 4. 战斗仪表：集色环 + 宝石等级 + 血条 + 双色盾 + 倒计时
+    pack.drawPanel(ctx, 578, 192, 146, 224, 'stone', {});
+    const mask = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 4);
+    pack.drawColorRing(ctx, 651, 244, 30, mask, Math.floor(t) % 7, t);
+    for (let ch = 0; ch < 3; ch++) {
+      pack.drawGemLevelBar(ctx, 592, 326 + ch * 26, 118, ch, ch + 2, (ch * 3 + Math.floor(t * 2)) % 10, 10);
+    }
+
+    pack.drawPanel(ctx, 738, 192, 204, 224, 'wood', {});
+    pack.drawCountdown(ctx, 768, 226, 4, t, false);
+    pack.drawCountdown(ctx, 812, 226, 1, t, true);
+    pack.drawHpBar(ctx, 840, 266, 124, 680, 1100, 1, 3);
+    pack.drawShield(ctx, 840, 286, [3, 2, 0], [4, 4, 0], false);
+    pack.drawHpBar(ctx, 840, 340, 124, 210, 460, 0, 1);
+    pack.drawShield(ctx, 840, 360, [0, 0, 0], [3, 0, 0], true);
+
+    // 5. 底部像素数字展示带
+    pack.drawPanel(ctx, 18, 430, 924, 92, 'wood', { accentColor: '#ffd24a' });
+    pack.drawPixelNumber(ctx, '428', 110, 476, { size: 22, color: '#ffffff', align: 'center' });
+    pack.drawPixelNumber(ctx, '×16', 250, 476, { size: 28, color: '#6fe07a', align: 'center' });
+    pack.drawPixelNumber(ctx, '18420!', 450, 476, { size: 32, crit: true, align: 'center' });
+    pack.drawPixelNumber(ctx, '152890', 740, 476, { size: 36, rainbow: true, align: 'center' });
+
+    hud.textContent = `UI-01 实时帧率：${fps} fps · 画布 ${cv.width}×${cv.height}`;
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

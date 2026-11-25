@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>UI-02B 印记、雕琢与战利品图标 · 验收预览台</title>
+<style>
+  body { margin: 0; background: #141920; color: #e8e2d4; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; }
+  header { padding: 12px 20px; background: #1d242e; border-bottom: 1px solid #303a48; display: flex; justify-content: space-between; align-items: center; }
+  #hud { font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: #8ff0ff; }
+  main { padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+  canvas { display: block; background: #1a212a; border: 1px solid #303a48; border-radius: 6px; image-rendering: pixelated; }
+  #err { color: #ff7a7a; white-space: pre-wrap; font-family: ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<header>
+  <div><strong>UI-02B 印记、雕琢与战利品图标</strong> · 20 枚像素徽章双尺寸实机目检</div>
+  <div id="hud">加载中...</div>
+</header>
+<main>
+  <div id="err"></div>
+  <canvas id="stage" width="1120" height="620"></canvas>
+</main>
+<script src="./bundle/pack_icons.js"></script>
+<script>
+(() => {
+  const errEl = document.getElementById('err');
+  const hudEl = document.getElementById('hud');
+  const cv = document.getElementById('stage');
+  const ctx = cv.getContext('2d');
+  const pack = window.Code00ArtPacks && window.Code00ArtPacks.cards;
+  if (!pack || typeof pack.drawSealIcon !== 'function') {
+    errEl.textContent = '❌ 未检测到 bundle/pack_icons.js 或缺少 drawSealIcon/drawLootBadge/drawCarveBadge。\n请先放入交付包并刷新。';
+    hudEl.textContent = '未就绪';
+    return;
+  }
+
+  let offBytes = 0, offCount = 0;
+  const makeCanvas = (w, h) => {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    offCount++; offBytes += w * h * 4;
+    return c;
+  };
+  const t0 = performance.now();
+  if (typeof pack.initIcons === 'function') pack.initIcons(makeCanvas);
+  const initMs = performance.now() - t0;
+
+  const SEALS = [
+    ['shatter_tide', '碎甲白潮', '#8ff0ff'],
+    ['desperate', '孤注破防', '#8ff0ff'],
+    ['double_white', '双重合白', '#ffffff'],
+    ['white_echo', '白潮余韵', '#ffffff'],
+    ['rainbow_bridge', '五彩虹桥', '#ffb0f0'],
+    ['ring_keep', '彩环常驻', '#ffb0f0'],
+    ['wide_bag', '宽裕行囊', '#ffd24a'],
+    ['hold_edge', '蓄锋待发', '#ffd24a'],
+    ['leap', '越隙相连', '#9aff9a'],
+    ['chain_surge', '连珠迭浪', '#9aff9a']
+  ];
+  const LOOTS = [
+    ['carve', '宝石雕琢', '#6ad8ff'],
+    ['seal', '秘宝印记', '#c490ff'],
+    ['arcana', '秘术牌', '#ffd24a'],
+    ['hand', '手牌扩容', '#7ae07a'],
+    ['heal', '疗伤果泉', '#ff6a78'],
+    ['attr', '属性提升', '#ff9a3a']
+  ];
+  const CARVES = [
+    ['sharp', '锐切', '#ffb04a'],
+    ['twin', '双晶', '#7ad8ff'],
+    ['pierce', '碎甲', '#ff7a7a'],
+    ['overflow', '溢彩', '#d49aff']
+  ];
+
+  let frames = 0, lastFpsT = performance.now(), fps = 0;
+  function render(now) {
+    const t = now * 0.001;
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = '#18202a';
+    ctx.fillRect(0, 0, cv.width, cv.height);
+
+    // 1. 10 枚印记（36px 放大 + 20px 实战 + active 态）
+    ctx.fillStyle = '#d9cfb8';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('一、10 枚印记图标（上：36px 精检 / 下左：20px 实战 / 下右：active 激活态）', 24, 34);
+
+    SEALS.forEach(([id, label, col], i) => {
+      const colIdx = i % 5, rowIdx = Math.floor(i / 5);
+      const bx = 24 + colIdx * 216, by = 50 + rowIdx * 126;
+      ctx.fillStyle = '#222c38';
+      ctx.fillRect(bx, by, 202, 112);
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(bx + 0.5, by + 0.5, 201, 111);
+
+      pack.drawSealIcon(ctx, id, bx + 44, by + 44, 36, { t });
+      pack.drawSealIcon(ctx, id, bx + 114, by + 44, 20, { t });
+      pack.drawSealIcon(ctx, id, bx + 162, by + 44, 24, { active: true, count: 2, t });
+
+      ctx.fillStyle = col;
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillText(label, bx + 12, by + 88);
+      ctx.fillStyle = '#9aa7b8';
+      ctx.font = '11px monospace';
+      ctx.fillText(id, bx + 12, by + 104);
+    });
+
+    // 2. 6 枚战利品徽章（28px + 16px）
+    ctx.fillStyle = '#d9cfb8';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillText('二、6 枚战利品徽章（左：28px 精检 / 右：16px 实战）', 24, 330);
+
+    LOOTS.forEach(([id, label, col], i) => {
+      const bx = 24 + i * 180, by = 346;
+      ctx.fillStyle = '#222c38';
+      ctx.fillRect(bx, by, 168, 96);
+      ctx.strokeStyle = col;
+      ctx.strokeRect(bx + 0.5, by + 0.5, 167, 95);
+
+      pack.drawLootBadge(ctx, id, bx + 44, by + 36, 28);
+      pack.drawLootBadge(ctx, id, bx + 112, by + 36, 16);
+
+      ctx.fillStyle = col;
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillText(label, bx + 12, by + 72);
+      ctx.fillStyle = '#9aa7b8';
+      ctx.font = '11px monospace';
+      ctx.fillText(id, bx + 12, by + 88);
+    });
+
+    // 3. 4 枚雕琢角标（24px + 14px + 模拟贴在牌角）
+    ctx.fillStyle = '#d9cfb8';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillText('三、4 枚雕琢角标（左：24px 精检 / 中：14px 实战 / 右：模拟牌角叠放）', 24, 476);
+
+    CARVES.forEach(([id, label, col], i) => {
+      const bx = 24 + i * 270, by = 492;
+      ctx.fillStyle = '#222c38';
+      ctx.fillRect(bx, by, 256, 102);
+      ctx.strokeStyle = col;
+      ctx.strokeRect(bx + 0.5, by + 0.5, 255, 101);
+
+      pack.drawCarveBadge(ctx, id, bx + 38, by + 38, 24);
+      pack.drawCarveBadge(ctx, id, bx + 98, by + 38, 14);
+
+      // 模拟牌角
+      ctx.fillStyle = '#332820';
+      ctx.fillRect(bx + 150, by + 16, 48, 66);
+      ctx.strokeStyle = '#c8a86a';
+      ctx.strokeRect(bx + 150.5, by + 16.5, 47, 65);
+      pack.drawCarveBadge(ctx, id, bx + 188, by + 26, 14);
+
+      ctx.fillStyle = col;
+      ctx.font = 'bold 13px sans-serif';
+      ctx.fillText(label, bx + 12, by + 76);
+      ctx.fillStyle = '#9aa7b8';
+      ctx.font = '11px monospace';
+      ctx.fillText(id, bx + 12, by + 92);
+    });
+
+    frames++;
+    if (now - lastFpsT >= 500) {
+      fps = Math.round(frames * 1000 / (now - lastFpsT));
+      frames = 0; lastFpsT = now;
+      hudEl.textContent = `FPS: ${fps} | initIcons: ${initMs.toFixed(1)} ms | 离屏: ${offCount} 张 (${(offBytes / 1048576).toFixed(2)} MB)`;
+    }
+    requestAnimationFrame(render);
+  }
+  requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>

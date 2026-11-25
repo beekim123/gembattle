@@ -468,9 +468,13 @@ window.PixelWorkshop.Creatures = window.PixelWorkshop.Creatures || [];
     spec: SPEC,
     skins: SKINS,
     actions: [
-      { id: 'patrol', name: '撑臂巡游摇果', loop: true, status: 'done' },
-      { id: 'idle',   name: '拄地张望',     loop: true, status: 'done' },
-      { id: 'shake',  name: '抱树猛摇果雨', loop: true, status: 'done' }
+      { id: 'patrol',         name: '撑臂巡游摇果', loop: true,  status: 'done' },
+      { id: 'idle',           name: '拄地张望',     loop: true,  status: 'done' },
+      { id: 'shake',          name: '抱树猛摇果雨', loop: true,  status: 'done' },
+      { id: 'battle_attack',  name: '甩果猛击',     loop: false, duration: 0.90, status: 'done' },
+      { id: 'battle_special', name: '集色威压',     loop: false, duration: 0.85, status: 'done' },
+      { id: 'battle_stagger', name: '破盾硬直',     loop: false, duration: 0.85, status: 'done' },
+      { id: 'battle_hurt',    name: '受击',         loop: false, duration: 0.35, status: 'done' }
     ],
     blocks: [
       '超长三段木壳前臂严格锁枢轴 IK', '撑杖秋千步态相位解算',
@@ -834,6 +838,239 @@ window.PixelWorkshop.Creatures = window.PixelWorkshop.Creatures || [];
           const action = (eco && eco.action)
             ? eco.action
             : ((eco && eco.patrol === false) ? 'idle' : 'patrol');
+          const isBattle = action === 'battle_attack' || action === 'battle_special' || action === 'battle_stagger' || action === 'battle_hurt';
+
+          if (isBattle) {
+            const actT = (eco && eco.actionTime != null) ? eco.actionTime : 0;
+            const isNewAct = action !== state._bAct || actT < (state._bLastT || 0) - 0.04;
+            if (isNewAct) {
+              state._bAct = action;
+              state._bFired = false;
+              state._bFired2 = false;
+              state._bFired3 = false;
+              state._bAx = (eco && eco.homeX != null) ? eco.homeX : state.x;
+              state._bAy = (eco && eco.homeY != null) ? eco.homeY : state.y;
+              state._bYaw = (eco && eco.homeYaw != null) ? eco.homeYaw : state.yaw;
+            }
+            state._bLastT = actT;
+            const ax = (eco && eco.homeX != null) ? eco.homeX : state._bAx;
+            const ay = (eco && eco.homeY != null) ? eco.homeY : state._bAy;
+            const hasTgt = eco && Array.isArray(eco.targetPos) && eco.targetPos.length >= 2 && Number.isFinite(eco.targetPos[0]) && Number.isFinite(eco.targetPos[1]);
+            const tx = hasTgt ? eco.targetPos[0] : ax - Math.sin(state._bYaw) * 46 * sMul;
+            const ty = hasTgt ? eco.targetPos[1] : ay + Math.cos(state._bYaw) * 46 * sMul;
+            const tz = (hasTgt && Number.isFinite(eco.targetPos[2])) ? eco.targetPos[2] : 8 * sMul;
+            const dx = tx - ax, dy = ty - ay;
+            const dist = Math.hypot(dx, dy) || 1;
+            const dirX = dx / dist, dirY = dy / dist;
+            const sideX = -dirY, sideY = dirX;
+            const aimYaw = Math.atan2(-dx, dy);
+            const fx = curSkin.fx || SKINS[0].fx;
+
+            // 对阵时将小果树安放在身侧后方，彻底杜绝挥臂穿树
+            state.treeX = ax + sideX * 26 * sMul - dirX * 10 * sMul;
+            state.treeY = ay + sideY * 26 * sMul - dirY * 10 * sMul;
+
+            state.mode = 'battle';
+            state.vx = 0; state.vy = 0;
+
+            if (action === 'battle_attack') {
+              // 0.90s：双长臂高举蓄果(0.28s) -> 猛力朝主角高弧甩出炽红果弹雨(0.27s) -> 命中爆浆 + 垂臂回位(0.35s)
+              state.yaw = aimYaw;
+              if (actT < 0.28) {
+                const u = smoothstep(0, 1, actT / 0.28);
+                state.x = ax - dirX * 2.0 * u * sMul;
+                state.y = ay - dirY * 2.0 * u * sMul;
+                state.z = lerp(7.4, 9.6, u) * sMul;
+                state.pouchHasFruit = true;
+                for (const h of hands) {
+                  const [hx, hy] = localToWorldXY(state.x, state.y, state.yaw, h.side * lerp(10.6, 9.2, u) * sMul, lerp(9.2, 8.0, u) * sMul);
+                  h.x = hx; h.y = hy; h.z = lerp(0, 13.5 + Math.sin(actT * 28) * 1.4, u) * sMul;
+                  h.yaw = wrapAngle(state.yaw - h.side * 0.25 * u);
+                  h.planted = false;
+                }
+                if (vfx && Math.random() < 0.45) {
+                  vfx.spawnParticle(
+                    state.x + (Math.random() - 0.5) * 10 * sMul, state.y + (Math.random() - 0.5) * 10 * sMul, state.z + 15 * sMul,
+                    0, 0, 8 * sMul, 0.24, 1.5, fx.fruitHi, true, 10
+                  );
+                }
+              } else if (actT < 0.55) {
+                const u = (actT - 0.28) / 0.27;
+                const throwE = Math.sin(u * Math.PI * 0.5);
+                state.x = ax + dirX * (-2.0 + 7.0 * throwE) * sMul;
+                state.y = ay + dirY * (-2.0 + 7.0 * throwE) * sMul;
+                state.z = lerp(9.6, 7.2, u) * sMul;
+                state.pouchHasFruit = false;
+                for (const h of hands) {
+                  const [hx, hy] = localToWorldXY(state.x, state.y, state.yaw, h.side * lerp(9.2, 11.2, throwE) * sMul, lerp(8.0, 14.8, throwE) * sMul);
+                  h.x = hx; h.y = hy; h.z = lerp(13.5, 4.5, throwE) * sMul;
+                  h.yaw = state.yaw;
+                  h.planted = false;
+                }
+                if (!state._bFired && actT >= 0.32) {
+                  state._bFired = true;
+                  bodyBounce.impulse(-12 * sMul);
+                  if (vfx) {
+                    const z0 = state.z + 13.0 * sMul;
+                    const g = 68 * sMul;
+                    for (let i = 0; i < 16; i++) {
+                      const flightT = 0.25 + (i % 4) * 0.028;
+                      const spread = ((i % 5) - 2) * 2.4 * sMul;
+                      const sx0 = state.x + dirX * 8 * sMul + sideX * spread * 0.35;
+                      const sy0 = state.y + dirY * 8 * sMul + sideY * spread * 0.35;
+                      const ttx = tx + sideX * spread;
+                      const tty = ty + sideY * spread;
+                      const vxP = (ttx - sx0) / flightT;
+                      const vyP = (tty - sy0) / flightT;
+                      const vzP = (tz - z0 + 0.5 * g * flightT * flightT) / flightT;
+                      const col = i % 4 === 0 ? '#ffe36e' : (i % 3 === 0 ? fx.fruitHi : fx.fruit);
+                      vfx.spawnParticle(sx0, sy0, z0, vxP, vyP, vzP, flightT + 0.08, i % 2 === 0 ? 2.2 : 1.75, col, i % 3 === 0, g);
+                    }
+                  }
+                }
+              } else {
+                const u = clamp((actT - 0.55) / 0.35, 0, 1);
+                const ret = 1 - smoothstep(0, 1, u);
+                state.x = ax + dirX * 5.0 * ret * sMul;
+                state.y = ay + dirY * 5.0 * ret * sMul;
+                state.z = 7.4 * sMul;
+                for (const h of hands) {
+                  const [hx, hy] = localToWorldXY(state.x, state.y, state.yaw, h.side * 10.6 * sMul, lerp(9.2, 14.8, ret) * sMul);
+                  h.x = hx; h.y = hy; h.z = 4.5 * ret * sMul;
+                  h.yaw = state.yaw;
+                  h.planted = ret < 0.2;
+                }
+                if (!state._bFired2 && actT >= 0.58) {
+                  state._bFired2 = true;
+                  if (vfx) {
+                    // 命中主角处巨大红果爆浆 + 湿渍果浆印 + 双环震波
+                    vfx.addDecal({
+                      kind: 'wet', x: tx, y: ty, yaw: aimYaw,
+                      rx: 10.5 * sMul, ry: 9.0 * sMul, life: 2.4, alpha: 0.72,
+                      color: '#8f141e', hiColor: '#ff7a6b', darkColor: '#4d0810'
+                    });
+                    vfx.addRipple(tx, ty, 3 * sMul, 24 * sMul, 0.54, 2.2);
+                    vfx.addRipple(tx, ty, 2 * sMul, 15 * sMul, 0.36, 1.6);
+                    for (let i = 0; i < 18; i++) {
+                      const a = (i / 18) * TAU + Math.random() * 0.2;
+                      const spd = (14 + Math.random() * 20) * sMul;
+                      const col = i % 4 === 0 ? '#ffe36e' : (i % 2 === 0 ? fx.fruitHi : fx.fruit);
+                      vfx.spawnParticle(
+                        tx, ty, tz + 3 * sMul,
+                        Math.cos(a) * spd, Math.sin(a) * spd, (12 + Math.random() * 14) * sMul,
+                        0.42 + Math.random() * 0.18, 1.9, col, i % 3 === 0, 48
+                      );
+                    }
+                  }
+                }
+              }
+            } else if (action === 'battle_special') {
+              // 集色威压 (0.85s)：双臂严格留在合法 IK 环内强力捶胸三连震，全场巨幅冲击波 + 漫天落叶
+              const p = clamp(actT / 0.85, 0, 1);
+              const env = Math.sin(p * Math.PI);
+              const beat = Math.sin(actT * 24.0);
+              state.x = ax;
+              state.y = ay;
+              state.z = (7.4 + env * 2.4 + Math.abs(beat) * 0.8) * sMul;
+              state.yaw = wrapAngle(aimYaw + beat * 0.14 * env);
+              for (const h of hands) {
+                const pound = Math.max(0, h.side * beat);
+                // 保持腕距肩 >= 10.0 格，在胸前有力扣击且 0 穿躯干
+                const [hx, hy] = localToWorldXY(state.x, state.y, state.yaw, h.side * lerp(10.8, 8.4, pound * env) * sMul, lerp(9.2, 11.4, pound * env) * sMul);
+                h.x = hx; h.y = hy;
+                h.z = (7.2 + pound * 5.2) * env * sMul;
+                h.yaw = wrapAngle(state.yaw - h.side * 0.45 * env);
+                h.planted = false;
+              }
+              if (!state._bFired && actT >= 0.18) {
+                state._bFired = true;
+                bodyBounce.impulse(-14 * sMul);
+                if (vfx) {
+                  vfx.addRipple(ax, ay, 6 * sMul, 46 * sMul, 0.66, 2.4);
+                  for (let i = 0; i < 16; i++) {
+                    const a = (i / 16) * TAU;
+                    const spd = (24 + Math.random() * 20) * sMul;
+                    vfx.spawnParticle(ax, ay, 16 * sMul, Math.cos(a) * spd, Math.sin(a) * spd, (10 + Math.random() * 12) * sMul, 0.68, 2.0, i % 2 === 0 ? '#f59b3d' : fx.leaf, i % 2 === 0, 22);
+                  }
+                }
+              }
+              if (!state._bFired2 && actT >= 0.42) {
+                state._bFired2 = true;
+                bodyBounce.impulse(-15 * sMul);
+                if (vfx) {
+                  vfx.addRipple(ax, ay, 8 * sMul, 54 * sMul, 0.64, 2.4);
+                  vfx.addRipple(tx, ty, 3 * sMul, 24 * sMul, 0.50, 2.0);
+                  for (let i = 0; i < 16; i++) {
+                    const a = (i / 16) * TAU + 0.15;
+                    const spd = (18 + Math.random() * 18) * sMul;
+                    vfx.spawnParticle(tx + (Math.random() - 0.5) * 20 * sMul, ty + (Math.random() - 0.5) * 20 * sMul, 26 * sMul,
+                      Math.cos(a) * spd * 0.5, Math.sin(a) * spd * 0.5, -14 * sMul, 0.62, 1.9, i % 3 === 0 ? '#ffe5a8' : fx.leaf, i % 3 === 0, 12);
+                  }
+                }
+              }
+              if (!state._bFired3 && actT >= 0.62) {
+                state._bFired3 = true;
+                bodyBounce.impulse(-12 * sMul);
+                if (vfx) vfx.addRipple(ax, ay, 6 * sMul, 42 * sMul, 0.50, 2.0);
+              }
+            } else if (action === 'battle_stagger') {
+              const p = clamp(actT / 0.85, 0, 1);
+              const decay = 1 - p;
+              const heave = Math.sin(actT * 28) * 1.4 * decay * sMul;
+              state.x = ax - dirX * 3.2 * Math.sin(p * Math.PI) * sMul + sideX * heave;
+              state.y = ay - dirY * 3.2 * Math.sin(p * Math.PI) * sMul + sideY * heave;
+              state.z = lerp(7.4, 4.2, Math.sin(p * Math.PI)) * sMul;
+              state.yaw = wrapAngle(aimYaw + Math.sin(actT * 20) * 0.22 * decay);
+              for (const h of hands) {
+                const [hx, hy] = localToWorldXY(state.x, state.y, state.yaw, h.side * 12.2 * sMul, 9.6 * sMul);
+                h.x = hx; h.y = hy; h.z = 0; h.yaw = state.yaw; h.planted = true;
+              }
+              if (!state._bFired) {
+                state._bFired = true;
+                bodyBounce.impulse(-16 * sMul);
+                if (vfx) {
+                  vfx.addRipple(ax, ay, 5 * sMul, 22 * sMul, 0.58, 1.8);
+                  for (let i = 0; i < 14; i++) {
+                    const a = (i / 14) * TAU;
+                    const spd = (12 + Math.random() * 14) * sMul;
+                    vfx.spawnParticle(ax, ay, 10 * sMul, Math.cos(a) * spd, Math.sin(a) * spd, (10 + Math.random() * 12) * sMul, 0.48, 1.7, i % 2 === 0 ? '#b8f4ff' : '#ffffff', true, 42);
+                  }
+                }
+              }
+            } else {
+              // battle_hurt (0.35s)
+              const p = clamp(actT / 0.35, 0, 1);
+              const env = Math.sin(p * Math.PI);
+              const vib = Math.sin(actT * 58) * 1.3 * (1 - p) * sMul;
+              state.x = ax - dirX * 4.2 * env * sMul + sideX * vib;
+              state.y = ay - dirY * 4.2 * env * sMul + sideY * vib;
+              state.z = (7.4 - 1.2 * env) * sMul;
+              state.yaw = wrapAngle(aimYaw + Math.sin(actT * 46) * 0.14 * (1 - p));
+              for (const h of hands) {
+                const [hx, hy] = localToWorldXY(state.x, state.y, state.yaw, h.side * 10.6 * sMul, 9.2 * sMul);
+                h.x = hx; h.y = hy; h.z = 0; h.yaw = state.yaw; h.planted = true;
+              }
+              if (!state._bFired) {
+                state._bFired = true;
+                bodyBounce.impulse(-10 * sMul);
+              }
+            }
+
+            eyeLookSpring.update(dt, 0, 56 * sp, clamp(6.4 * dScale, 3.0, 10.0));
+            bodyBounce.update(dt, 0, 130 * sp, clamp(8.2 * dScale, 3.5, 13.0));
+            pouchRoll.update(dt, 0, 75 * sp, 7.0);
+            treeShakeX.update(dt, 0, 140 * sp, clamp(6.2 * dScale, 3.0, 10.5));
+            treeShakeY.update(dt, 0, 140 * sp, clamp(6.2 * dScale, 3.0, 10.5));
+            treeCanopyLagX.update(dt, 0, 75 * sp, clamp(4.6 * dScale, 2.2, 8.5));
+            treeCanopyLagY.update(dt, 0, 75 * sp, clamp(4.6 * dScale, 2.2, 8.5));
+            const contacts = [];
+            for (const h of hands) if (h.z < 6.0 * sMul) contacts.push({ x: h.x, y: h.y, z: h.z, r: 4.0 * sMul });
+            contacts.push({ x: state.treeX, y: state.treeY, z: 0, r: 6.2 * sMul });
+            instance.footContacts = contacts;
+            sockets.setLocal('pouchTop', state.x, state.y, state.z, state.yaw, 0, 0.5, 10.5, sMul);
+            return;
+          }
+          state._bAct = '';
 
           if (action !== state.lastAction) {
             state.lastAction = action;

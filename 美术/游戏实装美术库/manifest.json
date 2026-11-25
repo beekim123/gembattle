@@ -1,0 +1,59 @@
+{
+  "name": "code00-game-art-library",
+  "version": "1.0.0",
+  "biome": "落果密林",
+  "sourceWorkshop": "../像素堆叠生物工坊",
+  "totalCount": 36,
+  "groups": {
+    "core": [
+      { "path": "core/math.js", "name": "数学内核" },
+      { "path": "core/voxel.js", "name": "体素建模与着色内核" },
+      { "path": "core/solvers.js", "name": "链式/IK/弹簧求解内核" },
+      { "path": "core/behaviors.js", "name": "生态行为积木内核" },
+      { "path": "core/renderer.js", "name": "图集烘焙与渲染内核" },
+      { "path": "core/registry.js", "name": "资产登记内核" }
+    ],
+    "habitats": [
+      { "path": "scenes/habitats.js", "name": "地貌色板与生境地台" }
+    ],
+    "npc": [
+      { "id": "npc_mage", "path": "npc/npc_mage.js", "name": "宝石卡牌法师（主角）" },
+      { "id": "npc_gear_smith", "path": "npc/npc_gear_smith.js", "name": "林地行商铁匠" }
+    ],
+    "creatures": [
+      { "id": "slime_jelly", "path": "creatures/slime.js", "name": "水滴软泥", "hasSpecial": false },
+      { "id": "earth2_barometz", "path": "creatures/earth2_barometz.js", "name": "草茎绵羊", "hasSpecial": false },
+      { "id": "goblin_scout", "path": "creatures/goblin.js", "name": "拾荒地精", "hasSpecial": false },
+      { "id": "fairy_meadow", "path": "creatures/fairy.js", "name": "花甸灵精", "hasSpecial": true },
+      { "id": "earth6_long_arm", "path": "creatures/earth6_long_arm.js", "name": "摇果长臂猿", "hasSpecial": true },
+      { "id": "earth3_zheng", "path": "creatures/earth3_zheng.js", "name": "五尾赤豹", "hasSpecial": false },
+      { "id": "earth1_belly_maw", "path": "creatures/earth1_belly_maw.js", "name": "腹口懒兽", "hasSpecial": true },
+      { "id": "tree3_leshy", "path": "creatures/tree3_leshy.js", "name": "千丈古树精", "hasSpecial": true }
+    ],
+    "scenes": [
+      { "id": "scene_forest_tree", "path": "scenes/scene_forest_tree.js", "name": "林间落果古树" },
+      { "id": "scene_t09_fallen_fruit_log", "path": "scenes/scene_t09_fallen_fruit_log.js", "name": "苔藓倒木与赤果堆" },
+      { "id": "scene_t17_swamp_cypress", "path": "scenes/scene_t17_swamp_cypress.js", "name": "泥泽落羽杉" },
+      { "id": "scene_flora_cluster", "path": "scenes/scene_flora_cluster.js", "name": "花甸草花丛" },
+      { "id": "scene_t10_giant_bud", "path": "scenes/scene_t10_giant_bud.js", "name": "巨型花苞" },
+      { "id": "scene_t16_moss_obelisk", "path": "scenes/scene_t16_moss_obelisk.js", "name": "青苔古碑" },
+      { "id": "scene_t11_canopy_bough", "path": "scenes/scene_t11_canopy_bough.js", "name": "林冠巨枝" },
+      { "id": "scene_t11_epiphyte_nest", "path": "scenes/scene_t11_epiphyte_nest.js", "name": "附生树巢" },
+      { "id": "scene_campfire", "path": "scenes/scene_campfire.js", "name": "林间营火" },
+      { "id": "scene_rock_hollow", "path": "scenes/scene_rock_hollow.js", "name": "藏物石洞" },
+      { "id": "scene_crates_sign", "path": "scenes/scene_crates_sign.js", "name": "行商木箱与路牌" }
+    ],
+    "buildings": [
+      { "id": "building_ruin_arch", "path": "buildings/building_ruin_arch.js", "name": "遗迹石拱门" },
+      { "id": "building_camp_tent", "path": "buildings/building_camp_tent.js", "name": "行商营地帐篷" },
+      { "id": "building_stone_gate", "path": "buildings/building_stone_gate.js", "name": "林缘古石门" }
+    ],
+    "artPacks": [
+      { "id": "ui01_skin", "path": "art-packs/pack_ui_skin.js", "name": "UI-01 像素皮肤与通用控件" },
+      { "id": "ui02a_cards", "path": "art-packs/pack_cards.js", "name": "UI-02A 七色宝石与秘术卡牌" },
+      { "id": "ui02b_icons", "path": "art-packs/pack_icons.js", "name": "UI-02B 印记雕琢与战利品图标" },
+      { "id": "ui03_map", "path": "art-packs/pack_map_panels.js", "name": "UI-03 探索地图与非战斗装饰" },
+      { "id": "ui04_ground_vfx", "path": "art-packs/pack_ground_vfx.js", "name": "UI-04 旋转像素地面与3D特效" }
+    ]
+  }
+}

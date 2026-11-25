@@ -1,0 +1,329 @@
+{
+  "id": "boss_goblin_king",
+  "name": "哥布林王",
+  "category": "creature",
+  "status": "done",
+  "defaultHabitat": "forest",
+  "footRadius": 12.6,
+  "ecoWeight": 1.9,
+  "paletteCount": 39,
+  "duplicateColors": 0,
+  "glowKeys": [
+    "emissiveMid",
+    "emissiveHot",
+    "emissiveCore"
+  ],
+  "parts": [
+    {
+      "id": "torso",
+      "size": [
+        24,
+        20,
+        18
+      ],
+      "baseLift": 7.5,
+      "bias": 0.1,
+      "note": "宽厚大肚腩躯干 + 镶金红宝石腰扣 + 深包大腿根的皮革战裙"
+    },
+    {
+      "id": "cape",
+      "size": [
+        22,
+        14,
+        16
+      ],
+      "baseLift": 8.5,
+      "bias": -0.25,
+      "note": "镶金边赤红王者披风，局部坐标后挂零穿模"
+    },
+    {
+      "id": "lootSack",
+      "size": [
+        18,
+        16,
+        16
+      ],
+      "baseLift": 13.5,
+      "bias": -0.15,
+      "note": "满溢金锭与红绿蓝晶石的鼓胀大宝袋，二阶弹簧滞后颠簸"
+    },
+    {
+      "id": "head",
+      "size": [
+        18,
+        17,
+        15
+      ],
+      "baseLift": 21.0,
+      "bias": 0.4,
+      "note": "宽大狞笑头颅 + 鹰钩鼻 + 露白上翘双獠牙 + 0.6 俯视 0 遮挡锐利双邪眼"
+    },
+    {
+      "id": "crown",
+      "size": [
+        15,
+        15,
+        9
+      ],
+      "baseLift": 32.5,
+      "bias": 0.65,
+      "note": "常态微微歪戴的锯齿金冠，额前并排镶嵌红绿蓝三原色大宝石"
+    },
+    {
+      "id": "crownCharged",
+      "size": [
+        15,
+        15,
+        9
+      ],
+      "baseLift": 32.5,
+      "bias": 0.65,
+      "note": "蓄力脉动态金冠（仅三宝石与冠尖带少量 emissive 爆发核）"
+    },
+    {
+      "id": "crownAskew",
+      "size": [
+        15,
+        15,
+        9
+      ],
+      "baseLift": 32.5,
+      "bias": 0.65,
+      "note": "破盾硬直大歪态金冠（受击弹飞后扣歪在脑门）"
+    },
+    {
+      "id": "earL",
+      "size": [
+        10,
+        6,
+        7
+      ],
+      "baseLift": 26.5,
+      "bias": 0.45,
+      "note": "左超长带金环大尖耳，pivotToWorldXY 锁死耳根枢轴"
+    },
+    {
+      "id": "earR",
+      "size": [
+        10,
+        6,
+        7
+      ],
+      "baseLift": 26.5,
+      "bias": 0.45,
+      "note": "右超长带金环大尖耳，pivotToWorldXY 锁死耳根枢轴"
+    },
+    {
+      "id": "upperArm",
+      "size": [
+        8,
+        10,
+        8
+      ],
+      "baseLift": 19.0,
+      "bias": 0.3,
+      "note": "左右对称复用大臂 + 镶金皮护肩，连续 FK 驱动"
+    },
+    {
+      "id": "forearm",
+      "size": [
+        7,
+        10,
+        7
+      ],
+      "baseLift": 19.0,
+      "bias": 0.34,
+      "note": "左右对称复用小臂 + 铁钉护腕，相对大臂滞后随动"
+    },
+    {
+      "id": "mace",
+      "size": [
+        12,
+        24,
+        12
+      ],
+      "baseLift": 16.8,
+      "bias": 0.55,
+      "note": "常态黑铁镶金巨型狼牙重锤，右手腕枢轴锁死零脱节"
+    },
+    {
+      "id": "maceCharged",
+      "size": [
+        12,
+        24,
+        12
+      ],
+      "baseLift": 16.8,
+      "bias": 0.55,
+      "note": "蓄力脉冲态狼牙重锤（锤头含 emissive 裂纹火环）"
+    },
+    {
+      "id": "maceRaised",
+      "size": [
+        12,
+        14,
+        24
+      ],
+      "baseLift": 20.0,
+      "bias": 0.55,
+      "note": "高举过顶蓄力竖直态狼牙重锤（霸王重锤蓄力专用）"
+    },
+    {
+      "id": "leg",
+      "size": [
+        8,
+        9,
+        11
+      ],
+      "baseLift": 0.0,
+      "bias": -0.35,
+      "note": "左右复用粗壮短腿 + 铁头皮靴，顶部深嵌躯干战裙 >= 3 格防脱胯"
+    },
+    {
+      "id": "goldChunk",
+      "size": [
+        7,
+        7,
+        6
+      ],
+      "symDeg": 90,
+      "bias": 0.5,
+      "note": "技能 2 撒币乱砸复用立体金锭金币块（6 枚共享 1 份资产）"
+    },
+    {
+      "id": "warBanner",
+      "size": [
+        14,
+        6,
+        26
+      ],
+      "bias": 0.6,
+      "note": "技能 3 摇旗召众赤红锯齿部落战旗 + 白骨骷髅金冠纹"
+    },
+    {
+      "id": "minionGoblin",
+      "size": [
+        11,
+        11,
+        13
+      ],
+      "bias": 0.25,
+      "note": "技能 3 召出的迷你持棒哥布林喽啰（2 只共享 1 份资产）"
+    }
+  ],
+  "skins": [
+    {
+      "id": "forest_tyrant",
+      "name": "苔绿金冠",
+      "dot": "#5ca339",
+      "outline": "#12100d",
+      "theme": "密林暴君（苔绿肤 + 绛红披风 + 纯金黑铁）"
+    },
+    {
+      "id": "blood_warlord",
+      "name": "赤皮战酋",
+      "dot": "#9c4632",
+      "outline": "#1c0c0a",
+      "theme": "荒野狂酋（暗赤褐肤 + 焦褐披风 + 熔铜骨刺）"
+    },
+    {
+      "id": "frost_raider",
+      "name": "霜青雪酋",
+      "dot": "#548c9e",
+      "outline": "#0d1521",
+      "theme": "极地劫掠（冰青灰肤 + 深靛披风 + 银白寒铁）"
+    },
+    {
+      "id": "royal_obsidian",
+      "name": "玄铁黑酋",
+      "dot": "#3d4f46",
+      "outline": "#0c0b12",
+      "theme": "古迹霸主（墨灰绿肤 + 紫绛披风 + 赤金熔核黑铁）"
+    }
+  ],
+  "actions": [
+    {
+      "id": "patrol",
+      "name": "霸道巡营",
+      "loop": true,
+      "duration": null,
+      "combatRole": "常态重步巡场与待战走位，落地扬尘且大宝袋偶尔颠落金色碎粒"
+    },
+    {
+      "id": "idle",
+      "name": "叉腰狞笑",
+      "loop": true,
+      "duration": null,
+      "combatRole": "原地左手叉腰、右手掂锤与周期性挺肚大笑抖耳"
+    },
+    {
+      "id": "stagger",
+      "name": "破盾歪冠",
+      "loop": false,
+      "duration": 1.5,
+      "combatRole": "护盾被击破时触发：向后踉跄下沉 + 金冠弹飞扣歪 + 宝袋颠币 + 双耳耷拉发抖 + 末段左手扶正王冠"
+    },
+    {
+      "id": "skill_mace_smash",
+      "name": "霸王重锤",
+      "loop": false,
+      "duration": 2.4,
+      "combatRole": "重击扣主角 1 颗心（可被破盾打断或推迟）；0.0~0.85s 高举脉冲蓄力，0.85~1.45s 前跨 +5 格砸地裂纹与碎石爆发，1.45~2.4s 拔锤回位"
+    },
+    {
+      "id": "skill_gold_rain",
+      "name": "撒币乱砸",
+      "loop": false,
+      "duration": 2.8,
+      "combatRole": "扣半颗心并塞入 1 张沉重假币废牌（暂夺少量金币，击杀双倍返还）；0.0~0.6s 叉腰大笑抓宝，0.6~2.1s 抛射 6 枚金块二次弹跳溅屑，2.1~2.8s 拍肚归位"
+    },
+    {
+      "id": "skill_rally_horde",
+      "name": "摇旗召众",
+      "loop": false,
+      "duration": 3.0,
+      "combatRole": "召唤 2 只低血哥布林喽啰并给 Boss 补 2 格色盾；0.0~0.9s 左手狂摇战旗扩散 2 道声波环，0.9~2.4s 召出 2 只迷你喽啰绕场跳步冲锋，2.4~3.0s 收旗退场"
+    },
+    {
+      "id": "skill_greed_charge",
+      "name": "贪财蛮冲",
+      "loop": false,
+      "duration": 3.2,
+      "combatRole": "蓄力 2 回合终极大招（红+蓝双色护盾 5+5 格，破盾即触发 stagger）；0.0~1.05s 低身刨地蓄势，1.05~2.15s 前冲 +18 格沿途犁地掉币并回旋横扫，2.15~3.2s 挺肚走回"
+    }
+  ],
+  "sockets": [
+    {
+      "id": "torso",
+      "desc": "躯干中心挂点，随步态晃动与起伏实时更新"
+    },
+    {
+      "id": "head",
+      "desc": "头颅中心挂点，含独立转头弹簧角"
+    },
+    {
+      "id": "crown",
+      "desc": "头顶金冠挂点，供三宝石脉动与破盾弹冠定位"
+    },
+    {
+      "id": "lootSack",
+      "desc": "背后大宝袋袋口挂点，供巡营颠币与蛮冲沿途掉币粒子发射"
+    },
+    {
+      "id": "handL",
+      "desc": "左手腕挂点，供摇旗召众战旗与扶冠动作挂载"
+    },
+    {
+      "id": "handR",
+      "desc": "右手腕挂点，供巨型狼牙重锤枢轴锁死"
+    },
+    {
+      "id": "maceHead",
+      "desc": "狼牙重锤锤头中心挂点，供蓄力火屑与砸地冲击点定位"
+    },
+    {
+      "id": "bannerTop",
+      "desc": "战旗顶端挂点，供摇旗召众声波环特效定位"
+    }
+  ]
+}

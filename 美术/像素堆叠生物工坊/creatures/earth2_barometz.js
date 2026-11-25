@@ -400,9 +400,12 @@ window.PixelWorkshop.Creatures = window.PixelWorkshop.Creatures || [];
     spec: SPEC,
     skins: SKINS,
     actions: [
-      { id: 'patrol', name: '绕茎啃草循环', loop: true, status: 'done' },
-      { id: 'idle',   name: '原地抬头摇耳', loop: true, status: 'done' },
-      { id: 'graze',  name: '专注低头啃草', loop: true, status: 'done' }
+      { id: 'patrol',         name: '绕茎啃草循环', loop: true,  status: 'done' },
+      { id: 'idle',           name: '原地抬头摇耳', loop: true,  status: 'done' },
+      { id: 'graze',          name: '专注低头啃草', loop: true,  status: 'done' },
+      { id: 'battle_attack',  name: '顶角冲撞',     loop: false, duration: 0.85, status: 'done' },
+      { id: 'battle_stagger', name: '破盾硬直',     loop: false, duration: 0.85, status: 'done' },
+      { id: 'battle_hurt',    name: '受击',         loop: false, duration: 0.35, status: 'done' }
     ],
     blocks: [
       '宽大亮翠/暖黄双态扎根叶盘',
@@ -600,8 +603,164 @@ window.PixelWorkshop.Creatures = window.PixelWorkshop.Creatures || [];
           const dScale = 1 / Math.sqrt(Math.max(0.35, sp));
 
           const action = (eco && eco.action) || (eco && eco.patrol === false ? 'idle' : 'patrol');
+          const isBattle = action === 'battle_attack' || action === 'battle_stagger' || action === 'battle_hurt';
           const maxR = (eco && eco.maxRadius) || 46;
           const orbitLimit = Math.min(ORBIT_R * sMul, maxR * 0.72);
+
+          if (isBattle) {
+            const actT = (eco && eco.actionTime != null) ? eco.actionTime : 0;
+            const isNewAct = action !== state._bAct || actT < (state._bLastT || 0) - 0.04;
+            if (isNewAct) {
+              state._bAct = action;
+              state._bFired = false;
+              state._bHitFx = false;
+              state._bAx = (eco && eco.homeX != null) ? eco.homeX : state.x;
+              state._bAy = (eco && eco.homeY != null) ? eco.homeY : state.y;
+              state._bYaw = (eco && eco.homeYaw != null) ? eco.homeYaw : state.yaw;
+            }
+            state._bLastT = actT;
+            const ax = (eco && eco.homeX != null) ? eco.homeX : state._bAx;
+            const ay = (eco && eco.homeY != null) ? eco.homeY : state._bAy;
+            state.x = ax; state.y = ay; state.z = 0; state.vx = 0; state.vy = 0;
+            const hasTgt = eco && Array.isArray(eco.targetPos) && eco.targetPos.length >= 2 && Number.isFinite(eco.targetPos[0]) && Number.isFinite(eco.targetPos[1]);
+            const tx = hasTgt ? eco.targetPos[0] : ax - Math.sin(state._bYaw) * 46 * sMul;
+            const ty = hasTgt ? eco.targetPos[1] : ay + Math.cos(state._bYaw) * 46 * sMul;
+            const tz = (hasTgt && Number.isFinite(eco.targetPos[2])) ? eco.targetPos[2] : 7 * sMul;
+            const dx = tx - ax, dy = ty - ay;
+            const dist = Math.hypot(dx, dy) || 1;
+            const dirX = dx / dist, dirY = dy / dist;
+            const sideX = -dirY, sideY = dirX;
+            const aimYaw = Math.atan2(-dx, dy);
+            const fx = curSkin.fx || SKINS[0].fx;
+
+            // 防穿模：小羊距叶盘中心严格保持在 [11.2, 17.6] 格，绝不扎进叶盘也绝不拉断 5 节绿茎
+            const restDist = 13.0 * sMul;
+            state.lambYaw = aimYaw;
+
+            if (action === 'battle_attack') {
+              state.isWilt = false;
+              if (actT < 0.24) {
+                const u = smoothstep(0, 1, actT / 0.24);
+                state.headPose = 'graze';
+                state.stage = 'walk';
+                state.gaitPhase = (state.gaitPhase + dt * 5.8) % 1;
+                const rNow = lerp(restDist, 11.2 * sMul, u);
+                state.lambX = ax + dirX * rNow;
+                state.lambY = ay + dirY * rNow;
+                state.lambZ = (4.4 - 0.6 * u) * sMul;
+              } else if (actT < 0.52) {
+                const u = (actT - 0.24) / 0.28;
+                const dash = Math.sin(u * Math.PI * 0.5);
+                state.headPose = 'graze';
+                state.stage = 'walk';
+                state.gaitPhase = (state.gaitPhase + dt * 10.0) % 1;
+                const rNow = lerp(11.2 * sMul, 17.6 * sMul, dash);
+                state.lambX = ax + dirX * rNow;
+                state.lambY = ay + dirY * rNow;
+                state.lambZ = (4.0 + Math.sin(u * Math.PI) * 2.8) * sMul;
+                if (!state._bFired && actT >= 0.30) {
+                  state._bFired = true;
+                  chewBobSpring.impulse(18 * sp);
+                  if (vfx) {
+                    // 弧形旋风绒毛冲击波直劈主角
+                    const z0 = state.lambZ + 6.5 * sMul;
+                    for (let i = 0; i < 18; i++) {
+                      const arcFrac = (i / 17) - 0.5;
+                      const flightT = 0.22 + Math.abs(arcFrac) * 0.08;
+                      const lat0 = arcFrac * 10.0 * sMul;
+                      const sx0 = state.lambX + dirX * 5.5 * sMul + sideX * lat0 * 0.5;
+                      const sy0 = state.lambY + dirY * 5.5 * sMul + sideY * lat0 * 0.5;
+                      const ttx = tx + sideX * lat0 * 1.1;
+                      const tty = ty + sideY * lat0 * 1.1;
+                      const col = i % 3 === 0 ? '#ffffff' : (i % 2 === 0 ? fx.grass : '#ffc2d4');
+                      vfx.spawnParticle(sx0, sy0, z0 + (1 - Math.abs(arcFrac)) * 2.5 * sMul,
+                        (ttx - sx0) / flightT, (tty - sy0) / flightT, (tz - z0) / flightT,
+                        flightT + 0.08, i % 3 === 0 ? 2.15 : 1.75, col, i % 3 === 0, 8);
+                    }
+                  }
+                }
+              } else {
+                const u = clamp((actT - 0.52) / 0.33, 0, 1);
+                const ret = 1 - smoothstep(0, 1, u);
+                state.headPose = 'up';
+                state.stage = 'walk';
+                state.gaitPhase = (state.gaitPhase + dt * 6.0) % 1;
+                const rNow = lerp(restDist, 17.6 * sMul, ret);
+                state.lambX = ax + dirX * rNow;
+                state.lambY = ay + dirY * rNow;
+                state.lambZ = (4.4 + Math.sin(u * Math.PI) * 1.1) * sMul;
+              }
+              if (!state._bHitFx && actT >= 0.48) {
+                state._bHitFx = true;
+                if (vfx) {
+                  vfx.addRipple(tx, ty, 3 * sMul, 23 * sMul, 0.48, 2.0);
+                  for (let i = 0; i < 16; i++) {
+                    const a = (i / 16) * TAU;
+                    const spd = (13 + Math.random() * 16) * sMul;
+                    const col = i % 3 === 0 ? '#ffffff' : (i % 2 === 0 ? fx.puff : fx.grass);
+                    vfx.spawnParticle(tx, ty, tz + 2 * sMul, Math.cos(a) * spd, Math.sin(a) * spd, (10 + Math.random() * 14) * sMul, 0.44, 1.8, col, i % 4 === 0, 32);
+                  }
+                }
+              }
+            } else if (action === 'battle_stagger') {
+              const p = clamp(actT / 0.85, 0, 1);
+              const decay = 1 - p;
+              const sway = Math.sin(actT * 34) * 2.2 * decay * sMul;
+              state.isWilt = p < 0.82;
+              state.headPose = 'graze';
+              state.stage = 'wilt';
+              const rNow = restDist - 1.5 * Math.sin(p * Math.PI) * sMul;
+              state.lambX = ax + dirX * rNow + sideX * sway;
+              state.lambY = ay + dirY * rNow + sideY * sway;
+              state.lambZ = lerp(4.4, 2.4, Math.sin(p * Math.PI)) * sMul;
+              state.lambYaw = wrapAngle(aimYaw + Math.sin(actT * 24) * 0.30 * decay);
+              if (!state._bFired) {
+                state._bFired = true;
+                earTwitchSpring.impulse(18 * sp);
+                if (vfx) {
+                  vfx.addRipple(state.lambX, state.lambY, 4 * sMul, 20 * sMul, 0.56, 1.8);
+                  for (let i = 0; i < 14; i++) {
+                    const a = (i / 14) * TAU;
+                    const spd = (11 + Math.random() * 14) * sMul;
+                    const col = i < 5 ? fx.grass : (i % 2 === 0 ? '#b8f4ff' : '#ffffff');
+                    vfx.spawnParticle(state.lambX, state.lambY, 7 * sMul, Math.cos(a) * spd, Math.sin(a) * spd, (9 + Math.random() * 11) * sMul, 0.48, 1.65, col, i >= 5 && i % 2 === 0, 38);
+                  }
+                }
+              }
+            } else {
+              // battle_hurt (0.35s)
+              const p = clamp(actT / 0.35, 0, 1);
+              const env = Math.sin(p * Math.PI);
+              const vib = Math.sin(actT * 58) * 1.4 * (1 - p) * sMul;
+              state.isWilt = false;
+              state.headPose = 'up';
+              state.stage = 'graze';
+              const rNow = restDist - 1.8 * env * sMul;
+              state.lambX = ax + dirX * rNow + sideX * vib;
+              state.lambY = ay + dirY * rNow + sideY * vib;
+              state.lambZ = (4.4 - 0.6 * env) * sMul;
+              state.lambYaw = wrapAngle(aimYaw + Math.sin(actT * 46) * 0.16 * (1 - p));
+              if (!state._bFired) {
+                state._bFired = true;
+                earTwitchSpring.impulse(-16 * sp);
+                if (vfx) emitGrazeBits(vfx, state.lambX, state.lambY, sMul);
+              }
+            }
+
+            tailWagSpring.update(dt, Math.sin(time * 8.0) * 0.35, 95 * sp, clamp(5.4 * dScale, 2.8, 9.5));
+            earTwitchSpring.update(dt, state.isWilt ? -0.4 : 0.05, 115 * sp, clamp(6.0 * dScale, 3.0, 10.0));
+            headYawSpring.update(dt, 0, 90 * sp, clamp(6.8 * dScale, 3.2, 10.5));
+            chewBobSpring.update(dt, 0, 125 * sp, clamp(7.2 * dScale, 3.5, 11.0));
+            stemSwaySpring.update(dt, 0, 48 * sp, clamp(4.8 * dScale, 2.2, 7.5));
+            updateStemNodes(time, sMul);
+            sockets.setWorld('lambCenter', state.lambX, state.lambY, state.lambZ + 6.0 * sMul, state.lambYaw);
+            instance.footContacts = [
+              { x: state.x, y: state.y, z: 0, r: 9.5 * sMul },
+              { x: state.lambX, y: state.lambY, z: 0, r: 6.2 * sMul }
+            ];
+            return;
+          }
+          state._bAct = '';
 
           // 1. 叶盘永久扎根原地
           Propulsion.rooted(state, dt, time * 0.5, params, {

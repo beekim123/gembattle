@@ -1,7 +1,7 @@
 # 外包项目合集（由 打包发给网页AI.command 自动生成）
-# 包含文件清单：
+# 目标交付压缩包：bundle_boss_weaver_spider.zip
+# 包含文件清单（开工提示词.md 压轴在最末尾）：
 #   - README.md
-#   - 开工提示词.md
 #   - 设计文档-织茧棘蛛母.md
 #   - bundle/README.md
 #   - core/behaviors.js
@@ -16,6 +16,7 @@
 #   - references/slime.js
 #   - references/骨骼化改造交接与经验.md
 #   - verify.mjs
+#   - 开工提示词.md
 
 
 ===== FILE: ./README.md =====
@@ -62,56 +63,8 @@
 1. **发出去（零手动命令）**：
    - 网页端 AI 通常无法自动解压 `.zip`，本包已配好 **`打包发给网页AI.command`**（Mac 双击自动把所有文档、内核与参考合并成单个 **`all_in_one.txt`**，且已预先生成好）；
    - 直接把 **`all_in_one.txt`** 拖进网页端 AI 对话框，再粘贴 `开工提示词.md` 的提示词即可开工！
-2. **收回来（硬性交付规范）**：`开工提示词.md` 已写明**禁止在聊天框里贴源码、必须按 `bundle/` 目录结构直接打包成可下载的 `bundle.zip` 交付**（发消息时也可顺手补一句：「按文档要求完成开发，不要在聊天里贴源码，直接打包成可下载的 `bundle.zip` 发我」）。把收到的压缩包放进 `交回/` 解压，覆盖到本目录的 `bundle/` 即可。
+2. **收回来（硬性交付规范）**：`开工提示词.md` 已写明**禁止在聊天框里贴源码、必须按 `bundle/` 目录结构直接打包成可下载的 `bundle_boss_weaver_spider.zip` 交付**（发消息时也可顺手补一句：「按文档要求完成开发，不要在聊天里贴源码，直接打包成可下载的 `bundle_boss_weaver_spider.zip` 发我」）。把收到的压缩包放进 `交回/` 解压，覆盖到本目录的 `bundle/` 即可。
 3. **一键验收**：直接双击 **`预览验收.command`** —— 自动先跑 `node verify.mjs` 查格式/防糊/零 `NaN`，再自动起本地服务在浏览器打开 `preview.html`，360° 旋转看清晰度并一键点放全部 4 个大 Boss 技能。确认完美后，直接把 `bundle/boss_weaver_spider.js` 拷进主工坊 `creatures/` 即可零改动合入！
-
-
-===== FILE: ./开工提示词.md =====
-# 开工提示词（给无上下文独立网页端 AI · 直接整段复制）
-
-> **发包前**：先把整个 `分包-蜘蛛大Boss/` 文件夹（已内置 `core/`、`references/`、`preview.html`、`verify.mjs` 与设计文档）打包上传或挂载给网页端 AI，再把下面整段提示词发给它。
-
-```text
-你正在接手一个独立、自包含的像素堆叠（Sprite Stacking）美术外包任务。你只需要阅读本外包目录内的文件，严禁修改 ./core/ 和 ./references/ 中的任何文件，也不要虚构外部依赖。
-
-请先依次阅读本目录内的以下文件，彻底对齐像素堆叠管线与代码格式：
-1. ./README.md（包内结构、交付规范与验收方式）
-2. ./设计文档-织茧棘蛛母.md（外观、三维坐标预算、8 足运动学、4 套换色、4 大技能分段时间轴）
-3. ./references/骨骼化改造交接与经验.md（像素清晰度、glowKeys 隔离与零穿模铁律）
-4. ./core/voxel.js、./core/solvers.js、./core/registry.js、./core/renderer.js（真实渲染内核接口）
-5. ./references/sea2_qalupalik.js 与 ./references/slime.js（与现有主工坊 100% 对齐的真实标杆代码写法）
-
-【交付目标】
-请将全部产出写入 ./bundle/ 目录，最终交回一个完整的 bundle/ 包（包含以下 3 个文件）：
-
-1. ./bundle/boss_weaver_spider.js（核心资产脚本）：
-   - 必须完全照 ./references/sea2_qalupalik.js 与 slime.js 的格式编写，通过 window.PixelWorkshop 与 PW.Creatures.push(Def) 登记，id 严格为 'boss_weaver_spider'；
-   - 必须使用 ./core/voxel.js 的 createPaletteSpec + VoxelModel + applyArtShading + recolorAsset 构建体素部件，严禁自己绕开内核手画 2D 矢量图；
-   - 按设计文档实现大 Boss 三段轮廓：玄青头胸甲 + 0.6 俯视 0 遮挡 6 颗赤红复眼 + 偏心枢轴锁死双毒螯 + 双须肢 + 高耸猩红棘纹巨型腹囊 + 尾端三瓣纺丝器 + 8 条高拱棘刺长腿（3 段硬壳连杆，8 条腿共用同一套腿部体素资产，严禁建 8 份重复模型）；
-   - 在脚本内部实现 8 足四相交替步态（A 组 L1/R2/L3/R4，B 组 R1/L2/R3/R4，占空比 β=0.56，调用 PW.Solvers.solveIK2D 解高拱膝节，支撑脚钉地零滑冰、相邻落点不打架）；
-   - 实现 4 套零重建模一键换色 SKINS（玄甲赤纹 / 苔绿毒棘 / 霜白冰螯 / 熔岩赤甲），单盒严格 <= 40 格、总色数 <= 48、0 重色、eyeGlint 绝不进 glowKeys、常态严禁小数 scaleX/scaleY 拉伸；
-   - 在 Def.actions 中登记并完整实现全部 7 个连续动作（由 eco.action 与 eco.actionTime 驱动）：
-     * patrol（八足巡游，loop: true）
-     * idle（原地警戒，loop: true）
-     * stagger（破盾硬直，duration: 1.5，loop: false）
-     * skill_web_snare（织网缚阵，duration: 2.6：压低蓄丝 -> 喷出 5 道白丝粒子束 + vfx.addDecal 铺蛛网贴地痕迹 -> 前足拍地定网）
-     * skill_fang_lunge（毒螯扑杀，duration: 2.2：后缩仰身扬前腿 -> 前扑 + 双螯交剪斩击粒子 -> 碎步退回）
-     * skill_brood_burst（裂茧群涌，duration: 3.0：腹囊剧颤 -> 甩出 2 枚立体 eggSac 丝茧球抛物线落地炸开 -> 3 只复用 spiderling 小蛛四散冲锋巡游）
-     * skill_venom_barrage（棘背毒雨，duration: 3.4：8 腿扎地三连亮脉冲蓄力 -> 腹背连射 8 枚立体抛物线 venomOrb 毒囊弹 -> 砸地爆裂毒雾与腐蚀痕迹）
-   - 严格守住所有中文命名与字符串零禁用字（严禁出现 灯、烬、影、夜、魂、噬、幽、渊、星、光 及 守×者、×之×）。
-
-2. ./bundle/manifest.json：
-   - 列出 id、名称、部件尺寸表、4 套皮肤、7 个 actions 的时长与对应战斗机制说明、以及技能特效挂点说明。
-
-3. ./bundle/交付说明.md：
-   - 记录自检与性能数据。
-
-【强制自检与交付形式（硬性要求）】
-- 禁止在聊天正文中直接贴出完整代码；
-- 必须将全部交付文件按 bundle/xxx 的目录结构（bundle/boss_weaver_spider.js、bundle/manifest.json、bundle/交付说明.md），直接打包成一个可下载的 bundle.zip 文件交付（方便直接解压覆盖）；
-- 若当前环境支持 Node.js，打包前必须运行 node verify.mjs 并全部通过（0 报错），且通过 ./preview.html 验证 360° 视角、4 套换色与 7 个动作/技能演出（0 控制台报错、无穿模、无边界截断）；
-- 若当前环境没有 Node.js 无法运行 verify.mjs，请在打包前自行写脚本完成静态红线检查（禁用字正则、glowKeys 隔离、色表上限与去重、括号/语法校验），全部通过后再输出 bundle.zip。
-```
 
 
 ===== FILE: ./设计文档-织茧棘蛛母.md =====
@@ -6888,4 +6841,53 @@ if (errors.length) {
   process.exit(1);
 }
 console.log('\n✅ 全部硬性校验通过！可以打开 preview.html 做 360° 视觉终检并打包交回 bundle/。');
+
+
+===== FILE: ./开工提示词.md =====
+# 开工提示词（给无上下文独立网页端 AI · 直接整段复制）
+
+> **发包方式**：把本目录生成的 **`all_in_one.txt`** 拖进网页端 AI 对话框，统一发这句短口令：
+> `严格按附件末尾的 开工提示词.md 开发。务必用单个脚本一次性生成 3 个文件、自检并打包出可下载的 bundle_boss_weaver_spider.zip；正文严禁贴任何代码、JSON 或文档内容，若未打包完成直接停下汇报进度。`
+
+```text
+你正在接手一个独立、自包含的像素堆叠（Sprite Stacking）美术外包任务。你只需要阅读本外包目录内的文件，严禁修改 ./core/ 和 ./references/ 中的任何文件，也不要虚构外部依赖。
+
+请先依次阅读本目录内的以下文件，彻底对齐像素堆叠管线与代码格式：
+1. ./README.md（包内结构、交付规范与验收方式）
+2. ./设计文档-织茧棘蛛母.md（外观、三维坐标预算、8 足运动学、4 套换色、4 大技能分段时间轴）
+3. ./references/骨骼化改造交接与经验.md（像素清晰度、glowKeys 隔离与零穿模铁律）
+4. ./core/voxel.js、./core/solvers.js、./core/registry.js、./core/renderer.js（真实渲染内核接口）
+5. ./references/sea2_qalupalik.js 与 ./references/slime.js（与现有主工坊 100% 对齐的真实标杆代码写法）
+
+【交付目标】
+请将全部产出写入 ./bundle/ 目录，最终交回一个完整的 bundle/ 包（包含以下 3 个文件）：
+
+1. ./bundle/boss_weaver_spider.js（核心资产脚本）：
+   - 必须完全照 ./references/sea2_qalupalik.js 与 slime.js 的格式编写，通过 window.PixelWorkshop 与 PW.Creatures.push(Def) 登记，id 严格为 'boss_weaver_spider'；
+   - 必须使用 ./core/voxel.js 的 createPaletteSpec + VoxelModel + applyArtShading + recolorAsset 构建体素部件，严禁自己绕开内核手画 2D 矢量图；
+   - 按设计文档实现大 Boss 三段轮廓：玄青头胸甲 + 0.6 俯视 0 遮挡 6 颗赤红复眼 + 偏心枢轴锁死双毒螯 + 双须肢 + 高耸猩红棘纹巨型腹囊 + 尾端三瓣纺丝器 + 8 条高拱棘刺长腿（3 段硬壳连杆，8 条腿共用同一套腿部体素资产，严禁建 8 份重复模型）；
+   - 在脚本内部实现 8 足四相交替步态（A 组 L1/R2/L3/R4，B 组 R1/L2/R3/R4，占空比 β=0.56，调用 PW.Solvers.solveIK2D 解高拱膝节，支撑脚钉地零滑冰、相邻落点不打架）；
+   - 实现 4 套零重建模一键换色 SKINS（玄甲赤纹 / 苔绿毒棘 / 霜白冰螯 / 熔岩赤甲），单盒严格 <= 40 格、总色数 <= 48、0 重色、eyeGlint 绝不进 glowKeys、常态严禁小数 scaleX/scaleY 拉伸；
+   - 在 Def.actions 中登记并完整实现全部 7 个连续动作（由 eco.action 与 eco.actionTime 驱动）：
+     * patrol（八足巡游，loop: true）
+     * idle（原地警戒，loop: true）
+     * stagger（破盾硬直，duration: 1.5，loop: false）
+     * skill_web_snare（织网缚阵，duration: 2.6：压低蓄丝 -> 喷出 5 道白丝粒子束 + vfx.addDecal 铺蛛网贴地痕迹 -> 前足拍地定网）
+     * skill_fang_lunge（毒螯扑杀，duration: 2.2：后缩仰身扬前腿 -> 前扑 + 双螯交剪斩击粒子 -> 碎步退回）
+     * skill_brood_burst（裂茧群涌，duration: 3.0：腹囊剧颤 -> 甩出 2 枚立体 eggSac 丝茧球抛物线落地炸开 -> 3 只复用 spiderling 小蛛四散冲锋巡游）
+     * skill_venom_barrage（棘背毒雨，duration: 3.4：8 腿扎地三连亮脉冲蓄力 -> 腹背连射 8 枚立体抛物线 venomOrb 毒囊弹 -> 砸地爆裂毒雾与腐蚀痕迹）
+   - 严格守住所有中文命名与字符串零禁用字（严禁出现 灯、烬、影、夜、魂、噬、幽、渊、星、光 及 守×者、×之×）。
+
+2. ./bundle/manifest.json：
+   - 列出 id、名称、部件尺寸表、4 套皮肤、7 个 actions 的时长与对应战斗机制说明、以及技能特效挂点说明。
+
+3. ./bundle/交付说明.md：
+   - 记录自检与性能数据。
+
+【执行步数与交付熔断铁律（最高优先级）】
+1. 压缩包命名格式（固定规范）：输出文件必须严格命名为 bundle_boss_weaver_spider.zip（格式：bundle_<英文名>.zip），包内目录结构为 bundle/boss_weaver_spider.js、bundle/manifest.json、bundle/交付说明.md。
+2. 原子化打包：严禁分多轮试探环境或逐个读写文件。请在 1～2 次代码执行内，用单个脚本一次性写出上述 3 个文件，紧接着在同一脚本里完成静态红线校验（禁用字正则、glowKeys 隔离、色表上限与去重、括号/语法校验；若环境支持 Node.js 则直接跑 node verify.mjs），全部通过后立刻打包输出可下载的 bundle_boss_weaver_spider.zip。
+3. 正文零内容熔断：聊天正文仅允许包含 bundle_boss_weaver_spider.zip 下载链接与不超过 10 行的自检摘要，严禁贴出任何 JS 代码、JSON 清单或 Markdown 文档正文。
+4. 未完成即停：如果本轮因步数或环境限制未能生成 bundle_boss_weaver_spider.zip，严禁把文件内容贴进聊天补救——只输出 1 句话说明已完成到哪一步，等待我回复「继续打包」。
+```
 

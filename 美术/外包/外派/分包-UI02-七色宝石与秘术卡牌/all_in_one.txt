@@ -1,0 +1,478 @@
+# 外包项目合集（UI-02 七色宝石与秘术卡牌 · 由 打包发给网页AI.command 自动生成）
+# 目标交付压缩包：bundle_ui02_cards.zip
+# 包含文件清单（开工提示词.md 压轴在最末尾）：
+#   - README.md
+#   - 设计文档-宝石卡牌与图标集.md
+#   - bundle/README.md
+#   - preview.html
+#   - verify.mjs
+#   - 开工提示词.md
+
+
+===== FILE: ./README.md =====
+# 独立外包制作包 UI-02：七色宝石牌、8 张秘术牌与全套图标集（`cards`）
+
+> **本目录是 100% 自包含的外包制作包**：可直接合并发给**无本地上下文的独立网页端 AI**。含设计规格、独立可视化预览验收台、Node 自动化硬校验脚本与一键打包命令。
+
+---
+
+## 一、包内目录说明
+
+```text
+分包-UI02-七色宝石与秘术卡牌/
+├── README.md                    # 本文件
+├── 设计文档-宝石卡牌与图标集.md  # 7色宝石牌、8秘术牌、废牌/牌背、4雕琢、10印记、6战利品徽章精确规格
+├── 开工提示词.md                 # 发给网页端 AI 的完整提示词（置底于 all_in_one.txt）
+├── preview.html                 # 独立预览验收台（一屏陈列全部 7 色牌×4高亮态 + 8 秘术 + 10 印记 + 6 战利品）
+├── verify.mjs                   # 零依赖 Node 硬校验脚本（接口、禁用字、零 filter/shadowBlur、<=3MB）
+├── 打包发给网页AI.command        # Mac 双击生成 all_in_one.txt
+├── 预览验收.command              # Mac 双击先跑 verify.mjs，再自动开浏览器进 preview.html 验收
+├── 交回/                        # 收到的 bundle_ui02_cards.zip 放这里
+└── bundle/                      # 【交付区】产出以下 3 个文件并打包为 bundle_ui02_cards.zip
+    ├── README.md
+    ├── pack_cards_icons.js      #   注册 window.Code00ArtPacks.cards
+    ├── manifest.json            #   卡牌与图标元数据及离屏内存清单
+    └── 交付说明.md               #   verify.mjs 实测与目检记录
+```
+
+---
+
+## 二、发包与验收 3 步走
+
+1. **发包**：将 `all_in_one.txt` 拖进网页端 AI 对话框，附口令：
+   > 严格按附件末尾的 `开工提示词.md` 开发。务必用单个脚本一次性生成 3 个文件、自检并打包出可下载的 `bundle_ui02_cards.zip`；正文严禁贴任何代码、JSON 或文档内容。
+2. **收包**：把 `bundle_ui02_cards.zip` 放进 `交回/` 解压覆盖到 `bundle/`。
+3. **一键验收与合入**：双击 `预览验收.command` 跑校验并目检，通过后将 `bundle/pack_cards_icons.js` 拷进 `原型/v2/modules/art-packs/` 并在 `app/index.html` 引入即可。
+
+
+===== FILE: ./设计文档-宝石卡牌与图标集.md =====
+# 设计文档：UI-02 七色宝石牌、秘术牌与全套徽章图标（`Code00ArtPacks.cards`）
+
+## 一、核心痛点与视觉目标
+
+- **旧版问题**：现原型里的宝石牌只是纯色渐变方块 + 3 个平圆 + 一个巨大的系统黑体字「红 / 黄 / 紫」，像 PPT 占位贴片，完全没有卡牌游戏的质感与收藏欲。
+- **重做目标（复古奇幻精绘像素风）**：
+  - **7 色宝石牌彻底去掉大号「红/黄/紫」黑体字**！牌面中央是**手工精绘的多面体切面像素宝石立绘**（每色拥有独特的切割外形与内层晶面反射色阶），四周是锻铁/黄铜镶边像素牌框 + 细密纹饰，顶部固定 3 颗三原色宝石嵌孔（按色环混色规则点亮对应红/绿/蓝小晶珠，0.2 秒就能同时认出本牌颜色和能破哪几色盾！）；
+  - **8 张秘术牌**每张拥有专属精绘像素法术插画 + 独立牌框（5 张瞬发无色秘术用银紫符纹框；3 张入链带色秘术用暖金镶边 + 颜色嵌底）；
+  - **10 个秘宝印记**与 **6 种战利品角标**、**4 种雕琢徽记**全部做精绘像素徽章（`16×16`~`24×24` 像素原图预烘焙），放大清晰锐利。
+
+---
+
+## 二、完整资产清单与造型指导
+
+### 1. 七色宝石牌（`color: 0..6`，牌面基准 `CARD_W = 62, CARD_H = 88`）
+| `color` | 颜色名 | 含三原色点 `[红,绿,蓝]` | 主色 / 暗面 / 亮面 | 独特宝石切面造型（保证形+色双重辨识） |
+|---|---|---|---|---|
+| `0` | 红 | `[1, 0, 0]` | `#e2483c` / `#8e1f18` / `#ff9e8e` | 棱角锐利的**红曜菱尖晶**（竖长六角菱钻） |
+| `1` | 黄（红+绿） | `[1, 1, 0]` | `#efc93f` / `#9a7a10` / `#fff6b0` | 饱满耀眼的**琥珀八角盾晶**（宽面八边形） |
+| `2` | 绿 | `[0, 1, 0]` | `#4cb050` / `#1f6a24` / `#a6f2a0` | 阶梯切面的**祖母绿方柱晶**（祖母绿长方切面） |
+| `3` | 青（绿+蓝） | `[0, 1, 1]` | `#3fbac4` / `#14727c` / `#aef6fa` | 灵动修长的**碧海泪滴晶**（水滴尖顶切面） |
+| `4` | 蓝 | `[0, 0, 1]` | `#4474dd` / `#1f3f9a` / `#9cc4ff` | 沉稳厚重的**深蓝风筝钻**（上宽下尖盾钻） |
+| `5` | 紫（红+蓝） | `[1, 0, 1]` | `#9254cf` / `#561e8c` / `#dfb0ff` | 华丽多面的**紫晶双尖簇**（主尖+两侧小晶簇） |
+| `6` | 白（三原色） | `[1, 1, 1]` | `#f4f0e6` / `#9a9684` / `#ffffff` | 百搭尊贵的**棱白六角晶核**（带红/绿/蓝微色切面反边） |
+
+### 2. 八张秘术牌（`card.arcana`）+ 缠藤废牌（`card.junk`）+ 被遮蔽牌（`opts.masked`）
+- **5 张瞬发秘术（无色，银紫深框 `#6a5ab8`/`#342a68` + 顶沿菱形瞬发徽记 + 清晰精简卡名）**：
+  1. `spring`（涌泉抽牌）：蓝白涌动泉眼与飞出的两枚卡牌剪影
+  2. `ward`（护身结界）：青白六边形晶盾结界与护符纹
+  3. `shatter`（震裂破甲）：铁锤/晶锥击碎裂纹盾牌的爆发画面
+  4. `surge`（魔力沸腾）：沸腾橘红晶焰与向上翻涌的能量棱晶
+  5. `resonance`（双色共鸣）：两道弧形色环节点共振连线
+- **3 张入链秘术（带色，按 `card.color` 着底色 + 华丽暖金边框 + 顶部三原色晶孔 + 清晰精简卡名）**：
+  6. `refract`（逆色折射，白）：白晶棱柱把入射色折成补色的对称双芒
+  7. `prism`（倍增棱镜，红/绿/蓝）：双面嵌套菱镜映出 `×2` 折射叠影
+  8. `keep`（凝色留存，黄/青/紫）：黄铜沙漏/琥珀封存着一颗稳固宝石
+- **`junk`（缠藤废牌）**：枯褐破旧木牌缠满暗绿棘藤，无宝石孔，辨识度极强。
+- **`masked`（被遮蔽）**：青苔暗石板牌背，中央浮雕神秘 `?` 符纹与底部小字「已遮蔽」。
+
+### 3. 四种宝石雕琢角标（`drawCarveBadge`，单枚尺寸 `14×14` 布局单位）
+- `sharp`（锐切 · 暖橘 `#ffb04a`）：斜切利刃晶角
+- `twin`（双晶 · 天青 `#7ad8ff`）：并排双菱小晶
+- `pierce`（碎甲 · 绯红 `#ff7a7a`）：裂开的小盾
+- `overflow`（溢彩 · 淡紫 `#d49aff`）：外溢三色小晶点
+
+### 4. 十个秘宝印记徽章（`drawSealIcon`，支持 `20~48` 布局单位清晰显示）
+| `sealId` | 名称 | 路子色系 | 专属像素徽章图案 |
+|---|---|---|---|
+| `shatter_tide` | 碎甲白潮 | 破盾 `#8ff0ff` | 碎裂护盾背后涌起白色浪峰 |
+| `desperate` | 孤注破防 | 破盾 `#8ff0ff` | 交叉赤青双矛刺穿盾心 |
+| `double_white` | 双重合白 | 合白 `#ffffff` | 双重交叠的白晶六芒圆印 |
+| `white_echo` | 白潮余韵 | 合白 `#ffffff` | 白晶中心向外扩开的回纹与小牌角 |
+| `rainbow_bridge` | 五彩虹桥 | 彩虹 `#ffb0f0` | 五色拱桥横跨深空底板 |
+| `ring_keep` | 彩环常驻 | 彩虹 `#ffb0f0` | 亮着三枚彩色宝石的青铜环扣 |
+| `wide_bag` | 宽裕行囊 | 留牌 `#ffd24a` | 鼓囊囊的皮革铜扣探险行囊 |
+| `hold_edge` | 蓄锋待发 | 留牌 `#ffd24a` | 蓄满金锋的出鞘短剑与「×2」小刻纹 |
+| `leap` | 越隙相连 | 长链 `#9aff9a` | 跨越断沟连接两环的翡翠锁链 |
+| `chain_surge` | 连珠迭浪 | 长链 `#9aff9a` | 节节放大的连珠宝石波浪 |
+
+### 5. 六种战利品徽章（`drawLootBadge`，尺寸 `15~28` 布局单位）
+- `carve`（宝石雕琢 `#6ad8ff`）：雕刀与切面蓝晶
+- `seal`（秘宝印记 `#c490ff`）：六角青铜纹章嵌紫核
+- `arcana`（秘术牌 `#ffd24a`）：金边符文卷牌
+- `hand`（手牌扩容 `#7ae07a`）：展开扇形小牌配翠绿加号
+- `heal`（疗伤果泉 `#ff6a78`）：鲜红熟果与生命红心
+- `attr`（属性提升 `#ff9a3a`）：跃升锐剑/力量菱晶
+
+---
+
+## 三、技术硬红线与精确导出接口
+
+- **全局登记**：`window.Code00ArtPacks.cards = { id: 'cards', version: 1, name: '...', CARD_W: 62, CARD_H: 88, init, drawCard, drawCardBack, drawChainSlot, drawCarveBadge, drawSealIcon, drawLootBadge }`
+- **零 `ctx.filter`、零 `shadowBlur`、零外部图片 URL、零禁用字**；
+- **离屏贴图总预算 ≤ `3 MB`**（强烈建议把 7 色牌面底图、8 张秘术牌插画、10 个印记、6 个战利品预烘焙在离屏像素画布中，单帧绘制仅 `drawImage` + 动态高亮框，轻松跑 500fps+）；
+- **状态隔离**：所有绘制函数必须 `save() / restore()` 干净复原，画像素件时设 `imageSmoothingEnabled = false`。
+
+### 导出接口签名
+1. `init(makeCanvas)`：可选幂等初始化（自动懒初始化，耗时 ≤ 60ms）。
+2. `drawCard(ctx, card, opts = {})`：
+   - 以 `(0, 0)` 为牌中心绘制 `62×88` 的卡牌；
+   - `opts.frame`: `'near'`（翠绿像素亮框 `#6fe07a`）| `'comp'`（暖金双线合白框 `#ffd24a`）| `'wild'`（白金辉纹框 `#fff1b8`）| `'break'`（暗红虚线断色框 `#ff7a6a`）| `null`；
+   - `opts.lit`: 施法亮起时外圈画明亮阶梯像素金白边（不用 `shadowBlur`！）；
+   - `opts.dim`: 变暗遮罩（`rgba(8,10,8,0.52)`）；
+   - `opts.masked`: 绘制遮蔽牌背；
+   - `opts.tag` / `opts.tagColor`: 若传入，在牌顶上方绘制精简胶囊小标签（如「接上」「合白」「断色」「抵制」）。
+3. `drawCardBack(ctx, x, y, scale = 1)`：精绘牌背（深靛蓝木纹底 + 黄铜四角饰 + 中央六色罗盘暗纹）。
+4. `drawChainSlot(ctx, x, y, w, h, state = {})`：`state = { isNext, dragging, index, filled }`，以 `(x, y)` 为槽中心绘制石刻法阵镶嵌牌槽（替代粗糙虚线框；拖拽中 `isNext` 槽位亮起金色角标引导放入）。
+5. `drawCarveBadge(ctx, kind, cx, cy, size = 14)`
+6. `drawSealIcon(ctx, sealId, cx, cy, size = 24, opts = {})`（`opts = { hover, dim }`）
+7. `drawLootBadge(ctx, lootKind, cx, cy, size = 17)`
+
+
+===== FILE: ./bundle/README.md =====
+# `bundle/` 交付目录（UI-02 七色宝石与秘术卡牌）
+
+外包方请将最终产出的 3 个文件放入本目录，并打包成 **`bundle_ui02_cards.zip`** 交回：
+
+1. `pack_cards_icons.js` —— 注册 `window.Code00ArtPacks.cards`，实现全部 7 个导出接口
+2. `manifest.json` —— 7 色牌、8 秘术牌、10 印记、4 雕琢、6 战利品与内存统计
+3. `交付说明.md` —— `node verify.mjs` 自检结果与 `preview.html` 目检记录
+
+
+===== FILE: ./preview.html =====
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UI-02 独立预览验收台 · 七色宝石与秘术卡牌</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; background: #101612; color: #ece8dc; font: 13px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; overflow: hidden; }
+  .wrap { display: flex; width: 100%; height: 100%; }
+  .stage { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; background: #0c120e; }
+  canvas { display: block; box-shadow: 0 12px 40px rgba(0,0,0,0.6); }
+  .hud { position: absolute; left: 12px; top: 10px; padding: 6px 10px; border-radius: 6px; background: rgba(12,18,14,0.84); border: 1px solid rgba(255,255,255,0.14); font-variant-numeric: tabular-nums; }
+  .warn { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); max-width: 520px; padding: 16px 20px; border-radius: 8px; background: rgba(140,42,32,0.92); color: #fff; font-size: 14px; display: none; text-align: center; }
+  .side { width: 250px; background: #161d18; border-left: 1px solid rgba(255,255,255,0.1); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  h2 { font-size: 15px; color: #ffe498; }
+  .tip { font-size: 12px; color: #9fb0a2; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  button { background: #263429; color: #ece8dc; border: 1px solid rgba(255,255,255,0.16); border-radius: 5px; padding: 6px 10px; cursor: pointer; font-size: 12px; }
+  button.on { background: #70551c; border-color: #ffe498; color: #fff; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <main class="stage" id="stage">
+    <canvas id="cv"></canvas>
+    <div class="hud" id="hud">初始化中...</div>
+    <div class="warn" id="warn"></div>
+  </main>
+  <aside class="side">
+    <h2>UI-02 · 卡牌与图标验收台</h2>
+    <div class="tip">核对项：7 色宝石切面各异且顶部三原色点秒认、8 秘术独立插画、10 印记与 6 战利品图标清晰锐利。</div>
+    <div>
+      <div class="tip" style="margin-bottom:6px">切换宝石牌高亮态</div>
+      <div class="row" id="frameBtns"></div>
+    </div>
+    <div>
+      <div class="tip" style="margin-bottom:6px">附加雕琢预览</div>
+      <button id="btnCarve">显示雕琢角标：开</button>
+    </div>
+    <div class="tip" id="meta"></div>
+  </aside>
+</div>
+<script src="./bundle/pack_cards_icons.js"></script>
+<script>
+(function () {
+  const W = 960, H = 540, SCALE = 2;
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const hud = document.getElementById('hud');
+  const warn = document.getElementById('warn');
+  const meta = document.getElementById('meta');
+  const pack = window.Code00ArtPacks && window.Code00ArtPacks.cards;
+
+  function resize() {
+    cv.width = W * SCALE; cv.height = H * SCALE;
+    const maxW = document.getElementById('stage').clientWidth - 24;
+    const maxH = document.getElementById('stage').clientHeight - 24;
+    const k = Math.min(maxW / W, maxH / H);
+    cv.style.width = Math.floor(W * k) + 'px';
+    cv.style.height = Math.floor(H * k) + 'px';
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  let frameMode = 'near', showCarve = true;
+  const modes = [['无框', null], ['接上', 'near'], ['合白', 'comp'], ['百搭', 'wild'], ['断色', 'break'], ['施法亮', 'lit']];
+  const fb = document.getElementById('frameBtns');
+  modes.forEach(([lbl, val]) => {
+    const b = document.createElement('button');
+    b.textContent = lbl;
+    if (val === frameMode) b.classList.add('on');
+    b.onclick = () => { frameMode = val; [...fb.children].forEach(x => x.classList.remove('on')); b.classList.add('on'); };
+    fb.appendChild(b);
+  });
+  document.getElementById('btnCarve').onclick = (e) => { showCarve = !showCarve; e.target.textContent = `显示雕琢角标：${showCarve ? '开' : '关'}`; };
+
+  if (!pack) {
+    warn.style.display = 'block';
+    warn.textContent = '尚未检测到 ./bundle/pack_cards_icons.js，请外包方交付后刷新本页验收。';
+    hud.textContent = '等待交付物：./bundle/pack_cards_icons.js';
+    return;
+  }
+
+  let offBytes = 0, offCount = 0;
+  const origCreate = document.createElement.bind(document);
+  function makeCanvas(w, h) { const c = origCreate('canvas'); c.width = w; c.height = h; offCount++; offBytes += w * h * 4; return c; }
+  const t0 = performance.now();
+  if (pack.init) pack.init(makeCanvas);
+  const initMs = performance.now() - t0;
+  meta.textContent = `卡牌集：${pack.name || pack.id} v${pack.version} · 初始化 ${initMs.toFixed(1)}ms · 离屏 ${offCount} 张 (${(offBytes/1048576).toFixed(2)} MB)`;
+
+  const ARCANA_LIST = [['spring', -1], ['ward', -1], ['shatter', -1], ['surge', -1], ['resonance', -1], ['refract', 6], ['prism', 0], ['keep', 3]];
+  const SEALS = ['shatter_tide', 'desperate', 'double_white', 'white_echo', 'rainbow_bridge', 'ring_keep', 'wide_bag', 'hold_edge', 'leap', 'chain_surge'];
+  const LOOTS = ['carve', 'seal', 'arcana', 'hand', 'heal', 'attr'];
+  const CARVES = ['sharp', 'twin', 'pierce', 'overflow'];
+
+  let frames = 0, acc = 0, last = performance.now(), fps = 0;
+  function loop(now) {
+    const dt = now - last; last = now; frames++; acc += dt;
+    if (acc >= 500) { fps = Math.round(frames * 1000 / acc); frames = 0; acc = 0; }
+    const t = now / 1000;
+    ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+    ctx.fillStyle = '#1e3824'; ctx.fillRect(0, 0, W, H);
+
+    const lbl = (s, x, y) => { ctx.font = '700 13px "PingFang SC", sans-serif'; ctx.fillStyle = '#ffe498'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(s, x, y); };
+
+    // 1. 第一排：7 色宝石牌 + 牌背 + 遮蔽 + 废牌
+    lbl('七色宝石牌（检查切面差异、顶部三原色点、高亮框与雕琢）', 24, 22);
+    for (let c = 0; c < 7; c++) {
+      ctx.save(); ctx.translate(64 + c * 82, 92);
+      const o = { t };
+      if (frameMode === 'lit') o.lit = true;
+      else if (frameMode) { o.frame = frameMode; o.tag = modes.find(m => m[1] === frameMode)[0]; o.tagColor = '#ffe498'; if (frameMode === 'break') o.dim = true; }
+      pack.drawCard(ctx, { color: c, carve: showCarve ? [CARVES[c % 4], CARVES[(c + 1) % 4]] : [] }, o);
+      ctx.restore();
+    }
+    pack.drawCardBack(ctx, 668, 92, 1);
+    ctx.save(); ctx.translate(750, 92); pack.drawCard(ctx, { color: 2 }, { masked: true, t }); ctx.restore();
+    ctx.save(); ctx.translate(832, 92); pack.drawCard(ctx, { color: -1, junk: true }, { t }); ctx.restore();
+
+    // 2. 第二排：8 张秘术牌 + 3 个施法链法阵槽
+    lbl('八张秘术牌（5 瞬发银紫框 + 3 入链带色金框）与施法链嵌槽', 24, 168);
+    ARCANA_LIST.forEach(([id, col], i) => {
+      ctx.save(); ctx.translate(64 + i * 82, 236);
+      pack.drawCard(ctx, { color: col, arcana: id }, { t });
+      ctx.restore();
+    });
+    for (let s = 0; s < 3; s++) {
+      pack.drawChainSlot(ctx, 738 + s * 64, 236, 52, 74, { isNext: s === 0, dragging: true, index: s, filled: s === 2 });
+    }
+
+    // 3. 第三排：10 个秘宝印记徽章
+    lbl('十个秘宝印记徽章（36px 大图与 22px 顶栏小图对照）', 24, 316);
+    SEALS.forEach((id, i) => {
+      const x = 60 + i * 88;
+      pack.drawSealIcon(ctx, id, x, 358, 36, { hover: i === Math.floor(t) % 10 });
+      pack.drawSealIcon(ctx, id, x, 396, 20, {});
+    });
+
+    // 4. 第四排：6 种战利品徽章 + 4 种雕琢徽记
+    lbl('六种战利品角标 + 四种雕琢徽记', 24, 444);
+    LOOTS.forEach((k, i) => {
+      pack.drawLootBadge(ctx, k, 64 + i * 74, 488, 28);
+      pack.drawLootBadge(ctx, k, 96 + i * 74, 492, 16);
+    });
+    CARVES.forEach((k, i) => {
+      pack.drawCarveBadge(ctx, k, 620 + i * 70, 488, 24);
+      pack.drawCarveBadge(ctx, k, 648 + i * 70, 492, 14);
+    });
+
+    hud.textContent = `UI-02 实时帧率：${fps} fps · 画布 ${cv.width}×${cv.height}`;
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
+
+
+===== FILE: ./verify.mjs =====
+// 外包交付自动化校验脚本：UI-02 七色宝石与秘术卡牌（运行：node verify.mjs）
+import fs from 'node:fs';
+import vm from 'node:vm';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const TARGET = path.join(ROOT, 'bundle', 'pack_cards_icons.js');
+const BUDGET_BYTES = 3 * 1024 * 1024; // 3 MB 硬红线
+
+if (!fs.existsSync(TARGET)) {
+  console.error('❌ 未找到交付文件：./bundle/pack_cards_icons.js');
+  process.exit(1);
+}
+
+const canvases = [];
+function makeCtx() {
+  const grad = { addColorStop() {} };
+  const state = { filter: 'none', shadowBlur: 0, globalAlpha: 1, imageSmoothingEnabled: true, fillStyle: '#000', strokeStyle: '#000', lineWidth: 1, font: '12px sans-serif', textAlign: 'left', textBaseline: 'alphabetic' };
+  let runtimeFilterSet = false, runtimeShadowSet = false;
+  return new Proxy(state, {
+    get(o, k) {
+      if (k === '__flags') return { runtimeFilterSet, runtimeShadowSet };
+      if (k in o) return o[k];
+      if (k === 'createLinearGradient' || k === 'createRadialGradient') return () => grad;
+      if (k === 'createImageData') return (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(1, w) * Math.max(1, h) * 4) });
+      if (k === 'measureText') return (s) => ({ width: String(s || '').length * 8 });
+      return () => {};
+    },
+    set(o, k, v) {
+      if (k === 'filter' && v && v !== 'none') runtimeFilterSet = true;
+      if (k === 'shadowBlur' && Number(v) > 0) runtimeShadowSet = true;
+      o[k] = v;
+      return true;
+    }
+  });
+}
+function makeCanvas(w = 1, h = 1) {
+  const c = { width: Math.max(1, Math.round(w)), height: Math.max(1, Math.round(h)), _ctx: null, getContext() { if (!this._ctx) this._ctx = makeCtx(); return this._ctx; } };
+  canvases.push(c);
+  return c;
+}
+
+const sandbox = {
+  window: {},
+  document: { createElement: (tag) => (tag === 'canvas' ? makeCanvas(1, 1) : {}) },
+  performance: { now: () => Number(process.hrtime.bigint()) / 1e6 },
+  console, Math, Array, Object, Number, String, Boolean, Set, Map, WeakMap,
+  Uint8Array, Uint8ClampedArray, Int32Array, Float32Array, Error, TypeError, RangeError
+};
+sandbox.window = sandbox;
+sandbox.globalThis = sandbox;
+vm.createContext(sandbox);
+
+const src = fs.readFileSync(TARGET, 'utf8');
+const errors = [];
+const check = (cond, msg) => { if (!cond) errors.push(msg); };
+
+check(!/\.filter\s*=/.test(src), '源码禁止设置 ctx.filter');
+check(!/shadowBlur/.test(src), '源码禁止使用 shadowBlur');
+check(!/\bnew\s+Image\b|https?:\/\/|fetch\s*\(/i.test(src), '源码禁止外部图片或网络加载');
+
+const BAD = /[\u706f\u70ec\u5f71\u591c\u9b42\u566c\u5e7d\u6e0a\u661f\u5149]|\u5b88.\u8005|\u4e4b/;
+const lits = src.match(/(['"`])(?:\\.|(?!\1).)*\1/g) || [];
+const badHits = [];
+for (const lit of lits) { const m = lit.match(BAD); if (m) badHits.push(`${m[0]} in ${lit.slice(0, 24)}`); }
+check(badHits.length === 0, `字符串含禁用字：${badHits.slice(0, 5).join('；')}`);
+
+vm.runInContext(src, sandbox, { filename: 'bundle/pack_cards_icons.js' });
+const pack = sandbox.Code00ArtPacks && sandbox.Code00ArtPacks.cards;
+check(!!pack, '未注册 window.Code00ArtPacks.cards');
+
+if (pack) {
+  check(pack.id === 'cards', `pack.id 应为 "cards"，实际为 ${pack.id}`);
+  check(pack.version === 1, `pack.version 应为 1`);
+  check(pack.CARD_W === 62 && pack.CARD_H === 88, `CARD_W/CARD_H 必须为 62×88`);
+  const reqFns = ['init', 'drawCard', 'drawCardBack', 'drawChainSlot', 'drawCarveBadge', 'drawSealIcon', 'drawLootBadge'];
+  for (const fn of reqFns) check(typeof pack[fn] === 'function', `缺少必需方法：${fn}`);
+
+  const t0 = sandbox.performance.now();
+  if (typeof pack.init === 'function') pack.init(makeCanvas);
+  const initMs = sandbox.performance.now() - t0;
+  check(initMs <= 60, `init 预烘焙耗时过长：${initMs.toFixed(1)}ms（上限 60ms）`);
+
+  const ctx = makeCtx();
+  try {
+    for (let c = 0; c < 7; c++) {
+      pack.drawCard(ctx, { color: c, carve: c === 0 ? ['sharp', 'pierce'] : [] }, { frame: ['near', 'comp', 'wild', 'break', null][c % 5], tag: '接上', tagColor: '#6fe07a', t: 1.2 });
+    }
+    for (const [id, col] of [['spring', -1], ['ward', -1], ['shatter', -1], ['surge', -1], ['resonance', -1], ['refract', 6], ['prism', 0], ['keep', 3]]) {
+      pack.drawCard(ctx, { color: col, arcana: id }, { lit: id === 'prism', t: 1.2 });
+    }
+    pack.drawCard(ctx, { color: -1, junk: true }, { dim: true });
+    pack.drawCard(ctx, { color: 2 }, { masked: true });
+    pack.drawCardBack(ctx, 100, 100, 1);
+    for (const st of [{ isNext: true, dragging: true, index: 0, filled: false }, { isNext: false, dragging: false, index: 1, filled: true }]) {
+      pack.drawChainSlot(ctx, 200, 200, 45, 64, st);
+    }
+    for (const k of ['sharp', 'twin', 'pierce', 'overflow']) pack.drawCarveBadge(ctx, k, 50, 50, 14);
+    for (const id of ['shatter_tide', 'desperate', 'double_white', 'white_echo', 'rainbow_bridge', 'ring_keep', 'wide_bag', 'hold_edge', 'leap', 'chain_surge']) {
+      pack.drawSealIcon(ctx, id, 80, 80, 24, { hover: true });
+    }
+    for (const k of ['carve', 'seal', 'arcana', 'hand', 'heal', 'attr']) pack.drawLootBadge(ctx, k, 120, 80, 18);
+  } catch (e) {
+    errors.push(`接口运行期异常：${e.stack || e.message}`);
+  }
+
+  check(!ctx.__flags.runtimeFilterSet, '运行期触发了 ctx.filter');
+  check(!ctx.__flags.runtimeShadowSet, '运行期触发了 ctx.shadowBlur');
+
+  const totalBytes = canvases.reduce((s, c) => s + c.width * c.height * 4, 0);
+  const mb = totalBytes / (1024 * 1024);
+  check(totalBytes <= BUDGET_BYTES, `离屏贴图超标：${mb.toFixed(2)} MB（上限 3.00 MB）`);
+
+  console.log('\n[UI-02 宝石与秘术卡牌 自动化校验报告]');
+  console.log(`- 名称：${pack.name || pack.id} (v${pack.version})`);
+  console.log(`- 初始化耗时：${initMs.toFixed(2)} ms（上限 60 ms）`);
+  console.log(`- 离屏画布：${canvases.length} 张，合计 ${mb.toFixed(2)} MB（上限 3.00 MB）`);
+}
+
+if (errors.length) {
+  console.error(`\n❌ 校验未通过（${errors.length} 项错误）：\n  - ${errors.join('\n  - ')}`);
+  process.exit(1);
+}
+console.log('\n✅ 全部硬性校验通过！可以打开 preview.html 目检全套牌面与图标并打包 bundle_ui02_cards.zip。');
+
+
+===== FILE: ./开工提示词.md =====
+# 开工提示词（UI-02 七色宝石与秘术卡牌 · 给无上下文网页端 AI）
+
+```text
+你正在接手一个独立、自包含的像素奇幻卡牌与图标集外包制作任务（UI-02）。你只需要阅读本外包目录内的文件，严禁虚构外部依赖，也不要改动已有验收文件。
+
+请先依次阅读本目录内的以下文件：
+1. ./README.md
+2. ./设计文档-宝石卡牌与图标集.md（7 色切面宝石牌、8 张秘术牌、废牌/牌背、4 雕琢、10 印记、6 战利品与全部接口签名）
+3. ./verify.mjs（自动化硬校验红线）
+4. ./preview.html（独立验收展示台）
+
+【交付目标】
+请用单个脚本一次性在 ./bundle/ 目录产出以下 3 个文件，并打包为可下载的 bundle_ui02_cards.zip（内含 bundle/pack_cards_icons.js、bundle/manifest.json、bundle/交付说明.md）：
+
+1. ./bundle/pack_cards_icons.js：
+   - 登记到 window.Code00ArtPacks = window.Code00ArtPacks || {}; window.Code00ArtPacks.cards = { id: 'cards', version: 1, name: '...', CARD_W: 62, CARD_H: 88, init, drawCard, drawCardBack, drawChainSlot, drawCarveBadge, drawSealIcon, drawLootBadge };
+   - 核心美术品质要求：
+     * 7 色宝石牌彻底弃用大号黑体字「红/黄/紫」，牌面中央精绘 7 种独特切面多面体像素宝石（菱尖/八角盾/祖母绿方柱/泪滴/风筝钻/双尖簇/六角白晶核），配复古金属像素牌框与顶部 3 颗三原色晶孔（按色环混色点亮红/绿/蓝圆晶，0.2 秒一眼认出颜色与可破盾色）；
+     * 8 张秘术牌（spring, ward, shatter, surge, resonance, refract, prism, keep）每张都有独立可辨识的像素插画与专属框（瞬发银紫框 vs 入链带色金纹框），牌底写精简 4 字卡名；
+     * 缠藤废牌(junk)与遮蔽牌背(masked)质感鲜明；牌背(drawCardBack)带六色罗盘暗纹；施法链槽(drawChainSlot)做成石刻法阵镶嵌槽；
+     * 4 种雕琢角标、10 个秘宝印记、6 种战利品角标全部为独立精绘像素徽章，绝不偷懒画单色圆点加首字母；
+   - 性能与合规死红线（verify.mjs 逐条查杀）：
+     * 绝不出现 ctx.filter 或 .filter =；
+     * 绝不出现 shadowBlur；
+     * 绝不加载外部图片/字体/网络 URL（全靠 Canvas 2D 像素预烘焙到小型离屏画布）；
+     * 离屏画布总占用 <= 3 MB，init 耗时 <= 60 ms；
+     * 全部字符串零禁用字（正则见 verify.mjs）；
+     * 绘制后完整 save()/restore()，关平滑保持像素清晰锐利。
+
+2. ./bundle/manifest.json：列出全部卡牌、印记、雕琢、战利品图标清单与离屏内存字节数。
+3. ./bundle/交付说明.md：记录设计说明、verify.mjs 校验结果与 preview.html 视觉目检确认。
+
+【强制交付形式】
+- 禁止在聊天正文中贴任何完整源码、JSON 或长文档；
+- 用单个脚本一次性生成 3 个文件，跑通 node verify.mjs（无 Node 时用 Python 查语法/禁用字/filter/shadowBlur），直接输出可下载的 bundle_ui02_cards.zip；未打包完成请直接停下汇报。
+```
+

@@ -278,6 +278,14 @@ window.PixelWorkshop.Creatures = window.PixelWorkshop.Creatures || [];
     useWaterFoam: true,
     spec: SPEC,
     skins: SKINS,
+    actions: [
+      { id: 'patrol',         name: '自由巡游',   loop: true,  status: 'done' },
+      { id: 'idle',           name: '原地待机',   loop: true,  status: 'done' },
+      { id: 'battle_attack',  name: '腹口猛咬',   loop: false, duration: 0.88, status: 'done' },
+      { id: 'battle_special', name: '喷藤塞废牌', loop: false, duration: 0.95, status: 'done' },
+      { id: 'battle_stagger', name: '破盾硬直',   loop: false, duration: 0.85, status: 'done' },
+      { id: 'battle_hurt',    name: '受击',       loop: false, duration: 0.35, status: 'done' }
+    ],
     blocks: ['四足/人立双姿切换', '4 档竖裂肚嘴与獠牙', '独立张望大地懒小头', '弯膝 IK 与反脚掌大爪', '两级赤红长毛弹簧'],
     soulHabit: '四足沉稳巡游小头四处张望 → 停步人立昂身张开竖裂肚嘴深吸落果 → 落掌震地抖毛',
     defaultParams: {
@@ -387,6 +395,216 @@ window.PixelWorkshop.Creatures = window.PixelWorkshop.Creatures || [];
           const sMul = instance.scaleMul;
           const sp = params.springiness ?? 1.0;
           const dScale = 1 / Math.sqrt(Math.max(0.35, sp));
+          const act = eco && eco.action;
+          const isBattle = act === 'battle_attack' || act === 'battle_special' || act === 'battle_stagger' || act === 'battle_hurt';
+
+          if (isBattle) {
+            const actT = (eco && eco.actionTime != null) ? eco.actionTime : 0;
+            const isNewAct = act !== state._bAct || actT < (state._bLastT || 0) - 0.04;
+            if (isNewAct) {
+              state._bAct = act;
+              state._bFired = false;
+              state._bFired2 = false;
+              state._bFired3 = false;
+              state._bAx = (eco && eco.homeX != null) ? eco.homeX : state.x;
+              state._bAy = (eco && eco.homeY != null) ? eco.homeY : state.y;
+              state._bYaw = (eco && eco.homeYaw != null) ? eco.homeYaw : state.yaw;
+            }
+            state._bLastT = actT;
+            const ax = (eco && eco.homeX != null) ? eco.homeX : state._bAx;
+            const ay = (eco && eco.homeY != null) ? eco.homeY : state._bAy;
+            const hasTgt = eco && Array.isArray(eco.targetPos) && eco.targetPos.length >= 2 && Number.isFinite(eco.targetPos[0]) && Number.isFinite(eco.targetPos[1]);
+            const tx = hasTgt ? eco.targetPos[0] : ax - Math.sin(state._bYaw) * 46 * sMul;
+            const ty = hasTgt ? eco.targetPos[1] : ay + Math.cos(state._bYaw) * 46 * sMul;
+            const tz = (hasTgt && Number.isFinite(eco.targetPos[2])) ? eco.targetPos[2] : 8 * sMul;
+            const dx = tx - ax, dy = ty - ay;
+            const dist = Math.hypot(dx, dy) || 1;
+            const dirX = dx / dist, dirY = dy / dist;
+            const sideX = -dirY, sideY = dirX;
+            const aimYaw = Math.atan2(-dx, dy);
+
+            const prevX = state.x, prevY = state.y;
+            let standTgt = 0, crouchTgt = 0;
+
+            if (act === 'battle_attack') {
+              // 0.88s：上身后仰撑开大肚巨嘴吸气(0.28s) -> 整体前压猛咬在主角处具象化上下巨牙合咬(0.25s) -> 沉重回正(0.35s)
+              state.yaw = aimYaw;
+              if (actT < 0.28) {
+                const u = smoothstep(0, 1, actT / 0.28);
+                state.x = ax - dirX * 2.8 * u * sMul;
+                state.y = ay - dirY * 2.8 * u * sMul;
+                state.z = 9.2 * sMul;
+                standTgt = 0.82 * u;
+                state.mawStage = u > 0.42 ? 'stand' : 'wide';
+                if (vfx && Math.random() < 0.65) {
+                  const sx0 = tx + sideX * (Math.random() - 0.5) * 14 * sMul;
+                  const sy0 = ty + sideY * (Math.random() - 0.5) * 14 * sMul;
+                  vfx.spawnParticle(
+                    sx0, sy0, tz + 3 * sMul,
+                    (state.x - sx0) * 3.2, (state.y - sy0) * 3.2, (state.z + 9 * sMul - tz) * 2.5,
+                    0.26, 1.6, '#ff8a2b', true, 0
+                  );
+                }
+              } else if (actT < 0.53) {
+                const u = (actT - 0.28) / 0.25;
+                const lunge = Math.sin(u * Math.PI * 0.5);
+                state.x = ax + dirX * (-2.8 + 11.8 * lunge) * sMul;
+                state.y = ay + dirY * (-2.8 + 11.8 * lunge) * sMul;
+                state.z = 9.2 * sMul;
+                standTgt = lerp(0.82, 0.0, u);
+                crouchTgt = 1.5 * lunge * sMul;
+                state.mawStage = u < 0.42 ? 'wide' : 'closed';
+                if (!state._bFired && actT >= 0.37) {
+                  state._bFired = true;
+                  bodyBounce.impulse(-24 * sMul);
+                  for (const f of furTufts) f.tip.impulse(dirX * 18, dirY * 18, -28 * sMul);
+                  if (vfx) {
+                    // 主角处上下两排巨型像素獠牙合咬 + 地裂 + 冲击波 + 炽热碎牙飞溅
+                    vfx.addDecal({
+                      kind: 'crack', x: tx, y: ty, yaw: aimYaw,
+                      rx: 10.5 * sMul, ry: 9.5 * sMul, life: 2.3, alpha: 0.75,
+                      color: '#362720', hiColor: '#ff8a2b', darkColor: '#140c0a'
+                    });
+                    vfx.addRipple(tx, ty, 4 * sMul, 26 * sMul, 0.54, 2.4);
+                    vfx.addRipple(tx, ty, 2 * sMul, 16 * sMul, 0.36, 1.6);
+                    for (let i = -3; i <= 3; i++) {
+                      const lat = i * 2.6 * sMul;
+                      vfx.spawnParticle(tx + sideX * lat, ty + sideY * lat, tz + 11 * sMul, 0, 0, -28 * sMul, 0.28, 2.2, '#f7f1e3', true, 18);
+                      vfx.spawnParticle(tx + sideX * lat, ty + sideY * lat, tz - 1 * sMul, 0, 0, 22 * sMul, 0.28, 2.2, '#d9cfbc', true, 18);
+                    }
+                    const toothCols = ['#f7f1e3', '#d9cfbc', '#ff8a2b', '#fff2b0'];
+                    for (let i = 0; i < 16; i++) {
+                      const a = (i / 16) * Math.PI * 2;
+                      const spd = (14 + Math.random() * 18) * sMul;
+                      vfx.spawnParticle(tx, ty, tz + 3 * sMul,
+                        Math.cos(a) * spd, Math.sin(a) * spd, (11 + Math.random() * 14) * sMul,
+                        0.42 + Math.random() * 0.16, 1.9, toothCols[i % toothCols.length], i % 2 === 0, 48);
+                    }
+                  }
+                }
+              } else {
+                const u = clamp((actT - 0.53) / 0.35, 0, 1);
+                const ret = 1 - smoothstep(0, 1, u);
+                state.x = ax + dirX * 9.0 * ret * sMul;
+                state.y = ay + dirY * 9.0 * ret * sMul;
+                state.z = 9.2 * sMul;
+                state.mawStage = 'closed';
+              }
+            } else if (act === 'battle_special') {
+              // 喷藤塞废牌 (0.95s)：大肚猛鼓连喷三波暗绿藤蔓狂潮席卷主角区 + 泥沼藤印
+              state.yaw = aimYaw;
+              if (actT < 0.28) {
+                const u = smoothstep(0, 1, actT / 0.28);
+                const vib = Math.sin(actT * 42) * 1.1 * u * sMul;
+                state.x = ax - dirX * 2.0 * u * sMul + sideX * vib;
+                state.y = ay - dirY * 2.0 * u * sMul + sideY * vib;
+                state.z = 9.2 * sMul;
+                standTgt = 0.78 * u;
+                state.mawStage = u > 0.4 ? 'stand' : 'half';
+              } else if (actT < 0.72) {
+                const u = (actT - 0.28) / 0.44;
+                state.x = ax + dirX * 3.5 * Math.sin(u * Math.PI) * sMul;
+                state.y = ay + dirY * 3.5 * Math.sin(u * Math.PI) * sMul;
+                state.z = 9.2 * sMul;
+                standTgt = 0.65 * (1 - u * 0.4);
+                state.mawStage = 'wide';
+                const emitVines = (waveIdx) => {
+                  if (!vfx) return;
+                  const z0 = state.z + 9.0 * sMul;
+                  const vineCols = ['#1f4f30', '#367d4b', '#62ad6f', '#b5f246'];
+                  for (let i = 0; i < 12; i++) {
+                    const flightT = 0.30 + (i % 4) * 0.04;
+                    const wave = Math.sin(i * 1.3 + waveIdx) * 8.5 * sMul;
+                    const sx0 = state.x + dirX * 8 * sMul + sideX * wave * 0.35;
+                    const sy0 = state.y + dirY * 8 * sMul + sideY * wave * 0.35;
+                    const vxP = (tx + sideX * wave - sx0) / flightT;
+                    const vyP = (ty + sideY * wave - sy0) / flightT;
+                    const vzP = (tz - z0 + 0.5 * 36 * sMul * flightT * flightT) / flightT;
+                    vfx.spawnParticle(sx0, sy0, z0, vxP, vyP, vzP, flightT + 0.20, 2.1 + (i % 2) * 0.4, vineCols[i % vineCols.length], i % 4 === 3, 36 * sMul);
+                  }
+                  vfx.addRipple(tx, ty, 4 * sMul, (22 + waveIdx * 6) * sMul, 0.56, 2.0);
+                  if (waveIdx === 1) {
+                    vfx.addDecal({
+                      kind: 'wet', x: tx, y: ty, yaw: aimYaw,
+                      rx: 13.0 * sMul, ry: 11.0 * sMul, life: 2.6, alpha: 0.68,
+                      color: '#1f4f30', hiColor: '#62ad6f', darkColor: '#0e2616'
+                    });
+                  }
+                };
+                if (!state._bFired && actT >= 0.32)  { state._bFired = true;  bodyBounce.impulse(-14 * sMul); emitVines(0); }
+                if (!state._bFired2 && actT >= 0.48) { state._bFired2 = true; bodyBounce.impulse(-12 * sMul); emitVines(1); }
+                if (!state._bFired3 && actT >= 0.62) { state._bFired3 = true; bodyBounce.impulse(-10 * sMul); emitVines(2); }
+              } else {
+                const u = clamp((actT - 0.72) / 0.23, 0, 1);
+                state.x = ax; state.y = ay; state.z = 9.2 * sMul;
+                standTgt = 0.35 * (1 - u);
+                state.mawStage = u < 0.4 ? 'half' : 'closed';
+              }
+            } else if (act === 'battle_stagger') {
+              const p = clamp(actT / 0.85, 0, 1);
+              const decay = 1 - p;
+              const wobble = Math.sin(actT * 30) * 2.2 * decay * sMul;
+              state.x = ax - dirX * 3.8 * Math.sin(p * Math.PI) * sMul + sideX * wobble;
+              state.y = ay - dirY * 3.8 * Math.sin(p * Math.PI) * sMul + sideY * wobble;
+              state.z = lerp(9.2, 6.2, Math.sin(p * Math.PI)) * sMul;
+              state.yaw = aimYaw + Math.sin(actT * 20) * 0.22 * decay;
+              state.mawStage = 'wide';
+              crouchTgt = 1.6 * Math.sin(p * Math.PI) * sMul;
+              if (!state._bFired) {
+                state._bFired = true;
+                bodyBounce.impulse(-22 * sMul);
+                for (const f of furTufts) f.tip.impulse((Math.random() - 0.5) * 32, (Math.random() - 0.5) * 32, -38 * sMul);
+                if (vfx) {
+                  vfx.addRipple(ax, ay, 6 * sMul, 26 * sMul, 0.58, 2.2);
+                  for (let i = 0; i < 16; i++) {
+                    const a = (i / 16) * Math.PI * 2;
+                    const spd = (14 + Math.random() * 14) * sMul;
+                    vfx.spawnParticle(ax, ay, 13 * sMul, Math.cos(a) * spd, Math.sin(a) * spd, (11 + Math.random() * 13) * sMul, 0.48, 1.8, i % 2 === 0 ? '#b8f4ff' : '#ffffff', true, 44);
+                  }
+                }
+              }
+            } else {
+              // battle_hurt (0.35s)
+              const p = clamp(actT / 0.35, 0, 1);
+              const env = Math.sin(p * Math.PI);
+              const vib = Math.sin(actT * 56) * 1.4 * (1 - p) * sMul;
+              state.x = ax - dirX * 4.0 * env * sMul + sideX * vib;
+              state.y = ay - dirY * 4.0 * env * sMul + sideY * vib;
+              state.z = 9.2 * sMul;
+              state.yaw = aimYaw + Math.sin(actT * 44) * 0.14 * (1 - p);
+              state.mawStage = env > 0.35 ? 'half' : 'closed';
+              crouchTgt = 1.2 * env * sMul;
+              if (!state._bFired) {
+                state._bFired = true;
+                bodyBounce.impulse(-14 * sMul);
+                for (const f of furTufts) f.root.impulse(0, 0, -22 * sMul);
+              }
+            }
+
+            state.vx = (state.x - prevX) / Math.max(dt, 0.001);
+            state.vy = (state.y - prevY) / Math.max(dt, 0.001);
+            state.standBlend = clamp(standSpring.update(dt, standTgt, 68 * sp, clamp(6.8 * dScale, 3.0, 11.0)), 0, 1.05);
+            state.crouch = lerp(state.crouch, crouchTgt, expSmooth(dt, 14));
+            state.tiltX = 0; state.tiltY = 0;
+            headLookSpring.update(dt, 0, 68 * sp, clamp(6.6 * dScale, 3.0, 10.5));
+            bodyBounce.update(dt, 0, 120 * sp, clamp(7.6 * dScale, 3.0, 12.0));
+            if (isNewAct) gait.reset(state.x, state.y, state.yaw);
+            gait.update(dt, state.x, state.y, state.z - state.crouch, state.yaw, state.vx, state.vy, {
+              mode: 'walk4', scaleMul: sMul, stepFreq: 1.8, stepHeight: 2.2 * sMul, stepThreshold: 3.6 * sMul
+            });
+            instance.footContacts = gait.legs.map(l => ({ x: l.footX, y: l.footY, z: l.footZ, r: 3.6 * sMul }));
+            const bodyLift = state.z - state.crouch + clamp(bodyBounce.x * 0.14, -2.4, 2.2);
+            for (const f of furTufts) {
+              const [ftx, fty] = localToWorldXY(state.x, state.y, state.yaw, f.lx * sMul, (f.ly - state.standBlend * 1.4) * sMul);
+              const ftz = bodyLift + (f.lz + state.standBlend * 3.4) * sMul;
+              f.root.update(dt, ftx, fty, ftz, f.root.stiffness * sp, clamp(f.root.damping * dScale, 2.4, 11.5));
+              const [tipX, tipY] = localToWorldXY(f.root.x, f.root.y, state.yaw, Math.sign(f.lx) * 1.5 * sMul, -1.3 * sMul);
+              f.tip.update(dt, tipX, tipY, f.root.z - 2.8 * sMul, f.tip.stiffness * sp, clamp(f.tip.damping * dScale, 2.0, 10.5));
+            }
+            sockets.setLocal('bellyMaw', state.x, state.y, state.z - state.crouch, state.yaw, 0, 9.6, 8.2 + state.standBlend * 2.5, sMul);
+            return;
+          }
+          state._bAct = '';
 
           // 10.5s 生态循环：0..4.5s 四足沉稳巡游 → 4.5..8.4s 停步人立昂身张开竖裂肚嘴深吸落果 → 8.4..10.5s 落掌震地抖毛恢复
           state.habitTimer = (state.habitTimer + dt) % 10.5;

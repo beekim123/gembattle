@@ -1,0 +1,420 @@
+{
+  "packId": "cards",
+  "subPackage": "UI-02A",
+  "version": 1,
+  "name": "七色宝石与秘术卡牌",
+  "entry": "bundle/pack_cards.js",
+  "mountMode": "Object.assign(window.Code00ArtPacks.cards, ...)",
+  "cardSize": {
+    "width": 62,
+    "height": 88
+  },
+  "exports": [
+    "id",
+    "version",
+    "cardsName",
+    "CARD_W",
+    "CARD_H",
+    "init",
+    "initCards",
+    "drawCard",
+    "drawCardBack",
+    "drawChainSlot"
+  ],
+  "assets": {
+    "gems": [
+      {
+        "color": 0,
+        "name": "红",
+        "rgb": [
+          1,
+          0,
+          0
+        ],
+        "silhouette": "竖长红曜菱尖晶",
+        "colors": {
+          "main": "#e2483c",
+          "dark": "#8e1f18",
+          "light": "#ff9e8e"
+        }
+      },
+      {
+        "color": 1,
+        "name": "黄",
+        "rgb": [
+          1,
+          1,
+          0
+        ],
+        "silhouette": "宽面琥珀八角盾晶",
+        "colors": {
+          "main": "#efc93f",
+          "dark": "#9a7a10",
+          "light": "#fff6b0"
+        }
+      },
+      {
+        "color": 2,
+        "name": "绿",
+        "rgb": [
+          0,
+          1,
+          0
+        ],
+        "silhouette": "祖母绿长方阶梯切面晶",
+        "colors": {
+          "main": "#4cb050",
+          "dark": "#1f6a24",
+          "light": "#a6f2a0"
+        }
+      },
+      {
+        "color": 3,
+        "name": "青",
+        "rgb": [
+          0,
+          1,
+          1
+        ],
+        "silhouette": "碧海泪滴尖顶晶",
+        "colors": {
+          "main": "#3fbac4",
+          "dark": "#14727c",
+          "light": "#aef6fa"
+        }
+      },
+      {
+        "color": 4,
+        "name": "蓝",
+        "rgb": [
+          0,
+          0,
+          1
+        ],
+        "silhouette": "深蓝风筝盾钻",
+        "colors": {
+          "main": "#4474dd",
+          "dark": "#1f3f9a",
+          "light": "#9cc4ff"
+        }
+      },
+      {
+        "color": 5,
+        "name": "紫",
+        "rgb": [
+          1,
+          0,
+          1
+        ],
+        "silhouette": "紫晶主尖+两侧小晶簇",
+        "colors": {
+          "main": "#9254cf",
+          "dark": "#561e8c",
+          "light": "#dfb0ff"
+        }
+      },
+      {
+        "color": 6,
+        "name": "白",
+        "rgb": [
+          1,
+          1,
+          1
+        ],
+        "silhouette": "百搭六角棱白晶核（带微红绿蓝切边）",
+        "colors": {
+          "main": "#f4f0e6",
+          "dark": "#9a9684",
+          "light": "#ffffff"
+        }
+      }
+    ],
+    "arcanaInstant": [
+      {
+        "id": "spring",
+        "title": "涌泉抽牌",
+        "color": -1,
+        "frame": "silver-violet"
+      },
+      {
+        "id": "ward",
+        "title": "护身结界",
+        "color": -1,
+        "frame": "silver-violet"
+      },
+      {
+        "id": "shatter",
+        "title": "震裂破甲",
+        "color": -1,
+        "frame": "silver-violet"
+      },
+      {
+        "id": "surge",
+        "title": "魔力沸腾",
+        "color": -1,
+        "frame": "silver-violet"
+      },
+      {
+        "id": "resonance",
+        "title": "双色共鸣",
+        "color": -1,
+        "frame": "silver-violet"
+      }
+    ],
+    "arcanaChain": [
+      {
+        "id": "refract",
+        "title": "逆色折射",
+        "defaultColor": 6,
+        "frame": "warm-gold",
+        "supportsAllColors": true
+      },
+      {
+        "id": "prism",
+        "title": "倍增棱镜",
+        "defaultColor": 0,
+        "frame": "warm-gold",
+        "supportsAllColors": true
+      },
+      {
+        "id": "keep",
+        "title": "凝色留存",
+        "defaultColor": 3,
+        "frame": "warm-gold",
+        "supportsAllColors": true
+      }
+    ],
+    "specialCards": [
+      {
+        "id": "junk",
+        "title": "缠藤废牌",
+        "size": [
+          62,
+          88
+        ]
+      },
+      {
+        "id": "masked",
+        "title": "被遮蔽石板牌",
+        "size": [
+          62,
+          88
+        ]
+      },
+      {
+        "id": "back",
+        "title": "六色罗盘牌背",
+        "size": [
+          62,
+          88
+        ]
+      }
+    ],
+    "chainSlots": [
+      {
+        "id": "slotEmpty",
+        "title": "石刻法阵空槽",
+        "size": [
+          54,
+          76
+        ]
+      },
+      {
+        "id": "slotFilled",
+        "title": "石刻法阵已填槽",
+        "size": [
+          54,
+          76
+        ]
+      }
+    ],
+    "dynamicStates": {
+      "frames": [
+        "near",
+        "comp",
+        "wild",
+        "break"
+      ],
+      "flags": [
+        "lit",
+        "dim",
+        "masked",
+        "tag",
+        "tagColor",
+        "t"
+      ],
+      "carveBridge": "优先调用 Code00ArtPacks.cards.drawCarveBadge，未挂载时使用彩色方徽兜底"
+    }
+  },
+  "offscreenMemory": {
+    "canvasCount": 27,
+    "totalBytes": 539456,
+    "totalMB": 0.5145,
+    "budgetBytes": 2097152,
+    "budgetUsagePercent": 25.72,
+    "canvases": [
+      {
+        "id": "gem_0_red",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "gem_1_yellow",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "gem_2_green",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "gem_3_cyan",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "gem_4_blue",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "gem_5_purple",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "gem_6_white",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "arcana_instant_spring",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "arcana_instant_ward",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "arcana_instant_shatter",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "arcana_instant_surge",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "arcana_instant_resonance",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "arcana_chain_base_0",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "arcana_chain_base_1",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "arcana_chain_base_2",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "arcana_chain_base_3",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "arcana_chain_base_4",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "arcana_chain_base_5",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "arcana_chain_base_6",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "arcana_chain_art_refract",
+        "width": 48,
+        "height": 46,
+        "bytes": 8832
+      },
+      {
+        "id": "arcana_chain_art_prism",
+        "width": 48,
+        "height": 46,
+        "bytes": 8832
+      },
+      {
+        "id": "arcana_chain_art_keep",
+        "width": 48,
+        "height": 46,
+        "bytes": 8832
+      },
+      {
+        "id": "card_junk",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "card_masked",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "card_back",
+        "width": 62,
+        "height": 88,
+        "bytes": 21824
+      },
+      {
+        "id": "chain_slot_empty",
+        "width": 54,
+        "height": 76,
+        "bytes": 16416
+      },
+      {
+        "id": "chain_slot_filled",
+        "width": 54,
+        "height": 76,
+        "bytes": 16416
+      }
+    ]
+  }
+}

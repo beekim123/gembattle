@@ -1,0 +1,394 @@
+{
+  "id": "mapPanels",
+  "version": 1,
+  "name": "落果密林·手绘卷轴与非战斗装饰",
+  "entry": "bundle/pack_map_panels.js",
+  "globalPath": "window.Code00ArtPacks.mapPanels",
+  "exports": [
+    "init",
+    "drawMapScrollBg",
+    "drawMapGateDivider",
+    "drawMapNode",
+    "drawTitleEmblem",
+    "drawSceneRibbon",
+    "drawChoiceIcon",
+    "drawSummaryCrest"
+  ],
+  "coverage": {
+    "mapSegments": [
+      "林缘",
+      "青苔界门",
+      "腹地",
+      "巨木树冠"
+    ],
+    "nodeTypes": [
+      "battle",
+      "elite",
+      "event",
+      "shop",
+      "camp",
+      "boss"
+    ],
+    "nodeStatuses": [
+      "visited",
+      "avail",
+      "future",
+      "dim"
+    ],
+    "choiceIcons": [
+      "camp_heal",
+      "camp_carve",
+      "camp_purge",
+      "shop_potion",
+      "shop_carve",
+      "gate_retreat",
+      "gate_advance",
+      "event_wood",
+      "event_stele",
+      "event_pool",
+      "event_bag"
+    ],
+    "summaryCrests": [
+      "victory",
+      "retreat",
+      "defeat"
+    ]
+  },
+  "offscreenSummary": {
+    "canvasCount": 41,
+    "totalBytes": 263040,
+    "totalMB": 0.2509,
+    "budgetBytes": 4194304,
+    "budgetUsagePercent": 6.27
+  },
+  "offscreenCanvases": [
+    {
+      "id": "parchTile",
+      "category": "mapScroll",
+      "width": 128,
+      "height": 128,
+      "bytes": 65536,
+      "desc": "暗林手绘羊皮纸无缝平铺底纹"
+    },
+    {
+      "id": "marginL",
+      "category": "mapScroll",
+      "width": 28,
+      "height": 128,
+      "bytes": 14336,
+      "desc": "卷轴左侧木轴包边、铜钉与毛边标尺无缝竖条"
+    },
+    {
+      "id": "marginR",
+      "category": "mapScroll",
+      "width": 28,
+      "height": 128,
+      "bytes": 14336,
+      "desc": "卷轴右侧木轴包边、铜钉与毛边标尺无缝竖条"
+    },
+    {
+      "id": "rollerCapL",
+      "category": "mapScroll",
+      "width": 26,
+      "height": 22,
+      "bytes": 2288,
+      "desc": "卷轴左侧车床木轴铜饰端头"
+    },
+    {
+      "id": "rollerCapR",
+      "category": "mapScroll",
+      "width": 26,
+      "height": 22,
+      "bytes": 2288,
+      "desc": "卷轴右侧车床木轴铜饰端头"
+    },
+    {
+      "id": "lm_tree",
+      "category": "mapLandmark",
+      "width": 40,
+      "height": 40,
+      "bytes": 6400,
+      "desc": "林缘地标暗纹：嫩叶小树与落果"
+    },
+    {
+      "id": "lm_fern",
+      "category": "mapLandmark",
+      "width": 40,
+      "height": 40,
+      "bytes": 6400,
+      "desc": "林缘地标暗纹：林间蕨草与蘑菇"
+    },
+    {
+      "id": "lm_pillar",
+      "category": "mapLandmark",
+      "width": 40,
+      "height": 40,
+      "bytes": 6400,
+      "desc": "青苔界门地标暗纹：青苔残柱"
+    },
+    {
+      "id": "lm_bramble",
+      "category": "mapLandmark",
+      "width": 40,
+      "height": 40,
+      "bytes": 6400,
+      "desc": "密林腹地地标暗纹：古藤荆棘枯枝"
+    },
+    {
+      "id": "lm_totem",
+      "category": "mapLandmark",
+      "width": 40,
+      "height": 40,
+      "bytes": 6400,
+      "desc": "密林腹地地标暗纹：林界古石刻碑"
+    },
+    {
+      "id": "lm_canopy",
+      "category": "mapLandmark",
+      "width": 40,
+      "height": 40,
+      "bytes": 6400,
+      "desc": "巨木树冠地标暗纹：古木垂藤巨冠"
+    },
+    {
+      "id": "lm_compass",
+      "category": "mapLandmark",
+      "width": 44,
+      "height": 44,
+      "bytes": 7744,
+      "desc": "卷轴右下角手绘复古罗盘暗纹"
+    },
+    {
+      "id": "gateBrick",
+      "category": "mapGate",
+      "width": 32,
+      "height": 16,
+      "bytes": 2048,
+      "desc": "青苔界门石砖横梁无缝横条"
+    },
+    {
+      "id": "gateClosed",
+      "category": "mapGate",
+      "width": 28,
+      "height": 20,
+      "bytes": 2240,
+      "desc": "青苔界门微型闭合石门徽章"
+    },
+    {
+      "id": "gateOpen",
+      "category": "mapGate",
+      "width": 28,
+      "height": 20,
+      "bytes": 2240,
+      "desc": "青苔界门微型敞开石门徽章"
+    },
+    {
+      "id": "node_battle",
+      "category": "mapNode",
+      "width": 28,
+      "height": 28,
+      "bytes": 3136,
+      "desc": "遭遇战节点：暗铁交叉双刃盾徽"
+    },
+    {
+      "id": "node_elite",
+      "category": "mapNode",
+      "width": 28,
+      "height": 28,
+      "bytes": 3136,
+      "desc": "强敌战节点：赤金双角兽首重盾"
+    },
+    {
+      "id": "node_event",
+      "category": "mapNode",
+      "width": 28,
+      "height": 28,
+      "bytes": 3136,
+      "desc": "林中偶遇节点：靛紫古石符文问号印"
+    },
+    {
+      "id": "node_shop",
+      "category": "mapNode",
+      "width": 28,
+      "height": 28,
+      "bytes": 3136,
+      "desc": "行商营帐节点：暖黄红条纹商帐钱袋徽"
+    },
+    {
+      "id": "node_camp_0",
+      "category": "mapNode",
+      "width": 28,
+      "height": 28,
+      "bytes": 3136,
+      "desc": "营火整备节点：像素篝火徽记（帧 1）"
+    },
+    {
+      "id": "node_camp_1",
+      "category": "mapNode",
+      "width": 28,
+      "height": 28,
+      "bytes": 3136,
+      "desc": "营火整备节点：像素篝火徽记（帧 2）"
+    },
+    {
+      "id": "node_boss",
+      "category": "mapNode",
+      "width": 40,
+      "height": 40,
+      "bytes": 6400,
+      "desc": "林地首领节点：大型古木三宝石金冠王徽"
+    },
+    {
+      "id": "node_check",
+      "category": "mapNode",
+      "width": 16,
+      "height": 16,
+      "bytes": 1024,
+      "desc": "已走过节点：暖金像素对勾印章"
+    },
+    {
+      "id": "node_ptr",
+      "category": "mapNode",
+      "width": 12,
+      "height": 10,
+      "bytes": 480,
+      "desc": "当前可走节点：动态金指针箭标"
+    },
+    {
+      "id": "vineL",
+      "category": "titleEmblem",
+      "width": 26,
+      "height": 40,
+      "bytes": 4160,
+      "desc": "标题牌左侧嫩叶藤蔓与赤红落果饰件"
+    },
+    {
+      "id": "vineR",
+      "category": "titleEmblem",
+      "width": 26,
+      "height": 40,
+      "bytes": 4160,
+      "desc": "标题牌右侧嫩叶藤蔓与赤红落果饰件"
+    },
+    {
+      "id": "gemTriad",
+      "category": "titleEmblem",
+      "width": 44,
+      "height": 18,
+      "bytes": 3168,
+      "desc": "标题牌顶部铜框三原色宝石嵌饰"
+    },
+    {
+      "id": "icon_camp_heal",
+      "category": "choiceIcon",
+      "width": 28,
+      "height": 28,
+      "bytes": 3136,
+      "desc": "营火选项图标：暖火烤果与红心"
+    },
+    {
+      "id": "icon_camp_carve",
+      "category": "choiceIcon",
+      "width": 28,
+      "height": 28,
+      "bytes": 3136,
+      "desc": "营火选项图标：刻刀与蓝晶雕琢"
+    },
+    {
+      "id": "icon_camp_purge",
+      "category": "choiceIcon",
+      "width": 28,
+      "height": 28,
+      "bytes": 3136,
+      "desc": "营火选项图标：火焰焚旧牌与行囊"
+    },
+    {
+      "id": "icon_shop_potion",
+      "category": "choiceIcon",
+      "width": 28,
+      "height": 28,
+      "bytes": 3136,
+      "desc": "行商选项图标：红果玻璃药瓶"
+    },
+    {
+      "id": "icon_shop_carve",
+      "category": "choiceIcon",
+      "width": 28,
+      "height": 28,
+      "bytes": 3136,
+      "desc": "行商选项图标：精工雕琢工作台"
+    },
+    {
+      "id": "icon_gate_retreat",
+      "category": "choiceIcon",
+      "width": 28,
+      "height": 28,
+      "bytes": 3136,
+      "desc": "界门选项图标：满载金币布袋与返程路标"
+    },
+    {
+      "id": "icon_gate_advance",
+      "category": "choiceIcon",
+      "width": 28,
+      "height": 28,
+      "bytes": 3136,
+      "desc": "界门选项图标：利剑破青苔石门与树冠"
+    },
+    {
+      "id": "icon_event_wood",
+      "category": "choiceIcon",
+      "width": 28,
+      "height": 28,
+      "bytes": 3136,
+      "desc": "偶遇选项图标：渗出红浆的空心老木"
+    },
+    {
+      "id": "icon_event_stele",
+      "category": "choiceIcon",
+      "width": 28,
+      "height": 28,
+      "bytes": 3136,
+      "desc": "偶遇选项图标：嵌晶青苔古石碑"
+    },
+    {
+      "id": "icon_event_pool",
+      "category": "choiceIcon",
+      "width": 28,
+      "height": 28,
+      "bytes": 3136,
+      "desc": "偶遇选项图标：沉着旧币的林泉水洼"
+    },
+    {
+      "id": "icon_event_bag",
+      "category": "choiceIcon",
+      "width": 28,
+      "height": 28,
+      "bytes": 3136,
+      "desc": "偶遇选项图标：树根空腔里的旧皮袋"
+    },
+    {
+      "id": "crest_victory",
+      "category": "summaryCrest",
+      "width": 90,
+      "height": 36,
+      "bytes": 12960,
+      "desc": "结算通关大纹章：古木王冠、翠叶月桂与三宝石金徽"
+    },
+    {
+      "id": "crest_retreat",
+      "category": "summaryCrest",
+      "width": 90,
+      "height": 36,
+      "bytes": 12960,
+      "desc": "结算折返大纹章：满囊金币布袋与铜色罗盘徽章"
+    },
+    {
+      "id": "crest_defeat",
+      "category": "summaryCrest",
+      "width": 90,
+      "height": 36,
+      "bytes": 12960,
+      "desc": "结算倒下大纹章：枯藤裂纹石盾与碎裂红心徽章"
+    }
+  ]
+}

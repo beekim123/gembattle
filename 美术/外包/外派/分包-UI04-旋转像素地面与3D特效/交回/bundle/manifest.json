@@ -1,0 +1,173 @@
+{
+  "id": "groundVfx",
+  "version": 1,
+  "name": "六生态可旋转像素地面与3D战斗特效",
+  "entry": "bundle/pack_ground_vfx.js",
+  "globalPath": "window.Code00ArtPacks.groundVfx",
+  "groundConfig": {
+    "defaultSize": 384,
+    "bytesPerTile": 589824,
+    "tileCount": 8,
+    "totalOffscreenBytes": 4718592,
+    "totalOffscreenMB": 4.5,
+    "budgetMB": 6.0,
+    "cacheKeyFormat": "${biomeId}_${size}",
+    "pixelRules": [
+      "imageSmoothingEnabled = false",
+      "无圆形展示台边框",
+      "无2D假树/假帐篷/假石门/假石碑/假火堆",
+      "色板与 core/habitats.js 同源"
+    ]
+  },
+  "biomes": [
+    {
+      "biomeId": "forest",
+      "label": "落果浅林",
+      "size": 384,
+      "bytes": 589824,
+      "palette": [
+        "#24472c",
+        "#34663c",
+        "#4b8046",
+        "#5c4b37",
+        "#d95736"
+      ],
+      "ambient3D": "斜飘像素绿/金落叶与外缘偶发红果落弹"
+    },
+    {
+      "biomeId": "swamp",
+      "label": "泽畔浅洼",
+      "size": 384,
+      "bytes": 589824,
+      "palette": [
+        "#1b2a1e",
+        "#243826",
+        "#2f5a58",
+        "#63a196",
+        "#94ba6c"
+      ],
+      "ambient3D": "贴地像素涟漪环、上升像素小泡与极淡像素雾带"
+    },
+    {
+      "biomeId": "meadow",
+      "label": "花甸林隙",
+      "size": 384,
+      "bytes": 589824,
+      "palette": [
+        "#346939",
+        "#488244",
+        "#6ca856",
+        "#f5b5c8",
+        "#fae078"
+      ],
+      "ambient3D": "飘浮暖金像素花粉"
+    },
+    {
+      "biomeId": "ruins",
+      "label": "苔石古径",
+      "size": 384,
+      "bytes": 589824,
+      "palette": [
+        "#404a48",
+        "#5d6966",
+        "#7c8a85",
+        "#5a8756",
+        "#314a4c"
+      ],
+      "ambient3D": "缓升淡青苔孢像素点与细白暖汽像素块"
+    },
+    {
+      "biomeId": "canopy",
+      "label": "巨木树冠",
+      "size": 384,
+      "bytes": 589824,
+      "palette": [
+        "#3d281b",
+        "#61412b",
+        "#7a5234",
+        "#1e4526",
+        "#4d8f47"
+      ],
+      "ambient3D": "受 wind 加速的斜掠像素风线与疾飞碎叶"
+    },
+    {
+      "biomeId": "camp",
+      "label": "林间营地",
+      "size": 384,
+      "bytes": 589824,
+      "palette": [
+        "#1c3a26",
+        "#2c5236",
+        "#524638",
+        "#383533",
+        "#857e73"
+      ],
+      "ambient3D": "围绕 (0, 0) 螺旋升腾的暖金/橘红像素火屑"
+    },
+    {
+      "biomeId": "trade",
+      "label": "林间土路",
+      "size": 384,
+      "bytes": 589824,
+      "palette": [
+        "#54442d",
+        "#6a573a",
+        "#8a7650",
+        "#9e8960",
+        "#356139"
+      ],
+      "ambient3D": "低空轻飘暖色像素浮尘"
+    },
+    {
+      "biomeId": "gate",
+      "label": "青石林道",
+      "size": 384,
+      "bytes": 589824,
+      "palette": [
+        "#465650",
+        "#566660",
+        "#6f8079",
+        "#608f57",
+        "#294a30"
+      ],
+      "ambient3D": "沿石道飘落的青苔像素细屑"
+    }
+  ],
+  "effects3D": {
+    "spellBolts": [
+      "red",
+      "green",
+      "blue",
+      "white",
+      "rainbow"
+    ],
+    "impactWaves": [
+      "white_wave",
+      "rainbow_burst",
+      "shield_shatter",
+      "ward_block"
+    ],
+    "monsterAttacks": [
+      "spit",
+      "puff",
+      "club",
+      "petals",
+      "fruit",
+      "claw",
+      "bite",
+      "roots"
+    ]
+  },
+  "exports": [
+    "id",
+    "version",
+    "name",
+    "BIOME_IDS",
+    "init",
+    "buildGroundTile",
+    "drawGroundAmbient3D",
+    "drawSpellBolt3D",
+    "drawImpactWave3D",
+    "drawAttackFx3D"
+  ]
+}

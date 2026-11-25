@@ -1,0 +1,440 @@
+{
+  "id": "uiSkin",
+  "version": 1,
+  "name": "复古奇幻精绘像素皮肤",
+  "entry": "bundle/pack_ui_skin.js",
+  "globalMount": "window.Code00ArtPacks.uiSkin",
+  "palette": {
+    "outline": "#0c121a",
+    "wood": [
+      "#18110c",
+      "#261b13",
+      "#3d2b1d",
+      "#694c34"
+    ],
+    "brass": [
+      "#5e3d12",
+      "#a67424",
+      "#d8a848",
+      "#fff0b4"
+    ],
+    "parchment": [
+      "#7a6340",
+      "#cbb68e",
+      "#e4d5b4",
+      "#f7eed6",
+      "#2b1e14"
+    ],
+    "stone": [
+      "#161e1c",
+      "#24302d",
+      "#3a4c47",
+      "#5f8c58"
+    ],
+    "buttonPrimary": [
+      "#6e420e",
+      "#c48918",
+      "#e6b32e",
+      "#fff2a8"
+    ],
+    "buttonSecondary": [
+      "#19291e",
+      "#2d4a34",
+      "#436b4b",
+      "#8ec48a"
+    ],
+    "buttonDanger": [
+      "#521614",
+      "#9e2c26",
+      "#d6483c",
+      "#ffaca0"
+    ],
+    "colorRing": [
+      "#e2483c",
+      "#efc93f",
+      "#4cb050",
+      "#3fbac4",
+      "#4474dd",
+      "#9254cf",
+      "#f4f0e6"
+    ],
+    "gemPrimaries": [
+      "#ff5a4a",
+      "#52d65a",
+      "#5a8cff"
+    ]
+  },
+  "offscreenBudget": {
+    "limitBytes": 2097152,
+    "canvasCount": 44,
+    "totalBytes": 215320,
+    "totalMB": 0.205,
+    "canvases": [
+      {
+        "name": "panel_wood",
+        "w": 72,
+        "h": 72,
+        "bytes": 20736,
+        "desc": "暗胡桃木纹与黄铜折角铆钉 9-slice 模板"
+      },
+      {
+        "name": "panel_parchment",
+        "w": 72,
+        "h": 72,
+        "bytes": 20736,
+        "desc": "暖羊皮纸微斑折痕与细金内线 9-slice 模板"
+      },
+      {
+        "name": "panel_stone",
+        "w": 72,
+        "h": 72,
+        "bytes": 20736,
+        "desc": "苔藓青石板与阶梯砖角 9-slice 模板"
+      },
+      {
+        "name": "panel_tooltip",
+        "w": 72,
+        "h": 72,
+        "bytes": 20736,
+        "desc": "紧凑深色木石镶金浮窗 9-slice 模板"
+      },
+      {
+        "name": "panel_bar",
+        "w": 72,
+        "h": 32,
+        "bytes": 9216,
+        "desc": "顶栏暗木横梁与底部黄铜收边 3-slice 模板"
+      },
+      {
+        "name": "btn_primary_normal",
+        "w": 48,
+        "h": 32,
+        "bytes": 6144,
+        "desc": "primary 按钮 normal 态 9-slice 模板"
+      },
+      {
+        "name": "btn_primary_hover",
+        "w": 48,
+        "h": 32,
+        "bytes": 6144,
+        "desc": "primary 按钮 hover 态 9-slice 模板"
+      },
+      {
+        "name": "btn_primary_pressed",
+        "w": 48,
+        "h": 32,
+        "bytes": 6144,
+        "desc": "primary 按钮 pressed 态 9-slice 模板"
+      },
+      {
+        "name": "btn_primary_disabled",
+        "w": 48,
+        "h": 32,
+        "bytes": 6144,
+        "desc": "primary 按钮 disabled 态 9-slice 模板"
+      },
+      {
+        "name": "btn_secondary_normal",
+        "w": 48,
+        "h": 32,
+        "bytes": 6144,
+        "desc": "secondary 按钮 normal 态 9-slice 模板"
+      },
+      {
+        "name": "btn_secondary_hover",
+        "w": 48,
+        "h": 32,
+        "bytes": 6144,
+        "desc": "secondary 按钮 hover 态 9-slice 模板"
+      },
+      {
+        "name": "btn_secondary_pressed",
+        "w": 48,
+        "h": 32,
+        "bytes": 6144,
+        "desc": "secondary 按钮 pressed 态 9-slice 模板"
+      },
+      {
+        "name": "btn_secondary_disabled",
+        "w": 48,
+        "h": 32,
+        "bytes": 6144,
+        "desc": "secondary 按钮 disabled 态 9-slice 模板"
+      },
+      {
+        "name": "btn_danger_normal",
+        "w": 48,
+        "h": 32,
+        "bytes": 6144,
+        "desc": "danger 按钮 normal 态 9-slice 模板"
+      },
+      {
+        "name": "btn_danger_hover",
+        "w": 48,
+        "h": 32,
+        "bytes": 6144,
+        "desc": "danger 按钮 hover 态 9-slice 模板"
+      },
+      {
+        "name": "btn_danger_pressed",
+        "w": 48,
+        "h": 32,
+        "bytes": 6144,
+        "desc": "danger 按钮 pressed 态 9-slice 模板"
+      },
+      {
+        "name": "btn_danger_disabled",
+        "w": 48,
+        "h": 32,
+        "bytes": 6144,
+        "desc": "danger 按钮 disabled 态 9-slice 模板"
+      },
+      {
+        "name": "btn_ghost_normal",
+        "w": 48,
+        "h": 32,
+        "bytes": 6144,
+        "desc": "ghost 按钮 normal 态 9-slice 模板"
+      },
+      {
+        "name": "btn_ghost_hover",
+        "w": 48,
+        "h": 32,
+        "bytes": 6144,
+        "desc": "ghost 按钮 hover 态 9-slice 模板"
+      },
+      {
+        "name": "btn_ghost_pressed",
+        "w": 48,
+        "h": 32,
+        "bytes": 6144,
+        "desc": "ghost 按钮 pressed 态 9-slice 模板"
+      },
+      {
+        "name": "btn_ghost_disabled",
+        "w": 48,
+        "h": 32,
+        "bytes": 6144,
+        "desc": "ghost 按钮 disabled 态 9-slice 模板"
+      },
+      {
+        "name": "heart_full",
+        "w": 16,
+        "h": 16,
+        "bytes": 1024,
+        "desc": "像素红心（full）"
+      },
+      {
+        "name": "heart_half",
+        "w": 16,
+        "h": 16,
+        "bytes": 1024,
+        "desc": "像素红心（half）"
+      },
+      {
+        "name": "heart_empty",
+        "w": 16,
+        "h": 16,
+        "bytes": 1024,
+        "desc": "像素红心（empty）"
+      },
+      {
+        "name": "coin",
+        "w": 16,
+        "h": 16,
+        "bytes": 1024,
+        "desc": "黄铜像素金币徽记"
+      },
+      {
+        "name": "shield_red_intact",
+        "w": 11,
+        "h": 13,
+        "bytes": 572,
+        "desc": "red色棱面护盾晶格（intact）"
+      },
+      {
+        "name": "shield_red_broken",
+        "w": 11,
+        "h": 13,
+        "bytes": 572,
+        "desc": "red色棱面护盾晶格（broken）"
+      },
+      {
+        "name": "shield_green_intact",
+        "w": 11,
+        "h": 13,
+        "bytes": 572,
+        "desc": "green色棱面护盾晶格（intact）"
+      },
+      {
+        "name": "shield_green_broken",
+        "w": 11,
+        "h": 13,
+        "bytes": 572,
+        "desc": "green色棱面护盾晶格（broken）"
+      },
+      {
+        "name": "shield_blue_intact",
+        "w": 11,
+        "h": 13,
+        "bytes": 572,
+        "desc": "blue色棱面护盾晶格（intact）"
+      },
+      {
+        "name": "shield_blue_broken",
+        "w": 11,
+        "h": 13,
+        "bytes": 572,
+        "desc": "blue色棱面护盾晶格（broken）"
+      },
+      {
+        "name": "ring_gem_0_red",
+        "w": 12,
+        "h": 12,
+        "bytes": 576,
+        "desc": "集色环red切面像素宝石"
+      },
+      {
+        "name": "ring_gem_1_yellow",
+        "w": 12,
+        "h": 12,
+        "bytes": 576,
+        "desc": "集色环yellow切面像素宝石"
+      },
+      {
+        "name": "ring_gem_2_green",
+        "w": 12,
+        "h": 12,
+        "bytes": 576,
+        "desc": "集色环green切面像素宝石"
+      },
+      {
+        "name": "ring_gem_3_cyan",
+        "w": 12,
+        "h": 12,
+        "bytes": 576,
+        "desc": "集色环cyan切面像素宝石"
+      },
+      {
+        "name": "ring_gem_4_blue",
+        "w": 12,
+        "h": 12,
+        "bytes": 576,
+        "desc": "集色环blue切面像素宝石"
+      },
+      {
+        "name": "ring_gem_5_purple",
+        "w": 12,
+        "h": 12,
+        "bytes": 576,
+        "desc": "集色环purple切面像素宝石"
+      },
+      {
+        "name": "ring_gem_6_white",
+        "w": 12,
+        "h": 12,
+        "bytes": 576,
+        "desc": "集色环white切面像素宝石"
+      },
+      {
+        "name": "ring_socket_empty",
+        "w": 12,
+        "h": 12,
+        "bytes": 576,
+        "desc": "集色环深凹青铜空槽"
+      },
+      {
+        "name": "big_gem_0_red",
+        "w": 14,
+        "h": 14,
+        "bytes": 784,
+        "desc": "宝石等级条red多面体小宝石"
+      },
+      {
+        "name": "big_gem_1_green",
+        "w": 14,
+        "h": 14,
+        "bytes": 784,
+        "desc": "宝石等级条green多面体小宝石"
+      },
+      {
+        "name": "big_gem_2_blue",
+        "w": 14,
+        "h": 14,
+        "bytes": 784,
+        "desc": "宝石等级条blue多面体小宝石"
+      },
+      {
+        "name": "medallion_normal",
+        "w": 36,
+        "h": 36,
+        "bytes": 5184,
+        "desc": "倒计时青铜圆章"
+      },
+      {
+        "name": "medallion_danger",
+        "w": 36,
+        "h": 36,
+        "bytes": 5184,
+        "desc": "倒计时警示朱红圆章"
+      }
+    ]
+  },
+  "exports": [
+    {
+      "name": "init",
+      "signature": "init(makeCanvas)",
+      "desc": "幂等预烘焙离屏 9-slice 面板、4×4 按钮与像素精灵，未手调时自动懒初始化"
+    },
+    {
+      "name": "drawPanel",
+      "signature": "drawPanel(ctx, x, y, w, h, variant='wood', opts={})",
+      "desc": "支持 wood / parchment / stone / tooltip / bar 五套平铺九宫格容器与 accentColor / highlight / alpha"
+    },
+    {
+      "name": "drawButton",
+      "signature": "drawButton(ctx, x, y, w, h, label, state={})",
+      "desc": "支持 primary / secondary / danger / ghost 四风格与常态 / 悬停 / 按下 / 禁用四态立体像素按钮"
+    },
+    {
+      "name": "drawHeart",
+      "signature": "drawHeart(ctx, cx, cy, size, fillState)",
+      "desc": "16×16 手绘像素红心，支持满心(1)、半心(0.5)、石槽空心(0)"
+    },
+    {
+      "name": "drawCoin",
+      "signature": "drawCoin(ctx, cx, cy, size)",
+      "desc": "16×16 锻打黄铜像素金币徽记"
+    },
+    {
+      "name": "drawHpBar",
+      "signature": "drawHpBar(ctx, cx, y, w, hp, maxHp, bar, barsTotal)",
+      "desc": "青铜像素槽多段血条、叠层晶格指示与顶部纯数字血量读数"
+    },
+    {
+      "name": "drawShield",
+      "signature": "drawShield(ctx, cx, y, shield, shieldMax, broken)",
+      "desc": "红绿蓝三色棱面护盾晶格、碎裂暗槽与破盾青色像素签"
+    },
+    {
+      "name": "drawCountdown",
+      "signature": "drawCountdown(ctx, cx, cy, n, t, danger)",
+      "desc": "青铜/警示朱红像素圆章，含无模糊阶梯脉冲外圈与像素数字"
+    },
+    {
+      "name": "drawColorRing",
+      "signature": "drawColorRing(ctx, cx, cy, r, collectedMask, cursor, t)",
+      "desc": "六色青铜法环底座、切面宝石镶孔、白晶核心、旋转金框指针与集色读数"
+    },
+    {
+      "name": "drawGemLevelBar",
+      "signature": "drawGemLevelBar(ctx, x, y, w, channelIdx, level, exp, maxExp)",
+      "desc": "红绿蓝多面体像素小宝石、级数标签与镶边进度槽"
+    },
+    {
+      "name": "drawPixelNumber",
+      "signature": "drawPixelNumber(ctx, str, x, y, opts={})",
+      "desc": "手工 5×7 点阵像素字体，支持硬描边、暴击金橙梯度(crit)与逐字七彩(rainbow)"
+    }
+  ]
+}

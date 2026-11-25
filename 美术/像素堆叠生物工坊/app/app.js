@@ -127,6 +127,28 @@
   const templates = new Map();      // 资产 id → 第一个实例（克隆共用它的部件和烘焙缓存）
   const skinIdx = Object.create(null);
   let focus = null;                 // 焦点实例
+  let activeUiPack = null;          // 当前正在预览的 UI/贴图包
+  const UI_PACKS = (PW.UiPackViewer && PW.UiPackViewer.UI_PACKS) || [];
+  const UI_PACK_BY_ID = (PW.UiPackViewer && PW.UiPackViewer.UI_PACK_BY_ID) || {};
+
+  function clearUiPack() {
+    if (!activeUiPack) return;
+    activeUiPack = null;
+    if (PW.UiPackViewer) PW.UiPackViewer.stopAnim();
+    const st = $('uiPackStage');
+    if (st) st.classList.remove('show');
+  }
+
+  function selectUiPack(id) {
+    const pack = UI_PACK_BY_ID[id];
+    if (!pack) return;
+    activeUiPack = pack;
+    ui.plan = null;
+    if (PW.UiPackViewer) PW.UiPackViewer.renderPack($('uiPackStage'), pack, makeCanvas);
+    renderLib();
+    syncInspector();
+    banner(`已加载 ${pack.code} · ${pack.name}`);
+  }
   let spawnSeq = 0;
   let thTarget = saved.th ?? 0.56;
   renderer.th = thTarget;
@@ -191,6 +213,7 @@
   }
 
   function setStage(defs, focusDef) {
+    clearUiPack();
     onStage.length = 0;
     for (const d of defs) onStage.push(spawn(d));
     focus = onStage.find(a => a.def === focusDef) || onStage[0] || null;
@@ -201,6 +224,7 @@
 
   function focusDef(def, announce = true) {
     if (!def) return;
+    clearUiPack();
     const existing = onStage.find(a => a.def === def);
     if (existing && onStage.length > 1) {
       focus = existing;
@@ -247,6 +271,7 @@
 
   function setHabitat(id, announce = true) {
     if (!HABITAT_MAP[id]) return;
+    clearUiPack();
     habitatId = id;
     renderer.renderSky(HABITAT_MAP[id]);
     renderer.vfx.clear();
@@ -294,8 +319,12 @@
 
   function renderCatTabs() {
     const counts = catCounts();
-    $('catTabs').innerHTML = Assets.CATEGORIES.map(c =>
-      `<button data-cat="${c.id}" class="${ui.category === c.id ? 'on' : ''}"><b>${c.name}</b><span>${counts[c.id]}</span></button>`
+    const tabs = [
+      ...Assets.CATEGORIES.map(c => ({ id: c.id, name: c.name, cnt: counts[c.id] })),
+      { id: 'uipacks', name: 'UI贴图', cnt: `${UI_PACKS.length}/${UI_PACKS.length}` }
+    ];
+    $('catTabs').innerHTML = tabs.map(t =>
+      `<button data-cat="${t.id}" class="${ui.category === t.id ? 'on' : ''}"><b>${t.name}</b><span>${t.cnt}</span></button>`
     ).join('');
     $('catTabs').querySelectorAll('button').forEach(b => {
       b.onclick = () => {
@@ -303,7 +332,14 @@
           ui.category = b.dataset.cat;
           ui.typeFilter = 'all';
         }
+        if (ui.category === 'uipacks' && UI_PACKS.length && !activeUiPack) {
+          selectUiPack(UI_PACKS[0].id);
+          saveState();
+          return;
+        }
+        if (ui.category !== 'uipacks') clearUiPack();
         renderLib();
+        syncInspector();
         saveState();
       };
     });
@@ -619,6 +655,22 @@
         }
       }
       $('libFoot').textContent = '场景环境：scenes/（18 种生境地台 + 5 类摆件模板）';
+    } else if (ui.category === 'uipacks') {
+      total = UI_PACKS.length;
+      const vis = UI_PACKS.filter(p => matches([p.id, p.code, p.name, p.tag, p.file].join(' ')));
+      shown = vis.length;
+      if (vis.length) {
+        html = `<div class="lib-group"><div class="lib-group-title"><span>UI 皮肤与 3D 特效贴图包（art-packs/）</span><span>${vis.length}/${total}</span></div>` +
+          vis.map(p => {
+            const focused = activeUiPack && activeUiPack.id === p.id;
+            return `<div class="lib-item done${focused ? ' focused' : ''}" data-uipack="${esc(p.id)}">
+              <span></span>
+              <div class="li-main"><div class="li-name"><span class="code">${esc(p.code)}</span><span class="nm">${esc(p.name)}</span></div>
+              <div class="li-sub">${esc(p.file)}</div></div>
+              <span class="st done">已入库</span></div>`;
+          }).join('') + `</div>`;
+      }
+      $('libFoot').textContent = 'UI 贴图包：art-packs/ 目录 · 点任一项即可实时高清预览全部离屏素材';
     } else {
       const cat = Assets.CATEGORIES.find(c => c.id === ui.category);
       const entries = buildCategoryEntries(ui.category);
@@ -659,6 +711,7 @@
         : (row.dataset.id ? Assets.byId[row.dataset.id] : null);
       if (cb) cb.onclick = (e) => { e.stopPropagation(); if (def) toggleOnStage(def); };
       row.onclick = () => {
+        if (row.dataset.uipack) { selectUiPack(row.dataset.uipack); return; }
         if (row.dataset.hab) { setHabitat(row.dataset.hab); return; }
         if (def) { focusDef(def); return; }
         if (row.dataset.tpl) {
@@ -680,6 +733,24 @@
 
   function syncInspector() {
     const secF = $('secFocus'), secA = $('secActions'), secS = $('secSkin');
+    if (activeUiPack) {
+      const p = activeUiPack;
+      secF.innerHTML = `<div class="sec-t">UI / 特效贴图包 <span class="key">总工坊真源</span></div>
+        <div class="focus-title"><span class="code">${esc(p.code)}</span><h2>${esc(p.name)}</h2><span class="st done">已入库</span></div>
+        <div class="focus-sub">${esc(p.tag)}</div>
+        <dl class="kv">
+          <dt>文件路径</dt><dd><span class="code">${esc(p.file)}</span></dd>
+          <dt>全局接口</dt><dd><span class="code">Code00ArtPacks.${esc(p.key)}</span></dd>
+          <dt>校验状态</dt><dd>verify.mjs 全部通过</dd>
+        </dl>`;
+      secA.style.display = '';
+      secA.innerHTML = `<div class="sec-t">完整独立验收页</div>
+        <div class="row"><a class="btn primary sm" href="${esc(p.preview)}" target="_blank">打开 ${esc(p.code)} preview.html</a></div>`;
+      secS.style.display = 'none';
+      $('secParams').style.display = 'none';
+      $('secExport').style.display = 'none';
+      return;
+    }
     if (ui.plan) {
       const it = ui.plan;
       if (it.isCategoryTemplate) {

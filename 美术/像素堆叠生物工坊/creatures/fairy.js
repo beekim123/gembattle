@@ -386,6 +386,14 @@ window.PixelWorkshop.Creatures = window.PixelWorkshop.Creatures || [];
     useWaterFoam: false,
     spec: SPEC,
     skins: SKINS,
+    actions: [
+      { id: 'patrol',         name: '自由巡游',   loop: true,  status: 'done' },
+      { id: 'idle',           name: '原地待机',   loop: true,  status: 'done' },
+      { id: 'battle_attack',  name: '螺旋花瓣',   loop: false, duration: 0.85, status: 'done' },
+      { id: 'battle_special', name: '切换抵制色', loop: false, duration: 0.85, status: 'done' },
+      { id: 'battle_stagger', name: '破盾硬直',   loop: false, duration: 0.85, status: 'done' },
+      { id: 'battle_hurt',    name: '受击',       loop: false, duration: 0.35, status: 'done' }
+    ],
     blocks: ['完整双腿与花瓣裙', '尖耳花饰2×2大眼', '弯头花枝自亮法杖', '锁枢轴四片金边蝶翅', '8字急停赏花穿飞'],
     soulHabit: '花丛悬停轻舞偶发挥杖洒花粉 ↔ 8 字形高低穿飞与急停赏花悬停节律',
     defaultParams: { gaitFreq: 1.0, tailFlex: 1.0, springiness: 1.0, speed: 1.0, scaleMul: 1.0 },
@@ -471,9 +479,259 @@ window.PixelWorkshop.Creatures = window.PixelWorkshop.Creatures || [];
           const gFreq = clamp(params.gaitFreq ?? 1.0, 0.4, 2.2);
           const speedMul = clamp(params.speed ?? 1.0, 0.4, 2.2);
           const flex = clamp(params.tailFlex ?? 1.0, 0.4, 2.0);
+          const act = eco && eco.action;
+          const isBattle = act === 'battle_attack' || act === 'battle_special' || act === 'battle_stagger' || act === 'battle_hurt';
           const patrol = eco && eco.patrol !== false;
           const maxR = (eco && eco.maxRadius) || 48;
           const fx = curSkin.fx || SKINS[0].fx;
+
+          if (isBattle) {
+            const actT = (eco && eco.actionTime != null) ? eco.actionTime : 0;
+            const isNewAct = act !== state._bAct || actT < (state._bLastT || 0) - 0.04;
+            if (isNewAct) {
+              state._bAct = act;
+              state._bFired = false;
+              state._bFired2 = false;
+              state._bFired3 = false;
+              state._bAx = (eco && eco.homeX != null) ? eco.homeX : state.x;
+              state._bAy = (eco && eco.homeY != null) ? eco.homeY : state.y;
+              state._bYaw = (eco && eco.homeYaw != null) ? eco.homeYaw : state.yaw;
+            }
+            state._bLastT = actT;
+            const ax = (eco && eco.homeX != null) ? eco.homeX : state._bAx;
+            const ay = (eco && eco.homeY != null) ? eco.homeY : state._bAy;
+            const hasTgt = eco && Array.isArray(eco.targetPos) && eco.targetPos.length >= 2 && Number.isFinite(eco.targetPos[0]) && Number.isFinite(eco.targetPos[1]);
+            const tx = hasTgt ? eco.targetPos[0] : ax - Math.sin(state._bYaw) * 46 * sMul;
+            const ty = hasTgt ? eco.targetPos[1] : ay + Math.cos(state._bYaw) * 46 * sMul;
+            const tz = (hasTgt && Number.isFinite(eco.targetPos[2])) ? eco.targetPos[2] : 10 * sMul;
+            const dx = tx - ax, dy = ty - ay;
+            const dist = Math.hypot(dx, dy) || 1;
+            const dirX = dx / dist, dirY = dy / dist;
+            const sideX = -dirY, sideY = dirX;
+            const aimYaw = Math.atan2(-dx, dy);
+
+            let wingFreq = 26.0 * gFreq;
+            let tgtHeadYaw = 0;
+            state.vx = 0; state.vy = 0;
+
+            if (act === 'battle_attack') {
+              if (actT < 0.25) {
+                const u = smoothstep(0, 1, actT / 0.25);
+                state.x = ax - dirX * 2.2 * u * sMul;
+                state.y = ay - dirY * 2.2 * u * sMul;
+                state.z = lerp(10.5, 16.0, u) * sMul;
+                state.yaw = wrapAngle(aimYaw + u * 0.72);
+                state.dartPose = false;
+                state.staffCast = true;
+                state.armLYaw = -0.34 * u; state.armLZ = 2.2 * u * sMul;
+                state.armRYaw =  0.34 * u; state.armRZ = 2.4 * u * sMul;
+                wingFreq = 34.0 * gFreq;
+                if (vfx && Math.random() < 0.55) {
+                  const a = actT * 18;
+                  vfx.spawnParticle(
+                    state.x + Math.cos(a) * 6 * sMul, state.y + Math.sin(a) * 6 * sMul, state.z + 18 * sMul,
+                    -Math.cos(a) * 8 * sMul, -Math.sin(a) * 8 * sMul, 4 * sMul,
+                    0.24, 1.4, '#ff88b8', true, 0
+                  );
+                }
+              } else if (actT < 0.55) {
+                const u = (actT - 0.25) / 0.30;
+                const surge = Math.sin(u * Math.PI * 0.5);
+                state.x = ax + dirX * (-2.2 + 7.8 * surge) * sMul;
+                state.y = ay + dirY * (-2.2 + 7.8 * surge) * sMul;
+                state.z = lerp(16.0, 12.2, u) * sMul;
+                state.yaw = aimYaw;
+                state.dartPose = true;
+                state.staffCast = true;
+                state.armLYaw = -0.32; state.armLZ = 1.5 * sMul;
+                state.armRYaw =  0.35; state.armRZ = 1.8 * sMul;
+                wingFreq = 36.0 * gFreq;
+                const petalCols = ['#ff88b8', '#ffd6e8', '#ffe67a', '#ff5ea0', '#ffffff'];
+                if (!state._bFired && actT >= 0.26) {
+                  state._bFired = true;
+                  if (vfx) {
+                    const z0 = state.z + 17.5 * sMul;
+                    for (let i = 0; i < 14; i++) {
+                      const ang = (i / 14) * TAU * 2;
+                      const rad = (2.6 + (i % 3) * 1.4) * sMul;
+                      const flightT = 0.24 + (i / 14) * 0.12;
+                      const sx0 = state.x + dirX * 5.0 * sMul + sideX * Math.cos(ang) * rad;
+                      const sy0 = state.y + dirY * 5.0 * sMul + sideY * Math.cos(ang) * rad;
+                      const sz0 = z0 + Math.sin(ang) * rad * 0.7;
+                      const vxP = (tx - sx0 + sideX * Math.cos(ang + 1.4) * 3.8 * sMul) / flightT;
+                      const vyP = (ty - sy0 + sideY * Math.cos(ang + 1.4) * 3.8 * sMul) / flightT;
+                      const vzP = (tz - sz0) / flightT;
+                      vfx.spawnParticle(sx0, sy0, sz0, vxP, vyP, vzP, flightT + 0.08, 1.85 + (i % 2) * 0.35, petalCols[i % petalCols.length], true, 2);
+                    }
+                  }
+                }
+                if (!state._bFired2 && actT >= 0.36) {
+                  state._bFired2 = true;
+                  if (vfx) {
+                    const z0 = state.z + 16.5 * sMul;
+                    for (let i = 0; i < 10; i++) {
+                      const ang = (i / 10) * TAU * 2 + Math.PI;
+                      const rad = 3.2 * sMul;
+                      const flightT = 0.20 + (i / 10) * 0.08;
+                      const sx0 = state.x + dirX * 6.0 * sMul + sideX * Math.cos(ang) * rad;
+                      const sy0 = state.y + dirY * 6.0 * sMul + sideY * Math.cos(ang) * rad;
+                      const sz0 = z0 + Math.sin(ang) * rad * 0.7;
+                      vfx.spawnParticle(sx0, sy0, sz0, (tx - sx0) / flightT, (ty - sy0) / flightT, (tz - sz0) / flightT, flightT + 0.06, 1.7, petalCols[(i + 2) % petalCols.length], true, 2);
+                    }
+                  }
+                }
+                if (!state._bFired3 && actT >= 0.50) {
+                  state._bFired3 = true;
+                  if (vfx) {
+                    vfx.addRipple(tx, ty, 3 * sMul, 22 * sMul, 0.50, 2.0);
+                    for (let i = 0; i < 16; i++) {
+                      const a = (i / 16) * TAU;
+                      const spd = (14 + (i % 3) * 6) * sMul;
+                      vfx.spawnParticle(
+                        tx, ty, tz + 3 * sMul,
+                        Math.cos(a) * spd, Math.sin(a) * spd, (8 + (i % 4) * 3) * sMul,
+                        0.45 + (i % 3) * 0.08, 1.9, petalCols[i % petalCols.length], true, 16
+                      );
+                    }
+                  }
+                }
+              } else {
+                const u = clamp((actT - 0.55) / 0.30, 0, 1);
+                const ret = 1 - smoothstep(0, 1, u);
+                state.x = ax + dirX * 5.6 * ret * sMul;
+                state.y = ay + dirY * 5.6 * ret * sMul;
+                state.z = lerp(10.5, 12.2, ret) * sMul;
+                state.yaw = aimYaw;
+                state.dartPose = ret > 0.4;
+                state.staffCast = ret > 0.3;
+                state.armLYaw = -0.32 * ret; state.armLZ = 1.5 * ret * sMul;
+                state.armRYaw =  0.35 * ret; state.armRZ = 1.8 * ret * sMul;
+              }
+              state.wingPhase += dt * wingFreq;
+              state.wingUpFlap = Math.sin(state.wingPhase) * 0.52;
+              state.wingLoFlap = Math.sin(state.wingPhase - 0.55) * 0.42;
+            } else if (act === 'battle_special') {
+              const p = clamp(actT / 0.85, 0, 1);
+              const spin = smoothstep(0.08, 0.84, p) * TAU;
+              const rise = Math.sin(p * Math.PI);
+              state.x = ax;
+              state.y = ay;
+              state.z = (10.5 + rise * 5.8) * sMul;
+              state.yaw = wrapAngle(aimYaw + spin);
+              state.dartPose = false;
+              state.staffCast = p > 0.10 && p < 0.88;
+              state.armLYaw = -0.35 * rise; state.armLZ = 2.6 * rise * sMul;
+              state.armRYaw =  0.35 * rise; state.armRZ = 2.6 * rise * sMul;
+              state.wingPhase += dt * 36.0 * gFreq;
+              state.wingUpFlap = Math.sin(state.wingPhase) * 0.54;
+              state.wingLoFlap = Math.sin(state.wingPhase - 0.55) * 0.44;
+              const ringCols = ['#ff5e7e', '#ffd166', '#46d67a', '#4da8ff', '#c87cff', '#ff94c8', '#ffffff'];
+              if (!state._bFired && actT >= 0.18) {
+                state._bFired = true;
+                if (vfx) {
+                  vfx.addRipple(ax, ay, 5 * sMul, 46 * sMul, 0.68, 2.4);
+                  for (let i = 0; i < 16; i++) {
+                    const a = (i / 16) * TAU;
+                    const spd = 48 * sMul;
+                    vfx.spawnParticle(ax + Math.cos(a) * 4 * sMul, ay + Math.sin(a) * 4 * sMul, state.z + 12 * sMul,
+                      Math.cos(a) * spd, Math.sin(a) * spd, (6 + (i % 3) * 3) * sMul, 0.72, 2.1, ringCols[i % ringCols.length], true, 6);
+                  }
+                }
+              }
+              if (!state._bFired2 && actT >= 0.38) {
+                state._bFired2 = true;
+                if (vfx) {
+                  vfx.addRipple(ax, ay, 8 * sMul, 54 * sMul, 0.65, 2.2);
+                  vfx.addRipple(tx, ty, 3 * sMul, 24 * sMul, 0.52, 1.9);
+                  for (let i = 0; i < 16; i++) {
+                    const a = (i / 16) * TAU + 0.2;
+                    const spd = 38 * sMul;
+                    vfx.spawnParticle(ax + Math.cos(a) * 4 * sMul, ay + Math.sin(a) * 4 * sMul, state.z + 16 * sMul,
+                      Math.cos(a) * spd, Math.sin(a) * spd, 10 * sMul, 0.64, 1.95, ringCols[(i + 2) % ringCols.length], true, 10);
+                  }
+                }
+              }
+              if (!state._bFired3 && actT >= 0.58) {
+                state._bFired3 = true;
+                if (vfx) {
+                  for (let i = 0; i < 12; i++) {
+                    const a = (i / 12) * TAU;
+                    const spd = 16 * sMul;
+                    vfx.spawnParticle(tx, ty, tz + 4 * sMul,
+                      Math.cos(a) * spd, Math.sin(a) * spd, 12 * sMul, 0.48, 1.8, ringCols[(i + 4) % ringCols.length], true, 14);
+                  }
+                }
+              }
+            } else if (act === 'battle_stagger') {
+              const p = clamp(actT / 0.85, 0, 1);
+              const decay = 1 - p;
+              const wobble = Math.sin(actT * 34) * 2.0 * decay * sMul;
+              state.x = ax - dirX * 3.8 * Math.sin(p * Math.PI) * sMul + sideX * wobble;
+              state.y = ay - dirY * 3.8 * Math.sin(p * Math.PI) * sMul + sideY * wobble;
+              state.z = lerp(10.5, 6.4, Math.sin(p * Math.PI)) * sMul;
+              state.yaw = wrapAngle(aimYaw + Math.sin(actT * 18) * 0.58 * decay);
+              state.dartPose = false;
+              state.staffCast = false;
+              state.armLYaw = -0.30 * decay; state.armLZ = -1.2 * decay * sMul;
+              state.armRYaw =  0.30 * decay; state.armRZ = -1.2 * decay * sMul;
+              state.wingUpFlap = -0.38 + Math.sin(actT * 28) * 0.14 * decay;
+              state.wingLoFlap =  0.30 - Math.sin(actT * 24) * 0.12 * decay;
+              if (!state._bFired) {
+                state._bFired = true;
+                if (vfx) {
+                  vfx.addRipple(ax, ay, 4 * sMul, 20 * sMul, 0.56, 1.8);
+                  for (let i = 0; i < 14; i++) {
+                    const a = (i / 14) * TAU;
+                    const spd = (12 + Math.random() * 14) * sMul;
+                    vfx.spawnParticle(ax, ay, state.z + 12 * sMul, Math.cos(a) * spd, Math.sin(a) * spd, (10 + Math.random() * 12) * sMul, 0.48, 1.65, i % 2 === 0 ? '#b8f4ff' : '#ffffff', true, 36);
+                  }
+                }
+              }
+            } else {
+              // battle_hurt (0.35s)
+              const p = clamp(actT / 0.35, 0, 1);
+              const env = Math.sin(p * Math.PI);
+              const vib = Math.sin(actT * 58) * 1.4 * (1 - p) * sMul;
+              state.x = ax - dirX * 4.4 * env * sMul + sideX * vib;
+              state.y = ay - dirY * 4.4 * env * sMul + sideY * vib;
+              state.z = (10.5 - 2.0 * env) * sMul;
+              state.yaw = wrapAngle(aimYaw + Math.sin(actT * 46) * 0.18 * (1 - p));
+              state.dartPose = false; state.staffCast = false;
+              state.armLYaw = 0; state.armRYaw = 0;
+              state.wingPhase += dt * 16.0 * gFreq;
+              state.wingUpFlap = Math.sin(state.wingPhase) * 0.35;
+              state.wingLoFlap = Math.sin(state.wingPhase - 0.55) * 0.25;
+              if (!state._bFired) {
+                state._bFired = true;
+                if (vfx) {
+                  for (let i = 0; i < 6; i++) {
+                    const a = Math.random() * TAU;
+                    vfx.spawnParticle(ax, ay, state.z + 12 * sMul, Math.cos(a) * 12 * sMul, Math.sin(a) * 12 * sMul, 8 * sMul, 0.4, 1.4, fx.pollenA, true, 16);
+                  }
+                }
+              }
+            }
+
+            const dScale = 1 / Math.sqrt(Math.max(0.35, sp));
+            headSpring.update(dt, tgtHeadYaw, 96 * sp, clamp(7.6 * dScale, 3.2, 12.0));
+            state.legSway = Math.sin(time * 4.0) * 0.08;
+            state.skirtSway = Math.sin(time * 4.5) * 0.06;
+            const hYaw = wrapAngle(state.yaw + clamp(headSpring.x, -0.45, 0.45));
+            const [hx, hy] = localToWorldXY(state.x, state.y, state.yaw, 0, (state.dartPose ? 3.2 : 0.2) * sMul);
+            const [a0x, a0y] = localToWorldXY(hx, hy, hYaw, 0, -2.8 * sMul);
+            hairChain[0].x = a0x; hairChain[0].y = a0y; hairChain[0].z = state.z + 21.8 * sMul;
+            const kh = expSmooth(dt, 14.0);
+            for (let j = 1; j < hairChain.length; j++) {
+              const [htx, hty] = localToWorldXY(a0x, a0y, hYaw, 0, -2.4 * j * sMul);
+              hairChain[j].x = lerp(hairChain[j].x, htx, kh);
+              hairChain[j].y = lerp(hairChain[j].y, hty, kh);
+              hairChain[j].z = lerp(hairChain[j].z, state.z + (21.8 - j * 2.6) * sMul, kh);
+            }
+            relaxChain(hairChain, 2.7 * sMul);
+            sockets.setWorld('head', hx, hy, state.z + (state.dartPose ? 16.6 : 17.6) * sMul, hYaw);
+            return;
+          }
+          state._bAct = '';
 
           const kSlow = expSmooth(dt, 9.0);
           const kFast = expSmooth(dt, 14.0);

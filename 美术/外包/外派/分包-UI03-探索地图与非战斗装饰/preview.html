@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UI-03 独立预览验收台 · 探索路线图与非战斗装饰</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; background: #101612; color: #ece8dc; font: 13px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; overflow: hidden; }
+  .wrap { display: flex; width: 100%; height: 100%; }
+  .stage { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; background: #0c120e; }
+  canvas { display: block; box-shadow: 0 12px 40px rgba(0,0,0,0.6); }
+  .hud { position: absolute; left: 12px; top: 10px; padding: 6px 10px; border-radius: 6px; background: rgba(12,18,14,0.84); border: 1px solid rgba(255,255,255,0.14); font-variant-numeric: tabular-nums; }
+  .warn { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); max-width: 520px; padding: 16px 20px; border-radius: 8px; background: rgba(140,42,32,0.92); color: #fff; font-size: 14px; display: none; text-align: center; }
+  .side { width: 250px; background: #161d18; border-left: 1px solid rgba(255,255,255,0.1); padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  h2 { font-size: 15px; color: #ffe498; }
+  .tip { font-size: 12px; color: #9fb0a2; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  button { background: #263429; color: #ece8dc; border: 1px solid rgba(255,255,255,0.16); border-radius: 5px; padding: 6px 10px; cursor: pointer; font-size: 12px; }
+  button.on { background: #70551c; border-color: #ffe498; color: #fff; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <main class="stage" id="stage">
+    <canvas id="cv"></canvas>
+    <div class="hud" id="hud">初始化中...</div>
+    <div class="warn" id="warn"></div>
+  </main>
+  <aside class="side">
+    <h2>UI-03 · 地图与装饰验收台</h2>
+    <div class="tip">在「路线图页」可直接滚轮上下卷动检查无缝平铺与界门分界带。</div>
+    <div class="row">
+      <button id="tabMap" class="on">1. 卷轴路线图</button>
+      <button id="tabDeco">2. 标题/图标/纹章</button>
+    </div>
+    <div class="tip" id="meta"></div>
+  </aside>
+</div>
+<script src="./bundle/pack_map_panels.js"></script>
+<script>
+(function () {
+  const W = 960, H = 540, SCALE = 2;
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  const hud = document.getElementById('hud');
+  const warn = document.getElementById('warn');
+  const meta = document.getElementById('meta');
+  const pack = window.Code00ArtPacks && window.Code00ArtPacks.mapPanels;
+
+  let tab = 'map', camY = 380;
+  function resize() {
+    cv.width = W * SCALE; cv.height = H * SCALE;
+    const maxW = document.getElementById('stage').clientWidth - 24;
+    const maxH = document.getElementById('stage').clientHeight - 24;
+    const k = Math.min(maxW / W, maxH / H);
+    cv.style.width = Math.floor(W * k) + 'px';
+    cv.style.height = Math.floor(H * k) + 'px';
+  }
+  window.addEventListener('resize', resize);
+  resize();
+  cv.addEventListener('wheel', e => { if (tab === 'map') { e.preventDefault(); camY = Math.max(0, Math.min(520, camY + e.deltaY * 0.5)); } }, { passive: false });
+  document.getElementById('tabMap').onclick = () => { tab = 'map'; mark('tabMap'); };
+  document.getElementById('tabDeco').onclick = () => { tab = 'deco'; mark('tabDeco'); };
+  function mark(id) { ['tabMap','tabDeco'].forEach(k => document.getElementById(k).classList.toggle('on', k === id)); }
+
+  if (!pack) {
+    warn.style.display = 'block';
+    warn.textContent = '尚未检测到 ./bundle/pack_map_panels.js，请外包方交付后刷新本页验收。';
+    hud.textContent = '等待交付物：./bundle/pack_map_panels.js';
+    return;
+  }
+
+  let offBytes = 0, offCount = 0;
+  const origCreate = document.createElement.bind(document);
+  function makeCanvas(w, h) { const c = origCreate('canvas'); c.width = w; c.height = h; offCount++; offBytes += w * h * 4; return c; }
+  const t0 = performance.now();
+  if (pack.init) pack.init(makeCanvas);
+  const initMs = performance.now() - t0;
+  meta.textContent = `装饰集：${pack.name || pack.id} v${pack.version} · 初始化 ${initMs.toFixed(1)}ms · 离屏 ${offCount} 张 (${(offBytes/1048576).toFixed(2)} MB)`;
+
+  const segs = [{ name: '林缘', from: 1, to: 4 }, { name: '腹地', from: 5, to: 7 }, { name: '巨木树冠', from: 8, to: 8 }];
+  const sampleNodes = [
+    { x: 480, y: 120, type: 'boss', status: 'future', r: 30 },
+    { x: 480, y: 230, type: 'camp', status: 'future', r: 19 },
+    { x: 340, y: 340, type: 'elite', status: 'future', r: 22 },
+    { x: 600, y: 340, type: 'shop', status: 'future', r: 19 },
+    { x: 300, y: 460, type: 'battle', status: 'avail', r: 19 },
+    { x: 480, y: 460, type: 'event', status: 'avail', r: 19 },
+    { x: 640, y: 460, type: 'elite', status: 'dim', r: 22 },
+    { x: 390, y: 600, type: 'battle', status: 'visited', r: 19 },
+    { x: 560, y: 600, type: 'shop', status: 'dim', r: 19 },
+    { x: 480, y: 740, type: 'battle', status: 'visited', r: 19 },
+  ];
+  const kinds = ['camp_heal', 'camp_carve', 'camp_purge', 'shop_potion', 'shop_carve', 'gate_retreat', 'gate_advance', 'event_wood', 'event_stele', 'event_pool', 'event_bag'];
+
+  let frames = 0, acc = 0, last = performance.now(), fps = 0;
+  function loop(now) {
+    const dt = now - last; last = now; frames++; acc += dt;
+    if (acc >= 500) { fps = Math.round(frames * 1000 / acc); frames = 0; acc = 0; }
+    const t = now / 1000;
+    ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+    ctx.fillStyle = '#142218'; ctx.fillRect(0, 0, W, H);
+
+    if (tab === 'map') {
+      pack.drawMapScrollBg(ctx, 130, 52, 700, 488, camY, 980, 525, segs);
+      ctx.save();
+      ctx.beginPath(); ctx.rect(130, 52, 700, 488); ctx.clip();
+      ctx.translate(0, 52 - camY);
+      pack.drawMapGateDivider(ctx, 160, 800, 525, false, t);
+      for (const n of sampleNodes) pack.drawMapNode(ctx, n.type, n.x, n.y, n.r, { status: n.status, hover: n.type === 'boss', t });
+      ctx.restore();
+      pack.drawSceneRibbon(ctx, 480, 26, 420, '落果密林 · 探索卷轴', '滚轮上下滚动检查卷轴无缝拼接与节点四态');
+    } else {
+      pack.drawTitleEmblem(ctx, 270, 96, '落果密林', '深入林地 · 第 1 步到第 8 步', t);
+      pack.drawSceneRibbon(ctx, 710, 62, 400, '营火整备', '三选一，选了就整备完毕');
+      pack.drawSceneRibbon(ctx, 710, 128, 400, '青苔界门', '第 4 步打完在此折返或深入腹地');
+
+      ctx.font = '700 13px "PingFang SC", sans-serif'; ctx.fillStyle = '#ffe498'; ctx.textAlign = 'left';
+      ctx.fillText('11 种非战斗选项像素图标（营火 / 行商 / 界门 / 偶遇）', 32, 200);
+      kinds.forEach((k, i) => {
+        const x = 66 + (i % 6) * 148, y = 248 + Math.floor(i / 6) * 76;
+        pack.drawChoiceIcon(ctx, k, x, y, 36);
+        ctx.font = '600 11px "PingFang SC", sans-serif'; ctx.fillStyle = '#cfd8dc'; ctx.textAlign = 'center';
+        ctx.fillText(k, x, y + 30);
+      });
+
+      ctx.font = '700 13px "PingFang SC", sans-serif'; ctx.fillStyle = '#ffe498'; ctx.textAlign = 'left';
+      ctx.fillText('3 枚结算大纹章（通关 / 折返 / 倒下）', 32, 396);
+      ['victory', 'retreat', 'defeat'].forEach((o, i) => pack.drawSummaryCrest(ctx, 180 + i * 300, 468, o, t));
+    }
+
+    hud.textContent = `UI-03 实时帧率：${fps} fps · 视图：${tab === 'map' ? '路线图 (camY=' + Math.round(camY) + ')' : '非战斗装饰总览'}`;
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

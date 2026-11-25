@@ -1,0 +1,1140 @@
+# 外包项目合集（UI-04 可旋转像素地面与 3D 战斗特效 · 由 打包发给网页AI.command 自动生成）
+# 目标交付压缩包：bundle_ui04_ground_vfx.zip
+# 包含文件清单（开工提示词.md 压轴在最末尾）：
+#   - README.md
+#   - 设计文档-旋转像素地面与3D特效.md
+#   - bundle/README.md
+#   - core/habitats.js
+#   - core/math.js
+#   - preview.html
+#   - verify.mjs
+#   - 开工提示词.md
+
+
+===== FILE: ./README.md =====
+# 独立外包制作包 UI-04：六生态可旋转像素地面与 3D 战斗特效（`groundVfx`）
+
+> **本目录是 100% 自包含的外包制作包**：可直接合并发给**无本地上下文的独立网页端 AI**。本包内置工坊 `core/` 渲染内核与 3 个真实 3D 像素堆叠模型（法师、地精、落果古树），打开 `preview.html` 即可在 **360° 可自由旋转的真实 3D 堆叠战场**里直接验收地面像素接缝、旋转流畅度（120fps）与全部 3D 战斗特效！
+
+---
+
+## 一、包内目录说明
+
+```text
+分包-UI04-旋转像素地面与3D特效/
+├── README.md                    # 本文件
+├── 设计文档-旋转像素地面与3D特效.md # 8 套像素地面纹理、3D 生态微粒、弹道/波纹与 8 只怪 3D 像素出手特效规范
+├── 开工提示词.md                 # 发给网页端 AI 的完整提示词（置底于 all_in_one.txt）
+├── preview.html                 # 360° 真 3D 像素堆叠实景验收台（拖动旋转/Q·E/一键试放全部生态与特效）
+├── verify.mjs                   # 零依赖 Node 硬校验脚本（查接口、零禁用字、零 filter/shadowBlur、<=6MB、0 NaN）
+├── 打包发给网页AI.command        # Mac 双击生成 all_in_one.txt（已自动排除冗余模型源码保持精炼）
+├── 预览验收.command              # Mac 双击先跑 verify.mjs，再自动开浏览器进 3D 实景 preview.html 验收
+├── core/                        # 【只读！严禁修改】工坊渲染内核与色板（math / habitats / renderer 等）
+├── references/                  # 【只读参考】实景验收用真 3D 像素模型（npc_mage / goblin / scene_forest_tree）
+├── 交回/                        # 收到的 bundle_ui04_ground_vfx.zip 放这里
+└── bundle/                      # 【交付区】产出以下 3 个文件并打包为 bundle_ui04_ground_vfx.zip
+    ├── README.md
+    ├── pack_ground_vfx.js       #   注册 window.Code00ArtPacks.groundVfx
+    ├── manifest.json            #   地面纹理尺寸、特效清单与内存占用
+    └── 交付说明.md               #   verify.mjs 实测数据与 360° 目检记录
+```
+
+---
+
+## 二、发包与验收 3 步走
+
+1. **发包**：将 `all_in_one.txt` 拖进网页端 AI 对话框，附口令：
+   > 严格按附件末尾的 `开工提示词.md` 开发。务必用单个脚本一次性生成 3 个文件、自检并打包出可下载的 `bundle_ui04_ground_vfx.zip`；正文严禁贴任何代码、JSON 或文档内容。
+2. **收包**：把 `bundle_ui04_ground_vfx.zip` 放进 `交回/` 解压覆盖到 `bundle/`。
+3. **一键验收与合入**：双击 `预览验收.command` 跑校验并在 360° 实景台里逐生态拖动旋转、点放全部 8 怪与主角特效。确认满意后，将 `bundle/pack_ground_vfx.js` 拷进 `原型/v2/modules/art-packs/` 并在 `app/index.html` 引入即可。
+
+
+===== FILE: ./设计文档-旋转像素地面与3D特效.md =====
+# 设计文档：UI-04 六生态可旋转像素地面与 3D 像素战斗特效（`Code00ArtPacks.groundVfx`）
+
+## 一、核心痛点与视觉目标（彻底终结 2D/3D 割裂感）
+
+- **旧版问题**：
+  - 旧地面是 `1920×1080`（8.3MB）的平滑 2D 矢量草地墙纸，既吃显存又无法跟着 3D 镜头角 `th` 旋转，且残留了大量 2D 假树/假帐篷/假石门，与工坊 3D 像素堆叠角色严重割裂；
+  - 旧战斗特效（`attack-fx.js` 与 `bolts`）全是平滑 2D 矢量圆球、贝塞尔弧线、软边 `shadowBlur`，不仅画风割裂，还无法跟 3D 旋转视角联动。
+- **重做目标（100% 像素统一 + 360° 丝滑旋转 + 120fps）**：
+  1. **8 套无缝/大视野可旋转像素地面纹理（`384×384` 像素原图，单套约 0.56MB，总计 ≤ 6MB）**：
+     - 像素质感与工坊 `./core/habitats.js` 同源（逐像素/块面像素绘制，`imageSmoothingEnabled = false`）；
+     - **严禁画圆形展示台边框，严禁画任何 2D 树/帐篷/石门/石碑/树洞**（那些立体物体全由工坊 3D 像素模型摆上去！地面只负责铺地貌纹理、路面、水洼、碎叶、青苔、木纹）；
+     - 边缘像素与中心色系过渡自然，支持 `WorldStage` 以 3D 仿射矩阵 `(c*SC, TILT*s*SC, -s*SC, TILT*c*SC)` 旋转压扁铺满 16:9 全屏而不穿帮、不露白边！
+  2. **全部微粒与战斗特效升级为「3D 世界坐标驱动的硬像素特效」**：
+     - 所有位置均从 3D 世界坐标 `[wx, wy, wz]` 经调用方传入的 `proj(wx, wy, wz) -> [sx, sy, depth]` 映射到屏幕（坐标系约定：1 格体素对应工坊世界 1 单位，主角通常在 `(0, +30, 0)`，怪在 `(x, -26, 0)`，屏幕投影 `TILT = 0.6, HS = 0.8`）；
+     - 无论玩家把视角旋转到任何角度，生态落叶/火屑、主角七色宝石弹丸、补色合白环形波、彩虹爆发、破盾碎晶、8 只怪各自出手特效，**全部随着 3D 空间同步透视旋转**，且全由硬边像素块/阶梯像素菱形/像素裂纹构成，和堆叠模型 100% 同一画风！
+
+---
+
+## 二、8 套可旋转像素地面规格（`buildGroundTile`）
+
+色板直接对齐 `./core/habitats.js`（可用 `./core/math.js` 的 `periodicNoise2` 生成像素级自然噪点与有机斑块）：
+
+| `biomeId` | 场景名 | 像素地貌画法要求（严格像素风，零 2D 假摆件、零圆台） |
+|---|---|---|
+| `forest` | 落果浅林 | 深翠 `#24472c` / 苔绿 `#34663c` / 亮草 `#4b8046` 交错像素草皮、踩踏浅泥小径印、点缀零星像素碎叶与几颗微小红果点 |
+| `swamp` | 泽畔浅洼 | 湿褐泥地 `#243826` / 暗泥 `#1b2a1e` 与藻绿浅水洼 `#2f5a58` 像素岸边交错，水洼边缘带浅青像素水纹与 2~3 像素浮萍点 |
+| `meadow` | 花甸林隙 | 明快春草坪 `#488244`~`#6ca856` 像素绒草地，散落精致 3×3 像素粉白/暖黄小花丛与踩出的柔和土路纹理 |
+| `ruins` | 苔石古径 | 错落拼缝的青灰古石板 `#404a48`~`#5d6966` 像素方砖，石板带 1px 亮顶边与暗裂纹，石缝间爬满厚青苔 `#5a8756` 与零星浅水渍 |
+| `canopy` | 巨木树冠 | 宽阔沧桑的巨枝木皮平台 `#3d281b`~`#61412b`，清晰像素木纹年轮沟壑与零星青苔斑，四缘略向深绿叶海 `#1e4526` 过渡 |
+| `camp` | 林间营地 | 傍晚压深草坪 `#1c3a26`~`#2c5236`，中央 `(0, 0)` 附近是一块踩实的灰褐篝火土圈与零星炭灰石子（不画假石头和假火堆，3D 营火会直接站在中央！） |
+| `trade` | 林间土路 | 压实暖褐黄土大道 `#6a573a`~`#8a7650` 伴像素车辙双痕，两侧衔接林缘绿草与碎石（不画假帐篷和假路牌！） |
+| `gate` | 青石林道 | 青灰铺石大道 `#465650`~`#566660` 沿 Y 轴延伸，石缝嵌厚青苔，两侧为暗林草地（不画假石门！） |
+
+---
+
+## 三、3D 像素战斗特效与微粒规格
+
+### 1. 生态 3D 像素微粒（`drawGroundAmbient3D`）
+- `forest`：缓慢斜飘的 2~3px 像素绿/金落叶 + 偶有 1 颗红果在边缘落弹；
+- `swamp`：水洼上空升起像素小泡与贴地压扁像素涟漪环 + 极淡像素雾带；
+- `meadow`：飘浮的 2px 暖金像素花粉；
+- `ruins`：缓升的淡青苔孢像素点与细白暖汽像素块；
+- `canopy`：斜掠过空的像素风线与疾飞碎叶（速度乘 `wind`）；
+- `camp`：围绕中央 `(0, 0)` 螺旋升腾的暖金/橘红像素火屑；
+- `trade`：低空轻飘的暖色像素浮尘；
+- `gate`：沿石门附近飘落的青苔像素细屑。
+
+### 2. 主角施法与爆发 3D 特效（`drawSpellBolt3D` / `drawImpactWave3D`）
+- **`drawSpellBolt3D(ctx, bolt, proj)`**：
+  - `bolt = { from: [wx,wy,wz], to: [wx,wy,wz], k: 0..1, art: 'red'|'green'|'blue'|'white'|'rainbow', big: bool }`；
+  - 沿 3D 抛物微弧飞行：前方是一颗带暗描边与亮心的**多面体像素晶弹**，身后拖着 4~5 节递减大小的像素方格星屑尾迹（`rainbow` 时尾迹逐节变七色）。
+- **`drawImpactWave3D(ctx, kind, centerW, k, proj)`**：
+  - `white_wave`（补色合白）：以 `centerW` 为中心贴地扩开的像素白色菱环 + 四散像素星晶；
+  - `rainbow_burst`（彩虹爆发）：三道错相扩开的七彩阶梯像素环 + 向上迸溅的七色像素方块雨；
+  - `shield_shatter`（破盾碎晶）：12~16 片带高光边的青白菱形像素护盾碎片按 3D 重力抛物线四溅落地；
+  - `ward_block`（护壁格挡）：主角身前展开六边形青白像素盾阵并弹开火星。
+
+### 3. 8 只怪专属 3D 像素出手特效（`drawAttackFx3D(ctx, kind, k, fromW, toW, proj)`）
+1. `spit`（水滴软泥）：3D 抛物线蓝绿像素水团，落地炸开 8 颗重力像素水滴与贴地像素水环；
+2. `puff`（草茎绵羊）：沿 3D 直线滚涌一串像素白绒毛团，命中迸出十字像素撞击星芒；
+3. `club`（拾荒地精）：目标头顶像素木棒重砸轨迹弧 + 地面震开像素碎石与裂纹；
+4. `petals`（花甸灵精）：9 片粉白像素花瓣沿 3D 螺旋轨飞向主角；
+5. `fruit`（摇果长臂猿）：高弧抛掷带绿蒂的像素大红果，砸中主角炸开深红像素果汁花；
+6. `claw`（五尾赤豹）：主角身前斜劈出三道带白芯的灼红阶梯像素爪痕；
+7. `bite`（腹口懒兽）：上下两排硬像素尖牙在主角 3D 位置猛然合拢并迸出像素星点；
+8. `roots`（千丈古树精）：4~5 根粗壮棕褐像素尖刺树根从主角脚下地面破土窜出，四周飞起泥土像素块。
+
+---
+
+## 四、技术硬红线与精确导出接口
+
+**全局登记**：
+```js
+window.Code00ArtPacks = window.Code00ArtPacks || {};
+window.Code00ArtPacks.groundVfx = {
+  id: 'groundVfx', version: 1, name: '...',
+  BIOME_IDS: ['forest', 'swamp', 'meadow', 'ruins', 'canopy', 'camp', 'trade', 'gate'],
+  init, buildGroundTile, drawGroundAmbient3D, drawSpellBolt3D, drawImpactWave3D, drawAttackFx3D
+};
+```
+
+- **零 `ctx.filter`、零 `shadowBlur`、零外部图片/字体 URL、零禁用字**；
+- **`buildGroundTile(biomeId, makeCanvas, size = 384)`**：
+  - 返回 `{ canvas, size, biomeId }`，**内部按 `biomeId + '_' + size` 做缓存复用**（多次调用同一生态不重复新建画布！）；
+  - 全部 8 套地面缓存合计内存严格 `<= 6 MB`（建议默认 `size = 384`，8 套总计仅 `4.5 MB`），单套构建耗时 `<= 30 ms`；
+- **状态整洁与无 NaN**：所有绘制结束必须 `restore()`，关平滑 `imageSmoothingEnabled = false`，任意 `k ∈ [0, 1]` 零报错零 NaN。
+
+
+===== FILE: ./bundle/README.md =====
+# `bundle/` 交付目录（UI-04 可旋转像素地面与 3D 战斗特效）
+
+外包方请将最终产出的 3 个文件放入本目录，并打包成 **`bundle_ui04_ground_vfx.zip`** 交回：
+
+1. `pack_ground_vfx.js` —— 注册 `window.Code00ArtPacks.groundVfx`，实现全部 6 个导出接口
+2. `manifest.json` —— 8 套像素地面与全套 3D 战斗特效清单及内存占用
+3. `交付说明.md` —— `node verify.mjs` 自检结果与 `preview.html` 360° 旋转目检记录
+
+
+===== FILE: ./core/habitats.js =====
+'use strict';
+
+window.PixelWorkshop = window.PixelWorkshop || {};
+
+(function (PW) {
+  const { periodicNoise2, hexToRgba } = PW.Math;
+
+  // =========================================================================
+  // 全部 22 种细分生境地台（含 T00 冒险家酒馆大厅底座 + T01~T21 野外生态，零禁用字）
+  // =========================================================================
+  const HABITAT_DEFS = [
+    // --- 大厅酒馆（1）---
+    {
+      id: 'tavern', code: 'T00', name: '冒险家酒馆', short: '冒险酒馆', group: '大厅酒馆', isWater: false, waterLevel: -99,
+      desc: '深暖胡桃木拼接长条木板、中央金边绛红圆形编织地毯与外缘石砌暖炉边',
+      skyTop: '#1a110c', skyMid: '#2f1e14', skyBot: '#4c301e', skyHalo: 'rgba(255, 184, 108, 0.22)',
+      fx: { ringRGB: '240, 178, 102', foamRGB: '255, 226, 172', dustRGB: '188, 146, 104', waterTint: 'rgba(130, 86, 48, 0.20)', accent: '#e08b3e' },
+      pal: {
+        rimA: '#4d4744', rimB: '#736b65', stoneHi: '#968c84',
+        deep: '#3a2113', mid: '#5f3921', hi: '#7e4e2e',
+        foam: '#9e242b', rugDark: '#6b151c', rugHi: '#c63b3d',
+        speck: '#deb048', hearth: '#e8782e'
+      }
+    },
+
+    // --- 天上（2）---
+    {
+      id: 'sky', code: 'T01', name: '高空云海', short: '高空云海', group: '天上', isWater: false, waterLevel: -99,
+      desc: '浮云层叠、无水面、随高度淡化接地印与轻风微粒',
+      skyTop: '#16274a', skyMid: '#2c4f82', skyBot: '#6590bf', skyHalo: 'rgba(218, 236, 255, 0.26)',
+      fx: { ringRGB: '198, 228, 255', foamRGB: '245, 250, 255', dustRGB: '220, 235, 250', waterTint: 'rgba(210, 230, 250, 0.16)', accent: '#7ab8f5' },
+      pal: { rimA: '#5f7696', rimB: '#8ca5c7', deep: '#8aa5c9', mid: '#b8cde6', hi: '#e3eefc', foam: '#f7fbff', speck: '#9eb7d9' }
+    },
+    {
+      id: 'thunderPeak', code: 'T02', name: '雷云峰顶', short: '雷云峰顶', group: '天上', isWater: false, waterLevel: -99,
+      desc: '深灰积雨云与岩峰交错，带静电闪纹与强风氛围',
+      skyTop: '#0d101f', skyMid: '#1d243d', skyBot: '#394666', skyHalo: 'rgba(130, 198, 255, 0.22)',
+      fx: { ringRGB: '146, 212, 255', foamRGB: '226, 246, 255', dustRGB: '158, 176, 204', waterTint: 'rgba(72, 108, 162, 0.22)', accent: '#6ec2ff' },
+      pal: { rimA: '#24293b', rimB: '#3e4763', deep: '#2b3247', mid: '#454f6e', hi: '#6a799e', foam: '#a6e4ff', speck: '#e3f7ff' }
+    },
+
+    // --- 河湖（2）---
+    {
+      id: 'river', code: 'T03', name: '河湖深潭', short: '河湖深潭', group: '河湖', isWater: true, waterLevel: 2.8,
+      desc: '深碧静水、水下折射印、3D 半潜淡化与 V 形尾迹',
+      skyTop: '#0a1f30', skyMid: '#133c59', skyBot: '#216682', skyHalo: 'rgba(72, 214, 240, 0.22)',
+      fx: { ringRGB: '76, 218, 245', foamRGB: '226, 250, 255', dustRGB: '164, 224, 236', waterTint: 'rgba(20, 126, 162, 0.28)', accent: '#36c8db' },
+      pal: { rimA: '#3b4e5c', rimB: '#536c7d', deep: '#114d6e', mid: '#1e80a6', hi: '#4fb6cc', foam: '#c4f1f8', speck: '#296e8c' }
+    },
+    {
+      id: 'stoneBay', code: 'T04', name: '石缝河湾', short: '石缝河湾', group: '河湖', isWater: true, waterLevel: 1.9,
+      desc: '浅滩鹅卵石与岸边岩缝交错，浅水漫过涟漪',
+      skyTop: '#0e222e', skyMid: '#1b4052', skyBot: '#336b78', skyHalo: 'rgba(122, 212, 224, 0.20)',
+      fx: { ringRGB: '104, 214, 226', foamRGB: '230, 248, 250', dustRGB: '170, 184, 182', waterTint: 'rgba(32, 124, 142, 0.26)', accent: '#4bc4cf' },
+      pal: { rimA: '#495459', rimB: '#6d7b80', deep: '#185469', mid: '#2b8299', hi: '#7b878a', foam: '#cceef2', speck: '#9ca8ab' }
+    },
+
+    // --- 海和冰（4）---
+    {
+      id: 'iceSea', code: 'T05', name: '极地冰缝', short: '极地冰缝', group: '海和冰', isWater: true, waterLevel: 2.6,
+      desc: '洁白冰面裂开深蓝冰缝、雪面足印与冰下波纹',
+      skyTop: '#091829', skyMid: '#153452', skyBot: '#2c5c80', skyHalo: 'rgba(150, 232, 255, 0.24)',
+      fx: { ringRGB: '148, 232, 255', foamRGB: '240, 252, 255', dustRGB: '214, 244, 255', waterTint: 'rgba(42, 134, 178, 0.30)', accent: '#7ce2ff' },
+      pal: { rimA: '#6c98b5', rimB: '#9ec8e0', deep: '#0e3759', mid: '#1d618a', hi: '#9ad8ed', foam: '#ebfaff', speck: '#c4ecfa' }
+    },
+    {
+      id: 'openSea', code: 'T06', name: '远洋浮岛海域', short: '远洋海域', group: '海和冰', isWater: true, waterLevel: 3.0,
+      desc: '开阔深蓝洋面、长波浪纹与破水白沫弧',
+      skyTop: '#061429', skyMid: '#0d2c54', skyBot: '#185082', skyHalo: 'rgba(84, 184, 245, 0.22)',
+      fx: { ringRGB: '88, 198, 252', foamRGB: '232, 248, 255', dustRGB: '174, 218, 245', waterTint: 'rgba(14, 90, 152, 0.30)', accent: '#3da8f5' },
+      pal: { rimA: '#264361', rimB: '#3c678f', deep: '#0a315c', mid: '#145894', hi: '#2c84bd', foam: '#d9f2ff', speck: '#1d6ca8' }
+    },
+    {
+      id: 'reef', code: 'T07', name: '浅海环礁', short: '浅海环礁', group: '海和冰', isWater: true, waterLevel: 2.8,
+      desc: '清澈碧水环礁池、礁石外圈与珊瑚点缀',
+      skyTop: '#071b2b', skyMid: '#0e3a57', skyBot: '#1c6d87', skyHalo: 'rgba(84, 230, 245, 0.24)',
+      fx: { ringRGB: '64, 224, 240', foamRGB: '232, 252, 255', dustRGB: '182, 236, 242', waterTint: 'rgba(16, 140, 168, 0.26)', accent: '#2ed6d6' },
+      pal: { rimA: '#4a5a66', rimB: '#708591', deep: '#0c4866', mid: '#1787a3', hi: '#5fd4db', foam: '#d9fafc', speck: '#c96f6b' }
+    },
+    {
+      id: 'tideflat', code: 'T08', name: '潮汐滩涂', short: '潮汐滩涂', group: '海和冰', isWater: true, waterLevel: 2.0,
+      desc: '浅水与湿泥沙交错、落脚溅水花与浅泥印',
+      skyTop: '#13242b', skyMid: '#23424d', skyBot: '#3b666e', skyHalo: 'rgba(130, 212, 206, 0.20)',
+      fx: { ringRGB: '112, 204, 198', foamRGB: '228, 245, 240', dustRGB: '166, 160, 134', waterTint: 'rgba(42, 108, 114, 0.28)', accent: '#5ebdb6' },
+      pal: { rimA: '#4a463c', rimB: '#6b6454', deep: '#245963', mid: '#3b7e82', hi: '#8c8369', foam: '#d2e8e2', speck: '#a89c7d' }
+    },
+
+    // --- 林地与树冠（4）---
+    {
+      id: 'forest', code: 'T09', name: '林地落果空坪', short: '林地落果', group: '林地树冠', isWater: false, waterLevel: -99,
+      desc: '林间草地、散落赤果与碎叶，重步落地扬尘',
+      skyTop: '#10211a', skyMid: '#1e3d2d', skyBot: '#335e40', skyHalo: 'rgba(130, 214, 146, 0.20)',
+      fx: { ringRGB: '144, 214, 134', foamRGB: '214, 245, 196', dustRGB: '166, 152, 114', waterTint: 'rgba(72, 130, 82, 0.20)', accent: '#62c77c' },
+      pal: { rimA: '#3d3326', rimB: '#594b38', deep: '#24472c', mid: '#34663c', hi: '#528c4d', foam: '#d9663c', speck: '#70583c' }
+    },
+    {
+      id: 'meadow', code: 'T10', name: '花丛草甸', short: '花丛草甸', group: '林地树冠', isWater: false, waterLevel: -99,
+      desc: '繁花草坪、飘浮花粉微粒与轻柔暖风',
+      skyTop: '#182e2a', skyMid: '#2c5446', skyBot: '#4c8062', skyHalo: 'rgba(245, 214, 168, 0.22)',
+      fx: { ringRGB: '245, 196, 128', foamRGB: '255, 240, 206', dustRGB: '238, 212, 146', waterTint: 'rgba(130, 196, 122, 0.18)', accent: '#e8b954' },
+      pal: { rimA: '#4a4734', rimB: '#6e694d', deep: '#2f5c35', mid: '#488244', hi: '#6ca856', foam: '#f5b5c8', speck: '#fae078' }
+    },
+    {
+      id: 'canopy', code: 'T11', name: '巨木树冠', short: '巨木树冠', group: '林地树冠', isWater: false, waterLevel: -99,
+      desc: '粗壮横枝与层叠叶冠平台，林梢立体空间感',
+      skyTop: '#0d1f18', skyMid: '#1a3b2c', skyBot: '#2f6142', skyHalo: 'rgba(148, 224, 138, 0.22)',
+      fx: { ringRGB: '140, 216, 126', foamRGB: '218, 247, 194', dustRGB: '152, 130, 96', waterTint: 'rgba(54, 118, 72, 0.20)', accent: '#58c96b' },
+      pal: { rimA: '#3d281b', rimB: '#61412b', deep: '#1e4526', mid: '#2f6b36', hi: '#529c4a', foam: '#8ed169', speck: '#7a5234' }
+    },
+    {
+      id: 'bamboo', code: 'T12', name: '翠绿竹林', short: '翠绿竹林', group: '林地树冠', isWater: false, waterLevel: -99,
+      desc: '竹节林地与散落细竹叶，清净雅致',
+      skyTop: '#0e241c', skyMid: '#1d4534', skyBot: '#397353', skyHalo: 'rgba(164, 235, 174, 0.22)',
+      fx: { ringRGB: '154, 226, 152', foamRGB: '226, 250, 212', dustRGB: '164, 186, 134', waterTint: 'rgba(72, 148, 96, 0.18)', accent: '#6dd480' },
+      pal: { rimA: '#2a422c', rimB: '#436942', deep: '#2b5933', mid: '#47874b', hi: '#78b867', foam: '#b8e38a', speck: '#94865b' }
+    },
+
+    // --- 沙漠（2）---
+    {
+      id: 'desert', code: 'T13', name: '戈壁沙丘', short: '戈壁沙丘', group: '沙漠', isWater: false, waterLevel: -99,
+      desc: '流动风纹沙丘、细沙扬尘与干裂沙痕',
+      skyTop: '#2b1c12', skyMid: '#5c3b20', skyBot: '#9c6c3b', skyHalo: 'rgba(255, 206, 128, 0.24)',
+      fx: { ringRGB: '242, 196, 122', foamRGB: '255, 236, 196', dustRGB: '224, 182, 124', waterTint: 'rgba(196, 146, 84, 0.20)', accent: '#e8a84a' },
+      pal: { rimA: '#6b4728', rimB: '#8f6339', deep: '#a3713c', mid: '#c99352', hi: '#e3b370', foam: '#f5d69f', speck: '#875a31' }
+    },
+    {
+      id: 'oasis', code: 'T14', name: '沙漠绿洲水边', short: '沙漠绿洲', group: '沙漠', isWater: true, waterLevel: 1.8,
+      desc: '暖沙环抱一汪浅碧绿洲水潭与棕榈草缘，水陆交界',
+      skyTop: '#241b13', skyMid: '#4c3822', skyBot: '#7d633b', skyHalo: 'rgba(130, 224, 212, 0.22)',
+      fx: { ringRGB: '88, 218, 212', foamRGB: '236, 252, 245', dustRGB: '222, 188, 134', waterTint: 'rgba(26, 146, 152, 0.26)', accent: '#42cfc2' },
+      pal: { rimA: '#7a5430', rimB: '#a87948', deep: '#146978', mid: '#259ca6', hi: '#d6a460', foam: '#c8f5eb', speck: '#4b8c4a' }
+    },
+
+    // --- 地下与特殊（4）---
+    {
+      id: 'cave', code: 'T15', name: '地下暗河溶洞', short: '暗河溶洞', group: '地下特殊', isWater: true, waterLevel: 1.6,
+      desc: '深色岩台、石笋与地下暗河交汇，潮湿回响波纹',
+      skyTop: '#12131c', skyMid: '#1f2233', skyBot: '#31364d', skyHalo: 'rgba(138, 152, 224, 0.18)',
+      fx: { ringRGB: '148, 166, 224', foamRGB: '216, 224, 245', dustRGB: '146, 148, 168', waterTint: 'rgba(42, 58, 96, 0.28)', accent: '#8e9ce6' },
+      pal: { rimA: '#232633', rimB: '#383d52', deep: '#172947', mid: '#3a4054', hi: '#5c647d', foam: '#7098c9', speck: '#1d202b' }
+    },
+    {
+      id: 'ruins', code: 'T16', name: '苔藓古石遗迹', short: '苔藓古石', group: '地下特殊', isWater: false, waterLevel: -99,
+      desc: '青苔石板缝隙、落叶碎石与浅水洼',
+      skyTop: '#131b1c', skyMid: '#223133', skyBot: '#394f4c', skyHalo: 'rgba(156, 204, 178, 0.18)',
+      fx: { ringRGB: '162, 196, 174', foamRGB: '218, 232, 222', dustRGB: '158, 166, 156', waterTint: 'rgba(84, 108, 96, 0.22)', accent: '#7eb598' },
+      pal: { rimA: '#303838', rimB: '#4b5754', deep: '#404a48', mid: '#5d6966', hi: '#818f8a', foam: '#5a8756', speck: '#38403e' }
+    },
+    {
+      id: 'swamp', code: 'T17', name: '沼泽泥潭', short: '沼泽泥潭', group: '地下特殊', isWater: true, waterLevel: 2.2,
+      desc: '浑浊泥水、冒泡沼气与泥渍溅花',
+      skyTop: '#111c16', skyMid: '#1e3326', skyBot: '#314d36', skyHalo: 'rgba(146, 206, 126, 0.18)',
+      fx: { ringRGB: '142, 202, 118', foamRGB: '204, 236, 178', dustRGB: '132, 152, 104', waterTint: 'rgba(46, 84, 52, 0.34)', accent: '#86bf5e' },
+      pal: { rimA: '#2e3324', rimB: '#444c33', deep: '#243826', mid: '#365435', hi: '#547846', foam: '#92b86e', speck: '#453e2b' }
+    },
+    {
+      id: 'volcano', code: 'T18', name: '熔岩火山口', short: '熔岩火山', group: '地下特殊', isWater: false, waterLevel: -99,
+      desc: '黑曜岩台、炽热熔岩裂隙与上升火屑氛围',
+      skyTop: '#1c0c0c', skyMid: '#3d1714', skyBot: '#6b281c', skyHalo: 'rgba(255, 134, 64, 0.24)',
+      fx: { ringRGB: '255, 136, 66', foamRGB: '255, 212, 138', dustRGB: '166, 118, 102', waterTint: 'rgba(220, 84, 34, 0.24)', accent: '#f0743a' },
+      pal: { rimA: '#261b1c', rimB: '#3d2a2a', deep: '#2e2224', mid: '#473638', hi: '#664e4d', foam: '#ff8a3d', speck: '#d94826' }
+    },
+
+    // --- 新增生态生境（T19~T21）---
+    {
+      id: 'carcass', code: 'T19', name: '巨兽遗骸', short: '巨兽遗骸', group: '林地树冠', isWater: false, waterLevel: -99, isNew: true,
+      desc: '黑褐腐土、跨台白骨肋拱与淡青菌斑',
+      skyTop: '#151210', skyMid: '#2a231c', skyBot: '#463a2c', skyHalo: 'rgba(214, 196, 160, 0.18)',
+      fx: { ringRGB: '214, 200, 168', foamRGB: '236, 228, 210', dustRGB: '120, 100, 78', waterTint: 'rgba(70, 58, 40, 0.24)', accent: '#cdb98a' },
+      pal: { rimA: '#2b231b', rimB: '#46382a', deep: '#2a2018', mid: '#3d2f22', hi: '#5a4630', foam: '#e6dcc4', speck: '#7fb3a2' }
+    },
+    {
+      id: 'saltlake', code: 'T20', name: '盐壳湖', short: '盐壳湖', group: '沙漠', isWater: true, waterLevel: 1.0, isNew: true,
+      desc: '白色六边形盐壳、翘边缝隙与粉红浓盐水洼',
+      skyTop: '#2a2128', skyMid: '#55444d', skyBot: '#9a8088', skyHalo: 'rgba(255, 214, 226, 0.22)',
+      fx: { ringRGB: '240, 200, 210', foamRGB: '255, 248, 250', dustRGB: '232, 224, 214', waterTint: 'rgba(199, 111, 134, 0.22)', accent: '#e48aa0' },
+      pal: { rimA: '#8f8577', rimB: '#b3aa9b', deep: '#c76f86', mid: '#e9e4dc', hi: '#fbf8f2', foam: '#cfc6b8', speck: '#e09aa8' }
+    },
+    {
+      id: 'hotspring', code: 'T21', name: '热泉梯田', short: '热泉梯田', group: '地下特殊', isWater: true, waterLevel: 1.6, isNew: true,
+      desc: '石灰矿壳台阶与橙黄绿三色热水菌毯',
+      skyTop: '#1d1a17', skyMid: '#3a332c', skyBot: '#6b5e4e', skyHalo: 'rgba(255, 196, 140, 0.20)',
+      fx: { ringRGB: '150, 220, 220', foamRGB: '240, 250, 248', dustRGB: '210, 200, 186', waterTint: 'rgba(47, 143, 154, 0.26)', accent: '#e88a3c' },
+      pal: { rimA: '#6e675c', rimB: '#8f877a', deep: '#2f8f9a', mid: '#b9b2a2', hi: '#dcd6c8', foam: '#e0742c', speck: '#c9b23a', green: '#6aa84f' }
+    }
+  ];
+
+  const HABITAT_MAP = Object.create(null);
+  for (const h of HABITAT_DEFS) HABITAT_MAP[h.id] = h;
+
+  const platformCache = Object.create(null);
+
+  function buildHabitatPlatform(habitatId, makeCanvas, size = 200) {
+    const def = HABITAT_MAP[habitatId] || HABITAT_DEFS[0];
+    if (platformCache[def.id]) return platformCache[def.id];
+
+    const base = makeCanvas(size, size);
+    const bg = base.getContext('2d');
+    const bim = bg.createImageData(size, size);
+    const half = size * 0.5;
+    const rOuter = size * 0.485;
+    const rRim = size * 0.435;
+    const rInner = size * 0.405;
+
+    const rgba = {};
+    for (const k in def.pal) rgba[k] = hexToRgba(def.pal[k]);
+
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const dx = x - half, dy = y - half;
+        const dist = Math.hypot(dx, dy);
+        if (dist > rOuter) continue;
+
+        const ang = Math.atan2(dy, dx);
+        const wave = Math.sin(ang * 8) * 1.3 + Math.cos(ang * 5) * 0.9;
+        const n1 = periodicNoise2(x, y, 64, 64, 16, 19);
+        const n2 = periodicNoise2(x + 13, y + 7, 32, 32, 8, 47);
+        const v = n1 * 0.62 + n2 * 0.38;
+
+        let key = 'mid';
+        if (def.id === 'tavern') {
+          if (dist > rRim) {
+            const seg = ((ang + Math.PI) / (Math.PI * 2)) * 32;
+            const seam = Math.abs(seg - Math.round(seg)) < 0.08;
+            if (dist > rOuter - 2.0) key = 'deep';
+            else if (seam) key = 'deep';
+            else key = ((Math.floor(seg) & 1) ? (v > 0.56 ? 'stoneHi' : 'rimB') : 'rimA');
+          } else if (dist > rInner) {
+            const seg = ((ang + Math.PI) / (Math.PI * 2)) * 28;
+            const seam = Math.abs(seg - Math.round(seg)) < 0.08;
+            const isHearthArc = Math.abs(ang + Math.PI * 0.5) < 0.46 && dist < rInner + 3.2;
+            if (isHearthArc && ((Math.floor(seg * 2) & 1) === 0)) key = 'hearth';
+            else if (seam || dist < rInner + 1.2) key = 'deep';
+            else key = ((Math.floor(seg) & 1) ? 'rimB' : (v > 0.58 ? 'stoneHi' : 'rimA'));
+          } else if (dist <= 44.0) {
+            // 中央金边绛红圆形编织地毯
+            const weave = ((x + y) & 1) ^ (((x >> 1) + (y >> 1)) & 1);
+            const petal = Math.sin(ang * 16);
+            if (dist > 41.6) {
+              key = (petal > 0.15) ? 'speck' : 'rugDark';
+            } else if (dist > 37.8) {
+              const motif = Math.abs(Math.sin(ang * 12));
+              key = (dist > 39.2 && dist < 40.4 && motif > 0.45) ? 'rugDark' : 'speck';
+            } else if (dist > 17.5 && dist < 20.5) {
+              key = (Math.sin(ang * 8) > -0.25) ? 'speck' : 'rugHi';
+            } else if (dist < 7.5) {
+              const centerDiamond = Math.abs(dx) + Math.abs(dy);
+              key = centerDiamond < 5.2 ? 'speck' : 'rugHi';
+            } else {
+              if (v > 0.68 && weave) key = 'rugHi';
+              else if (v < 0.34 || !weave) key = 'rugDark';
+              else key = 'foam';
+            }
+          } else {
+            // 深暖胡桃木拼接长条木板（板缝清晰、带微木纹）
+            const plankH = 11;
+            const rowIdx = Math.floor(y / plankH);
+            const inRowY = y - rowIdx * plankH;
+            const jointX = (x + rowIdx * 37) % 36;
+            const grain = Math.sin(x * 0.16 + rowIdx * 1.9 + n1 * 3.2);
+            if (inRowY === 0 || jointX === 0) {
+              key = 'deep';
+            } else if (inRowY === 1) {
+              key = grain > 0.15 ? 'hi' : 'mid';
+            } else if (inRowY === plankH - 1) {
+              key = 'deep';
+            } else {
+              const rowTone = (rowIdx * 13) % 3;
+              if (grain > 0.48 || (rowTone === 0 && v > 0.56)) key = 'hi';
+              else if (grain < -0.58 && rowTone === 2) key = 'deep';
+              else key = 'mid';
+            }
+          }
+        } else if (dist > rRim + wave * 0.45) {
+          key = (dist > rOuter - 2.2 || v > 0.66) ? 'foam' : (v < 0.38 ? 'deep' : 'mid');
+        } else if (dist > rInner + wave * 0.4) {
+          const seg = ((ang + Math.PI) / (Math.PI * 2)) * 26;
+          const seam = Math.abs(seg - Math.round(seg)) < 0.09;
+          key = seam ? 'rimA' : ((Math.floor(seg) & 1) ? 'rimB' : 'rimA');
+        } else {
+          if (def.id === 'desert') {
+            const dune = Math.sin((x * 0.12 + y * 0.08) + n1 * 2.2);
+            key = dune > 0.45 ? 'hi' : (dune < -0.4 ? 'deep' : 'mid');
+            if (v > 0.74) key = 'foam';
+          } else if (def.id === 'oasis') {
+            // 沙地环抱中央浅碧绿洲水潭 + 岸边棕榈草缘
+            const poolR = 46 + Math.sin(ang * 3 + n1 * 2.4) * 7.5;
+            if (dist < poolR - 5) key = (v > 0.52) ? 'mid' : 'deep';
+            else if (dist < poolR) key = 'foam';
+            else if (dist < poolR + 9 && n2 > 0.42) key = 'speck';
+            else key = (v > 0.58) ? 'hi' : 'rimB';
+          } else if (def.id === 'sky') {
+            const puff = Math.sin(x * 0.09) * Math.cos(y * 0.09) + v;
+            key = puff > 0.85 ? 'foam' : (puff > 0.45 ? 'hi' : (puff > 0.15 ? 'mid' : 'deep'));
+          } else if (def.id === 'thunderPeak') {
+            const bolt = Math.abs(Math.sin(x * 0.08 + y * 0.06 + n1 * 4.2));
+            if (bolt < 0.06 && dist < rInner - 10 && n2 > 0.58) key = bolt < 0.025 ? 'speck' : 'foam';
+            else key = v > 0.66 ? 'hi' : (v < 0.36 ? 'deep' : 'mid');
+          } else if (def.id === 'iceSea') {
+            // 洁白冰面裂开深蓝冰缝
+            const fissure = Math.abs(Math.sin(x * 0.065 - y * 0.045 + n1 * 3.2));
+            if (fissure < 0.14 && dist < rInner - 4) key = fissure < 0.07 ? 'deep' : 'mid';
+            else key = v > 0.56 ? 'foam' : (v > 0.34 ? 'speck' : 'hi');
+          } else if (def.id === 'openSea') {
+            const swell = Math.sin(y * 0.14 + Math.sin(x * 0.05) * 2.0 + n1 * 1.4);
+            if (swell > 0.86) key = 'foam';
+            else if (swell > 0.30) key = 'hi';
+            else if (swell < -0.35) key = 'deep';
+            else key = 'mid';
+          } else if (def.id === 'stoneBay') {
+            // 浅滩鹅卵石 + 岸边岩缝 + 漫过浅水
+            const riverBand = Math.sin(x * 0.045) * 16 + dy;
+            if (Math.abs(riverBand) < 26 + n1 * 12) key = (v > 0.62) ? 'foam' : (v > 0.35 ? 'mid' : 'deep');
+            else key = (n2 > 0.68) ? 'speck' : (v > 0.46 ? 'hi' : 'rimB');
+          } else if (def.id === 'canopy') {
+            // 粗壮树干横枝 + 层叠叶冠
+            const branch = Math.abs(Math.sin((dx * 0.032 - dy * 0.028) + n1 * 1.8));
+            if (branch < 0.18 && dist < rInner - 6) key = v > 0.5 ? 'speck' : 'rimB';
+            else key = v > 0.72 ? 'foam' : (v > 0.50 ? 'hi' : (v < 0.30 ? 'deep' : 'mid'));
+          } else if (def.id === 'bamboo') {
+            // 竹林地台 + 横向竹节纹 + 散落竹叶
+            const stalk = ((Math.round(x + n1 * 3) % 14) === 0);
+            const node = ((y % 18) === 0 && (x % 14) < 3);
+            if (node) key = 'foam';
+            else if (stalk) key = 'deep';
+            else if (n2 > 0.80 && ((x + y) & 3) === 0) key = 'speck';
+            else key = v > 0.64 ? 'hi' : (v < 0.34 ? 'deep' : 'mid');
+          } else if (def.id === 'cave') {
+            // 地下暗河贯穿深色溶洞岩台
+            const stream = Math.abs(dx + Math.sin(dy * 0.06) * 18);
+            if (stream < 18 + n1 * 8) key = (stream > 14 && v > 0.52) ? 'foam' : 'deep';
+            else key = v > 0.66 ? 'hi' : (v < 0.32 ? 'speck' : 'mid');
+          } else if (def.id === 'volcano') {
+            const crack = Math.abs(Math.sin(x * 0.07 + n1 * 3.8) + Math.cos(y * 0.07 - n2 * 2.5));
+            if (crack < 0.14 && dist < rInner - 6) key = crack < 0.06 ? 'foam' : 'speck';
+            else key = v > 0.64 ? 'hi' : (v < 0.34 ? 'deep' : 'mid');
+          } else if (def.id === 'forest') {
+            if (n2 > 0.86 && ((x * 5 + y * 3) & 7) === 0) key = 'foam';
+            else if (v > 0.66) key = 'hi';
+            else if (v < 0.32) key = 'deep';
+            else if (n2 > 0.78) key = 'speck';
+            else key = 'mid';
+          } else if (def.id === 'meadow') {
+            if (n2 > 0.84 && ((x + y) & 3) === 0) key = ((x * 7 + y) & 1) ? 'foam' : 'speck';
+            else key = v > 0.65 ? 'hi' : (v < 0.34 ? 'deep' : 'mid');
+          } else if (def.id === 'ruins') {
+            const tile = (x % 16 === 0 || y % 16 === 0);
+            if (tile) key = 'speck';
+            else if (v > 0.70) key = 'foam';
+            else key = v > 0.55 ? 'hi' : (v < 0.35 ? 'deep' : 'mid');
+          } else if (def.id === 'tideflat') {
+            if (v > 0.56) key = v > 0.72 ? 'speck' : 'hi';
+            else if (v > 0.48) key = 'foam';
+            else key = v > 0.32 ? 'mid' : 'deep';
+          } else if (def.id === 'carcass') {
+            // 黑褐腐土打底 + 5 道白色肋骨拱（带暗边）+ 淡青菌斑
+            key = v > 0.66 ? 'hi' : (v < 0.36 ? 'deep' : 'mid');
+            for (let k = 0; k < 5; k++) {
+              const ribX = 42 + k * 29 + Math.sin(y * 0.036 + k * 0.9) * 9;
+              const dRib = Math.abs(x - ribX);
+              if (Math.abs(dy) < 70 && dRib < 2.7) { key = 'foam'; break; }
+              if (Math.abs(dy) < 70 && dRib < 4.0) { key = 'rimA'; break; }
+            }
+            if (key !== 'foam' && key !== 'rimA' && n2 > 0.79 && ((x * 3 + y * 5) & 3) === 0) key = 'speck';
+          } else if (def.id === 'saltlake') {
+            // 白色六边形盐壳 + 浅灰翘边 + 粉红浓盐水裂隙与浅洼
+            const S = 15, HY = S * 0.866;
+            const j0 = Math.round(y / HY);
+            let d1 = 1e9, d2 = 1e9, best = 0;
+            for (let j = j0 - 1; j <= j0 + 1; j++) {
+              const off = (j & 1) ? S * 0.5 : 0;
+              const i0 = Math.round((x - off) / S);
+              for (let i = i0 - 1; i <= i0 + 1; i++) {
+                const dd = Math.hypot(x - (i * S + off), y - j * HY);
+                if (dd < d1) { d2 = d1; d1 = dd; best = i * 31 + j * 17; }
+                else if (dd < d2) d2 = dd;
+              }
+            }
+            const pool = (((best * 2654435761) >>> 0) % 9) === 0;
+            if (d2 - d1 < 1.35) key = (n2 > 0.54) ? 'speck' : 'foam';
+            else if (pool) key = d1 < S * 0.38 ? 'deep' : 'speck';
+            else key = (v > 0.62 || (n2 > 0.86 && ((x + y) & 3) === 0)) ? 'hi' : 'mid';
+          } else if (def.id === 'hotspring') {
+            // 石灰梯田台阶 + 白矿堰边 + 橙红 / 黄 / 绿三色热水菌毯
+            const yy = y + Math.sin(x * 0.06 + n1 * 3.0) * 6.0;
+            const band = Math.floor(yy / 26);
+            const rel = ((yy % 26) + 26) % 26;
+            const mats = ['foam', 'foam', 'speck', 'green', 'green', 'green', 'green', 'green'];
+            if (rel < 2.8) key = 'hi';
+            else if (rel < 4.4) key = 'rimB';
+            else if (v > 0.64) key = 'deep';
+            else key = mats[Math.max(0, Math.min(mats.length - 1, band))];
+          } else if (def.isWater) {
+            const caustic = Math.sin((x + y * 0.55) * 0.13) * Math.cos((y - x * 0.48) * 0.13);
+            if (dist > rInner - 2.4 && v > 0.5) key = 'foam';
+            else if (def.id === 'reef' && dist > rInner - 10 && n2 > 0.76) key = 'speck';
+            else if (dist < 48 && (v > 0.38 || caustic > 0.48)) key = 'mid';
+            else key = (v > 0.54 || caustic > 0.58) ? 'mid' : 'deep';
+          } else {
+            if (v > 0.68) key = 'hi';
+            else if (v < 0.32) key = 'deep';
+            else if (n2 > 0.78) key = 'speck';
+            else key = 'mid';
+            if (dist > rInner - 3.5 && v > 0.56) key = 'rimB';
+          }
+        }
+
+        const c = rgba[key];
+        const i = (y * size + x) * 4;
+        bim.data[i] = c[0]; bim.data[i + 1] = c[1]; bim.data[i + 2] = c[2]; bim.data[i + 3] = 255;
+      }
+    }
+
+    bg.putImageData(bim, 0, 0);
+    const res = { id: def.id, def, size, base, rInner, rRim, rOuter };
+    platformCache[def.id] = res;
+    return res;
+  }
+
+  PW.Habitats = { HABITAT_DEFS, HABITAT_MAP, buildHabitatPlatform };
+})(window.PixelWorkshop);
+
+
+===== FILE: ./core/math.js =====
+'use strict';
+
+window.PixelWorkshop = window.PixelWorkshop || {};
+
+(function (PW) {
+  const TAU = Math.PI * 2;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const smoothstep = (e0, e1, x) => {
+    const t = clamp((x - e0) / (e1 - e0), 0, 1);
+    return t * t * (3 - 2 * t);
+  };
+  const smin = (a, b, k) => {
+    const h = clamp(0.5 + 0.5 * (b - a) / k, 0, 1);
+    return lerp(b, a, h) - k * h * (1 - h);
+  };
+  const expSmooth = (dt, speed) => 1 - Math.exp(-Math.max(0, dt) * speed);
+  const wrapAngle = (a) => ((((a + Math.PI) % TAU) + TAU) % TAU) - Math.PI;
+  const lerpAngle = (a, b, t) => a + wrapAngle(b - a) * t;
+
+  // 局部坐标转世界坐标（正面 +Y，绕 Z 轴旋转 yaw）
+  function localToWorldXY(rx, ry, yaw, lx, ly) {
+    const cy = Math.cos(yaw), sy = Math.sin(yaw);
+    return [rx + cy * lx - sy * ly, ry + sy * lx + cy * ly];
+  }
+
+  // 关节枢轴锁死摆放：若部件真实旋转轴在局部 (px, py)，返回体素盒中心的世界坐标
+  function pivotToWorldXY(jointX, jointY, partYaw, pivotX, pivotY) {
+    return localToWorldXY(jointX, jointY, partYaw, -pivotX, -pivotY);
+  }
+
+  // 绕 X 轴向前倾倒（pitch > 0 时 +Z 倒向 +Y）
+  function pitchPt(pt, pitch, pivotY, pivotZ) {
+    const cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const dy = pt[1] - pivotY, dz = pt[2] - pivotZ;
+    return [pt[0], pivotY + dy * cp + dz * sp, pivotZ - dy * sp + dz * cp];
+  }
+
+  function distSeg3Sq(px, py, pz, ax, ay, az, bx, by, bz) {
+    const abx = bx - ax, aby = by - ay, abz = bz - az;
+    const apx = px - ax, apy = py - ay, apz = pz - az;
+    const denom = abx * abx + aby * aby + abz * abz || 1;
+    const t = clamp((apx * abx + apy * aby + apz * abz) / denom, 0, 1);
+    const dx = apx - abx * t, dy = apy - aby * t, dz = apz - abz * t;
+    return [dx * dx + dy * dy + dz * dz, t];
+  }
+
+  function distTri3Sq(px, py, pz, a, b, c) {
+    const abx = b[0] - a[0], aby = b[1] - a[1], abz = b[2] - a[2];
+    const acx = c[0] - a[0], acy = c[1] - a[1], acz = c[2] - a[2];
+    const apx = px - a[0], apy = py - a[1], apz = pz - a[2];
+    const d1 = abx * apx + aby * apy + abz * apz;
+    const d2 = acx * apx + acy * apy + acz * apz;
+    if (d1 <= 0 && d2 <= 0) return apx * apx + apy * apy + apz * apz;
+    const bpx = px - b[0], bpy = py - b[1], bpz = pz - b[2];
+    const d3 = abx * bpx + aby * bpy + abz * bpz;
+    const d4 = acx * bpx + acy * bpy + acz * bpz;
+    if (d3 >= 0 && d4 <= d3) return bpx * bpx + bpy * bpy + bpz * bpz;
+    const vc = d1 * d4 - d3 * d2;
+    if (vc <= 0 && d1 >= 0 && d3 <= 0) {
+      const v = d1 / (d1 - d3);
+      const qx = apx - abx * v, qy = apy - aby * v, qz = apz - abz * v;
+      return qx * qx + qy * qy + qz * qz;
+    }
+    const cpx = px - c[0], cpy = py - c[1], cpz = pz - c[2];
+    const d5 = abx * cpx + aby * cpy + abz * cpz;
+    const d6 = acx * cpx + acy * cpy + acz * cpz;
+    if (d6 >= 0 && d5 <= d6) return cpx * cpx + cpy * cpy + cpz * cpz;
+    const vb = d5 * d2 - d1 * d6;
+    if (vb <= 0 && d2 >= 0 && d6 <= 0) {
+      const w = d2 / (d2 - d6);
+      const qx = apx - acx * w, qy = apy - acy * w, qz = apz - acz * w;
+      return qx * qx + qy * qy + qz * qz;
+    }
+    const va = d3 * d6 - d5 * d4;
+    if (va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0) {
+      const w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+      const qx = bpx - (c[0] - b[0]) * w, qy = bpy - (c[1] - b[1]) * w, qz = bpz - (c[2] - b[2]) * w;
+      return qx * qx + qy * qy + qz * qz;
+    }
+    const denom = 1 / (va + vb + vc || 1);
+    const v = vb * denom, w = vc * denom;
+    const qx = apx - abx * v - acx * w, qy = apy - aby * v - acy * w, qz = apz - abz * v - acz * w;
+    return qx * qx + qy * qy + qz * qz;
+  }
+
+  function hash2i(ix, iy, seed) {
+    let h = (ix * 374761393 + iy * 668265263 + seed * 1442695041) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+  }
+
+  function periodicNoise2(x, y, periodX, periodY, cell, seed) {
+    const gx = x / cell, gy = y / cell;
+    const px = Math.max(1, Math.round(periodX / cell));
+    const py = Math.max(1, Math.round(periodY / cell));
+    const ix = Math.floor(gx), iy = Math.floor(gy);
+    const fx = gx - ix, fy = gy - iy;
+    const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+    const wMod = (v, m) => ((v % m) + m) % m;
+    const x0 = wMod(ix, px), x1 = wMod(ix + 1, px);
+    const y0 = wMod(iy, py), y1 = wMod(iy + 1, py);
+    return lerp(
+      lerp(hash2i(x0, y0, seed), hash2i(x1, y0, seed), ux),
+      lerp(hash2i(x0, y1, seed), hash2i(x1, y1, seed), ux),
+      uy
+    );
+  }
+
+  // 1D/2D 连续平滑值噪声（P5.js noise 风格，用于自然漂浮、微动与呼吸）
+  function valueNoise1(x, seed = 11) {
+    const ix = Math.floor(x);
+    const fx = x - ix;
+    const u = fx * fx * (3 - 2 * fx);
+    return lerp(hash2i(ix, 0, seed), hash2i(ix + 1, 0, seed), u);
+  }
+
+  function fbm1(x, seed = 11, octaves = 3) {
+    let sum = 0, amp = 0.5, freq = 1, norm = 0;
+    for (let i = 0; i < octaves; i++) {
+      sum += valueNoise1(x * freq, seed + i * 31) * amp;
+      norm += amp;
+      amp *= 0.5;
+      freq *= 2.03;
+    }
+    return sum / (norm || 1);
+  }
+
+  function hexToRgba(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 255];
+  }
+
+  PW.Math = {
+    TAU, clamp, lerp, smoothstep, smin, expSmooth, wrapAngle, lerpAngle,
+    localToWorldXY, pivotToWorldXY, pitchPt, distSeg3Sq, distTri3Sq,
+    hash2i, periodicNoise2, valueNoise1, fbm1, hexToRgba
+  };
+})(window.PixelWorkshop);
+
+
+===== FILE: ./preview.html =====
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UI-04 360° 真 3D 堆叠实景验收台 · 旋转像素地面与战斗特效</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; background: #0d130f; color: #ece8dc; font: 13px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; overflow: hidden; }
+  .wrap { display: flex; width: 100%; height: 100%; }
+  .stage { position: relative; flex: 1; background: #0a100c; cursor: grab; overflow: hidden; }
+  .stage:active { cursor: grabbing; }
+  #cv { width: 100%; height: 100%; display: block; }
+  .hud { position: absolute; left: 12px; top: 10px; padding: 6px 10px; border-radius: 6px; background: rgba(10,16,12,0.82); border: 1px solid rgba(255,255,255,0.14); font-variant-numeric: tabular-nums; pointer-events: none; }
+  .warn { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); max-width: 520px; padding: 16px 20px; border-radius: 8px; background: rgba(140,42,32,0.92); color: #fff; font-size: 14px; display: none; text-align: center; }
+  .side { width: 272px; background: #151c17; border-left: 1px solid rgba(255,255,255,0.1); padding: 14px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+  h2 { font-size: 15px; color: #ffe498; }
+  .sec { font-size: 12px; color: #9db0a0; font-weight: 600; margin-bottom: 5px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; }
+  button, select { background: #233026; color: #ece8dc; border: 1px solid rgba(255,255,255,0.15); border-radius: 5px; padding: 6px 8px; cursor: pointer; font-size: 12px; }
+  button.on { background: #70551c; border-color: #ffe498; color: #fff; font-weight: 700; }
+  .tip { font-size: 11px; color: #8da090; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <main class="stage" id="stage">
+    <canvas id="cv"></canvas>
+    <div class="hud" id="hud">初始化中...</div>
+    <div class="warn" id="warn"></div>
+  </main>
+  <aside class="side">
+    <div>
+      <h2>UI-04 · 360° 实景验收台</h2>
+      <div class="tip" style="margin-top:4px">拖动画面 360° 旋转 · Q/E 转 30° · 滚轮缩放 · 真实工坊 3D 角色站立验收</div>
+    </div>
+    <div>
+      <div class="sec">切换 8 套生态地面</div>
+      <select id="biomeSel" style="width:100%"></select>
+    </div>
+    <div>
+      <div class="sec">视角控制</div>
+      <div class="row">
+        <button id="btnSpin" class="on">自动缓转</button>
+        <button id="btnReset">回正 (18°)</button>
+      </div>
+    </div>
+    <div>
+      <div class="sec">主角施法与爆发波（3D 同步旋转）</div>
+      <div class="grid" id="spellBox"></div>
+    </div>
+    <div>
+      <div class="sec">8 只怪 3D 像素出手特效</div>
+      <div class="grid" id="fxBox"></div>
+    </div>
+    <div class="tip" id="meta"></div>
+  </aside>
+</div>
+
+<!-- 本包自带只读工坊内核与 3 个真 3D 像素模型 -->
+<script src="./core/math.js"></script>
+<script src="./core/voxel.js"></script>
+<script src="./core/solvers.js"></script>
+<script src="./core/behaviors.js"></script>
+<script src="./core/renderer.js"></script>
+<script src="./core/registry.js"></script>
+<script src="./core/habitats.js"></script>
+<script src="./references/npc_mage.js"></script>
+<script src="./references/goblin.js"></script>
+<script src="./references/scene_forest_tree.js"></script>
+
+<!-- 外包交付物 -->
+<script src="./bundle/pack_ground_vfx.js"></script>
+<script>
+(function () {
+  const PW = window.PixelWorkshop;
+  const pack = window.Code00ArtPacks && window.Code00ArtPacks.groundVfx;
+  const cv = document.getElementById('cv');
+  const stage = document.getElementById('stage');
+  const hud = document.getElementById('hud');
+  const warn = document.getElementById('warn');
+  const meta = document.getElementById('meta');
+  const biomeSel = document.getElementById('biomeSel');
+
+  const BIOME_LABELS = {
+    forest: '落果浅林 (forest)', swamp: '泽畔浅洼 (swamp)', meadow: '花甸林隙 (meadow)',
+    ruins: '苔石古径 (ruins)', canopy: '巨木树冠 (canopy)', camp: '林间营地 (camp)',
+    trade: '林间土路 (trade)', gate: '青石林道 (gate)'
+  };
+  for (const [id, name] of Object.entries(BIOME_LABELS)) {
+    const o = document.createElement('option'); o.value = id; o.textContent = name; biomeSel.appendChild(o);
+  }
+  let biomeId = 'forest', autoSpin = true;
+  biomeSel.onchange = () => { biomeId = biomeSel.value; };
+
+  if (!pack) {
+    warn.style.display = 'block';
+    warn.textContent = '尚未检测到 ./bundle/pack_ground_vfx.js，请外包方交付后刷新本页验收。';
+    hud.textContent = '等待交付物：./bundle/pack_ground_vfx.js';
+    return;
+  }
+
+  const R = new PW.Renderer.StackRenderer(cv);
+  R.th = 0.32;
+  let thTarget = 0.32;
+  const makeCanvas = PW.Renderer.makeCanvas;
+  if (pack.init) pack.init(makeCanvas);
+
+  // 真实 3D 站位：主角在前 (0, +28)、地精在后 (0, -24)、两棵古树在左右外缘
+  const actors = [];
+  const spawnAt = (id, x, y, yaw) => {
+    const def = PW.Assets.byId[id];
+    if (!def) return null;
+    const inst = PW.Assets.spawn(def, { seed: 42 });
+    inst.reset(x, y, yaw);
+    actors.push(inst);
+    return inst;
+  };
+  spawnAt('npc_mage', 0, 28, Math.PI);
+  spawnAt('goblin_scout', 0, -24, 0);
+  spawnAt('scene_forest_tree', -68, -28, 0.2);
+  spawnAt('scene_forest_tree', 72, -18, 1.1);
+
+  const activeBolts = [], activeWaves = [], activeFx = [];
+  const spellBox = document.getElementById('spellBox');
+  for (const [lbl, fn] of [
+    ['红弹丸', () => activeBolts.push({ from: [4, 26, 14], to: [0, -24, 12], art: 'red', t: 0, dur: 0.45 })],
+    ['绿弹丸', () => activeBolts.push({ from: [4, 26, 14], to: [0, -24, 12], art: 'green', t: 0, dur: 0.45 })],
+    ['蓝弹丸', () => activeBolts.push({ from: [4, 26, 14], to: [0, -24, 12], art: 'blue', t: 0, dur: 0.45 })],
+    ['彩虹大弹', () => activeBolts.push({ from: [4, 26, 14], to: [0, -24, 12], art: 'rainbow', big: true, t: 0, dur: 0.55 })],
+    ['补色合白波', () => activeWaves.push({ kind: 'white_wave', center: [0, -24, 4], t: 0, dur: 0.75 })],
+    ['彩虹爆发', () => activeWaves.push({ kind: 'rainbow_burst', center: [0, -24, 6], t: 0, dur: 0.9 })],
+    ['破盾碎晶', () => activeWaves.push({ kind: 'shield_shatter', center: [0, -24, 12], t: 0, dur: 0.85 })],
+    ['护壁格挡', () => activeWaves.push({ kind: 'ward_block', center: [0, 28, 12], t: 0, dur: 0.75 })],
+  ]) {
+    const b = document.createElement('button'); b.textContent = lbl; b.onclick = fn; spellBox.appendChild(b);
+  }
+  const fxBox = document.getElementById('fxBox');
+  for (const [k, nm] of [['spit','软泥水弹'],['puff','绵羊毛团'],['club','地精木棒'],['petals','灵精花瓣'],['fruit','长臂红果'],['claw','赤豹三爪'],['bite','懒兽巨咬'],['roots','树精地根']]) {
+    const b = document.createElement('button'); b.textContent = nm;
+    b.onclick = () => activeFx.push({ kind: k, from: [0, -24, 12], to: [0, 28, 10], t: 0, dur: 0.85 });
+    fxBox.appendChild(b);
+  }
+
+  let drag = null;
+  cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, th: R.th }; autoSpin = false; document.getElementById('btnSpin').classList.remove('on'); cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove', e => { if (drag) R.th = thTarget = drag.th + (e.clientX - drag.x) * 0.01; });
+  cv.addEventListener('pointerup', () => { drag = null; });
+  cv.addEventListener('wheel', e => { e.preventDefault(); R.zoom = Math.max(-2, Math.min(4, R.zoom + (e.deltaY > 0 ? -1 : 1))); fit(); }, { passive: false });
+  window.addEventListener('keydown', e => {
+    if (e.key.toLowerCase() === 'q') thTarget -= Math.PI / 6;
+    if (e.key.toLowerCase() === 'e') thTarget += Math.PI / 6;
+  });
+  document.getElementById('btnSpin').onclick = (e) => { autoSpin = !autoSpin; e.target.classList.toggle('on', autoSpin); };
+  document.getElementById('btnReset').onclick = () => { autoSpin = false; document.getElementById('btnSpin').classList.remove('on'); thTarget = 0.32; };
+
+  function fit() { R.fit(PW.Habitats.HABITAT_MAP.forest, stage.clientWidth, stage.clientHeight); }
+  new ResizeObserver(fit).observe(stage);
+  fit();
+
+  const SOFT = { gaitFreq: 1, tailFlex: 1, springiness: 1, speed: 1, scaleMul: 1 };
+  let last = performance.now(), animT = 0, frames = 0, acc = 0, fps = 0;
+  const proj = (wx, wy, wz = 0) => R.proj(wx, wy, wz);
+
+  function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now; animT += dt;
+    frames++; acc += dt;
+    if (acc >= 0.5) { fps = Math.round(frames / acc); frames = 0; acc = 0; }
+    if (autoSpin) thTarget += dt * 0.35;
+    R.th += (thTarget - R.th) * (1 - Math.exp(-dt * 10));
+
+    const hab = { ...(PW.Habitats.HABITAT_MAP[biomeId] || PW.Habitats.HABITAT_MAP.forest), isWater: false };
+    for (const a of actors) a.update(dt, animT, SOFT, hab, R.vfx, { patrol: false, action: 'idle', actionTime: animT, homeX: a.state.x, homeY: a.state.y, homeYaw: a.state.yaw, maxRadius: 0, seed: 42, self: a, allActors: actors });
+    R.vfx.update(dt);
+
+    // 1. 准备全部 3D 模型（工坊原版两阶段批处理）
+    R.frame++; R.atlas.frame = R.frame; R.scratchIdx = 0; R.updateTint(hab);
+    const c = Math.cos(R.th), s = Math.sin(R.th), SC = R.SCALE, TILT = 0.6;
+    const sorted = actors.map(a => ({ actor: a, ry: s * a.state.x + c * a.state.y, parts: null })).sort((a, b) => a.ry - b.ry);
+    for (const it of sorted) it.parts = R.prepareActor(it.actor, hab, c, s);
+
+    // 2. 绘制 3D 旋转像素地面（铺满视口，零圆台！）
+    const d = R.dctx;
+    d.setTransform(1, 0, 0, 1, 0, 0);
+    d.fillStyle = hab.pal ? hab.pal.deep : '#182c1e';
+    d.fillRect(0, 0, cv.width, cv.height);
+    const tile = pack.buildGroundTile(biomeId, makeCanvas, 384);
+    const span = 260; // 世界格宽，足以覆盖 16:9 任意旋转角
+    d.save();
+    d.imageSmoothingEnabled = false;
+    d.setTransform(c * SC, TILT * s * SC, -s * SC, TILT * c * SC, cv.width / 2, cv.height / 2 + 16 * SC);
+    d.drawImage(tile.canvas, -span / 2, -span / 2, span, span);
+    // 脚底接地暗斑（跟着地面一起 3D 旋转）
+    for (const a of actors) {
+      const fr = (a.def.footRadius || 10);
+      d.fillStyle = 'rgba(0,0,0,0.34)';
+      d.beginPath(); d.ellipse(a.state.x, a.state.y, fr, fr * 0.85, 0, 0, Math.PI * 2); d.fill();
+    }
+    d.restore();
+
+    // 3. 统一远→近画全部 3D 角色与摆件
+    for (const it of sorted) R.drawPreparedActor(it.parts);
+
+    // 4. 3D 生态微粒与 3D 像素战斗特效
+    d.setTransform(1, 0, 0, 1, 0, 0);
+    pack.drawGroundAmbient3D(d, biomeId, proj, animT, 1);
+    for (let i = activeBolts.length - 1; i >= 0; i--) {
+      const b = activeBolts[i]; b.t += dt;
+      if (b.t >= b.dur) activeBolts.splice(i, 1);
+      else pack.drawSpellBolt3D(d, { ...b, k: b.t / b.dur }, proj);
+    }
+    for (let i = activeWaves.length - 1; i >= 0; i--) {
+      const w = activeWaves[i]; w.t += dt;
+      if (w.t >= w.dur) activeWaves.splice(i, 1);
+      else pack.drawImpactWave3D(d, w.kind, w.center, w.t / w.dur, proj);
+    }
+    for (let i = activeFx.length - 1; i >= 0; i--) {
+      const f = activeFx[i]; f.t += dt;
+      if (f.t >= f.dur) activeFx.splice(i, 1);
+      else pack.drawAttackFx3D(d, f.kind, f.t / f.dur, f.from, f.to, proj);
+    }
+
+    const ci = R.cacheInfo();
+    hud.textContent = `UI-04 3D实景 · ${fps} fps · 视角 ${Math.round(((R.th * 180 / Math.PI) % 360 + 360) % 360)}° · 图集 ${ci.mb}MB`;
+    meta.textContent = `交付包：${pack.name || pack.id} v${pack.version} · 画布 ${cv.width}×${cv.height}`;
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
+
+
+===== FILE: ./verify.mjs =====
+// 外包交付自动化校验脚本：UI-04 可旋转像素地面与 3D 战斗特效（运行：node verify.mjs）
+import fs from 'node:fs';
+import vm from 'node:vm';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const TARGET = path.join(ROOT, 'bundle', 'pack_ground_vfx.js');
+const BUDGET_BYTES = 6 * 1024 * 1024; // 6 MB 硬红线
+
+if (!fs.existsSync(TARGET)) {
+  console.error('❌ 未找到交付文件：./bundle/pack_ground_vfx.js');
+  process.exit(1);
+}
+
+const canvases = [];
+function makeCtx() {
+  const grad = { addColorStop() {} };
+  const state = { filter: 'none', shadowBlur: 0, globalAlpha: 1, imageSmoothingEnabled: true, fillStyle: '#000', strokeStyle: '#000', lineWidth: 1 };
+  let runtimeFilterSet = false, runtimeShadowSet = false, badCoord = false;
+  const checkNums = (args) => { for (const a of args) if (typeof a === 'number' && !Number.isFinite(a)) badCoord = true; };
+  return new Proxy(state, {
+    get(o, k) {
+      if (k === '__flags') return { runtimeFilterSet, runtimeShadowSet, badCoord };
+      if (k in o) return o[k];
+      if (k === 'createLinearGradient' || k === 'createRadialGradient') return () => grad;
+      if (k === 'createImageData') return (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(1, w) * Math.max(1, h) * 4) });
+      return (...args) => { checkNums(args); };
+    },
+    set(o, k, v) {
+      if (k === 'filter' && v && v !== 'none') runtimeFilterSet = true;
+      if (k === 'shadowBlur' && Number(v) > 0) runtimeShadowSet = true;
+      o[k] = v;
+      return true;
+    }
+  });
+}
+function makeCanvas(w = 1, h = 1) {
+  const c = { width: Math.max(1, Math.round(w)), height: Math.max(1, Math.round(h)), _ctx: null, getContext() { if (!this._ctx) this._ctx = makeCtx(); return this._ctx; } };
+  canvases.push(c);
+  return c;
+}
+
+const sandbox = {
+  window: {},
+  document: { createElement: (tag) => (tag === 'canvas' ? makeCanvas(1, 1) : {}) },
+  performance: { now: () => Number(process.hrtime.bigint()) / 1e6 },
+  console, Math, Array, Object, Number, String, Boolean, Set, Map, WeakMap,
+  Uint8Array, Uint8ClampedArray, Int32Array, Float32Array, Error, TypeError, RangeError
+};
+sandbox.window = sandbox;
+sandbox.globalThis = sandbox;
+vm.createContext(sandbox);
+
+// 加载工坊只读 math 与 habitats 供复用
+for (const rel of ['core/math.js', 'core/habitats.js']) {
+  const f = path.join(ROOT, rel);
+  if (fs.existsSync(f)) vm.runInContext(fs.readFileSync(f, 'utf8'), sandbox, { filename: rel });
+}
+
+const src = fs.readFileSync(TARGET, 'utf8');
+const errors = [];
+const check = (cond, msg) => { if (!cond) errors.push(msg); };
+
+check(!/\.filter\s*=/.test(src), '源码禁止设置 ctx.filter');
+check(!/shadowBlur/.test(src), '源码禁止使用 shadowBlur');
+check(!/\bnew\s+Image\b|https?:\/\/|fetch\s*\(/i.test(src), '源码禁止外部图片或网络加载');
+
+const BAD = /[\u706f\u70ec\u5f71\u591c\u9b42\u566c\u5e7d\u6e0a\u661f\u5149]|\u5b88.\u8005|\u4e4b/;
+const lits = src.match(/(['"`])(?:\\.|(?!\1).)*\1/g) || [];
+const badHits = [];
+for (const lit of lits) { const m = lit.match(BAD); if (m) badHits.push(`${m[0]} in ${lit.slice(0, 24)}`); }
+check(badHits.length === 0, `字符串含禁用字：${badHits.slice(0, 5).join('；')}`);
+
+vm.runInContext(src, sandbox, { filename: 'bundle/pack_ground_vfx.js' });
+const pack = sandbox.Code00ArtPacks && sandbox.Code00ArtPacks.groundVfx;
+check(!!pack, '未注册 window.Code00ArtPacks.groundVfx');
+
+const BIOMES = ['forest', 'swamp', 'meadow', 'ruins', 'canopy', 'camp', 'trade', 'gate'];
+if (pack) {
+  check(pack.id === 'groundVfx', `pack.id 应为 "groundVfx"`);
+  check(pack.version === 1, `pack.version 应为 1`);
+  const reqFns = ['init', 'buildGroundTile', 'drawGroundAmbient3D', 'drawSpellBolt3D', 'drawImpactWave3D', 'drawAttackFx3D'];
+  for (const fn of reqFns) check(typeof pack[fn] === 'function', `缺少必需方法：${fn}`);
+
+  if (typeof pack.init === 'function') pack.init(makeCanvas);
+
+  // 1. 校验 8 套地面构建与缓存复用
+  let maxBuildMs = 0;
+  for (const bid of BIOMES) {
+    const t0 = sandbox.performance.now();
+    const g1 = pack.buildGroundTile(bid, makeCanvas, 384);
+    const ms = sandbox.performance.now() - t0;
+    maxBuildMs = Math.max(maxBuildMs, ms);
+    check(!!(g1 && g1.canvas && g1.canvas.width >= 256), `${bid} buildGroundTile 必须返回 { canvas, size, biomeId }`);
+    const beforeCount = canvases.length;
+    const g2 = pack.buildGroundTile(bid, makeCanvas, 384);
+    check(g2.canvas === g1.canvas && canvases.length === beforeCount, `${bid} buildGroundTile 未做缓存复用`);
+  }
+  check(maxBuildMs <= 40, `单套地面构建耗时偏慢：${maxBuildMs.toFixed(1)}ms（上限 40ms）`);
+
+  // 2. 校验全部 3D 特效在不同旋转角与不同 k 下零报错零 NaN
+  const ctx = makeCtx();
+  const makeProj = (th) => {
+    const c = Math.cos(th), s = Math.sin(th), SC = 5, TILT = 0.6, HS = 0.8;
+    return (wx, wy, wz = 0) => [480 + (c * wx - s * wy) * SC, 270 + (s * wx + c * wy) * TILT * SC - wz * HS * SC, s * wx + c * wy];
+  };
+
+  try {
+    for (const th of [0, 0.4, 1.57, 3.14, 5.1]) {
+      const proj = makeProj(th);
+      for (const bid of BIOMES) pack.drawGroundAmbient3D(ctx, bid, proj, 2.35, 1.4);
+      for (const art of ['red', 'green', 'blue', 'white', 'rainbow']) {
+        for (const k of [0, 0.25, 0.5, 0.85, 1]) {
+          pack.drawSpellBolt3D(ctx, { from: [0, 30, 14], to: [0, -26, 12], k, art, big: art === 'rainbow' }, proj);
+        }
+      }
+      for (const wk of ['white_wave', 'rainbow_burst', 'shield_shatter', 'ward_block']) {
+        for (const k of [0, 0.3, 0.7, 1]) pack.drawImpactWave3D(ctx, wk, [0, -26, 6], k, proj);
+      }
+      for (const fx of ['spit', 'puff', 'club', 'petals', 'fruit', 'claw', 'bite', 'roots']) {
+        for (const k of [0, 0.2, 0.5, 0.8, 1]) pack.drawAttackFx3D(ctx, fx, k, [0, -26, 12], [0, 30, 10], proj);
+      }
+    }
+  } catch (e) {
+    errors.push(`3D 特效运行期异常：${e.stack || e.message}`);
+  }
+
+  check(!ctx.__flags.runtimeFilterSet, '运行期触发了 ctx.filter');
+  check(!ctx.__flags.runtimeShadowSet, '运行期触发了 ctx.shadowBlur');
+  check(!ctx.__flags.badCoord, '绘制坐标出现 NaN 或 Infinity');
+
+  const totalBytes = canvases.reduce((s, c) => s + c.width * c.height * 4, 0);
+  const mb = totalBytes / (1024 * 1024);
+  check(totalBytes <= BUDGET_BYTES, `8 套地面总内存超标：${mb.toFixed(2)} MB（上限 6.00 MB）`);
+
+  console.log('\n[UI-04 可旋转像素地面与 3D 特效 自动化校验报告]');
+  console.log(`- 名称：${pack.name || pack.id} (v${pack.version})`);
+  console.log(`- 最慢单套地面构建：${maxBuildMs.toFixed(2)} ms（上限 40 ms）`);
+  console.log(`- 离屏画布：${canvases.length} 张，合计 ${mb.toFixed(2)} MB（上限 6.00 MB）`);
+}
+
+if (errors.length) {
+  console.error(`\n❌ 校验未通过（${errors.length} 项错误）：\n  - ${errors.join('\n  - ')}`);
+  process.exit(1);
+}
+console.log('\n✅ 全部硬性校验通过！可以打开 preview.html 360° 实景旋转终检并打包 bundle_ui04_ground_vfx.zip。');
+
+
+===== FILE: ./开工提示词.md =====
+# 开工提示词（UI-04 可旋转像素地面与 3D 战斗特效 · 给无上下文网页端 AI）
+
+```text
+你正在接手一个独立、自包含的像素堆叠（Sprite Stacking）3D 旋转地面与 3D 战斗特效外包任务（UI-04）。你只需要阅读本外包目录内的文件，严禁修改 ./core/ 与 ./references/，严禁虚构外部依赖。
+
+请先依次阅读本目录内的以下文件：
+1. ./README.md
+2. ./设计文档-旋转像素地面与3D特效.md（8 套无缝像素地面、3D 微粒、主角弹道/波纹与 8 只怪 3D 像素出手特效规范）
+3. ./core/math.js 与 ./core/habitats.js（可复用 periodicNoise2 / hexToRgba 与工坊真实地貌色板）
+4. ./verify.mjs（自动化硬校验标准）
+5. ./preview.html（360° 真 3D 堆叠实景验收台，你会看到 proj(wx, wy, wz) 与 buildGroundTile 如何被调用）
+
+【交付目标】
+请用单个脚本一次性在 ./bundle/ 目录产出以下 3 个文件，并打包为可下载的 bundle_ui04_ground_vfx.zip（内含 bundle/pack_ground_vfx.js、bundle/manifest.json、bundle/交付说明.md）：
+
+1. ./bundle/pack_ground_vfx.js：
+   - 登记到 window.Code00ArtPacks = window.Code00ArtPacks || {}; window.Code00ArtPacks.groundVfx = { id: 'groundVfx', version: 1, name: '...', BIOME_IDS: ['forest', 'swamp', 'meadow', 'ruins', 'canopy', 'camp', 'trade', 'gate'], init, buildGroundTile, drawGroundAmbient3D, drawSpellBolt3D, drawImpactWave3D, drawAttackFx3D };
+   - 核心美术品质要求：
+     * 8 套可旋转像素地面(buildGroundTile)：严格像素风、色板与 ./core/habitats.js 同源、边缘过渡自然以便 360° 旋转铺屏、绝不画圆形展示台、绝不画任何 2D 树/帐篷/石门/石碑/树洞（那些由工坊 3D 模型绘制），内部按 biomeId+size 缓存复用，默认 384×384；
+     * 3D 生态微粒(drawGroundAmbient3D) 与全部 3D 战斗特效(drawSpellBolt3D / drawImpactWave3D / drawAttackFx3D)：全部通过传入的 proj(wx, wy, wz) -> [sx, sy, depth] 投影到屏幕，使用硬朗像素块/阶梯像素环/像素碎晶绘制，随镜头 360° 旋转完全物理同步，彻底告别光滑 2D 矢量图；
+     * 完整支持 5 种弹道色(red/green/blue/white/rainbow)、4 种爆发波(white_wave/rainbow_burst/shield_shatter/ward_block) 与全部 8 种怪出手特效(spit/puff/club/petals/fruit/claw/bite/roots)；
+   - 性能与合规死红线（verify.mjs 逐条查杀）：
+     * 绝不出现 ctx.filter 或 .filter =；
+     * 绝不出现 shadowBlur；
+     * 绝不加载外部图片/字体/网络 URL；
+     * 全部 8 套地面加缓存总离屏内存 <= 6 MB，单套构建 <= 35 ms；
+     * 全部字符串零禁用字（正则见 verify.mjs）；
+     * 绘制结束必须 restore()，像素绘制关平滑 imageSmoothingEnabled = false，全周期 0 NaN。
+
+2. ./bundle/manifest.json：列出 8 套地面尺寸/色板、全部特效清单与离屏内存字节数。
+3. ./bundle/交付说明.md：记录设计思路、verify.mjs 自检结果与 preview.html 360° 旋转实景目检确认。
+
+【强制交付形式】
+- 禁止在聊天正文中贴任何完整源码、JSON 或长文档；
+- 用单个脚本一次性生成 3 个文件，跑通 node verify.mjs（无 Node 时用 Python 查语法/禁用字/filter/shadowBlur），直接输出可下载的 bundle_ui04_ground_vfx.zip；未打包完成请直接停下汇报。
+```
+

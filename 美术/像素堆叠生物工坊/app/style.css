@@ -102,7 +102,7 @@ input[type="checkbox"] { accent-color: var(--accent); margin: 0; }
 /* ---------------------------------------------------------------- 左：资产库 */
 .lib { grid-area: lib; }
 .lib-head { padding: 10px 10px 8px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
-.cat-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.cat-tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
 .cat-tabs button {
   border: 1px solid var(--line); background: var(--panel-2); border-radius: 8px; padding: 4px 0 3px; cursor: pointer;
   display: flex; flex-direction: column; align-items: center; line-height: 1.2; color: var(--muted);
@@ -253,3 +253,37 @@ table.bench td.bad { color: var(--warn); font-weight: 600; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: #d4d8e0; border-radius: 6px; border: 2px solid var(--panel); }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------------------------------------------------------------- UI/贴图包预览台 */
+.uipack-stage {
+  position: absolute; inset: 0; overflow: auto; padding: 20px 24px 36px;
+  background: #f3f5f8; display: none; z-index: 6;
+}
+.uipack-stage.show { display: block; }
+.uipack-h {
+  max-width: 1120px; margin: 0 auto 14px; display: flex; align-items: center;
+  justify-content: space-between; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line);
+}
+.uipack-h h3 { margin: 0; font-size: 16px; color: var(--text); }
+.uipack-sec-t {
+  max-width: 1120px; margin: 16px auto 10px; font-size: 12.5px; font-weight: 700;
+  color: var(--text); letter-spacing: .01em;
+}
+.uipack-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px; max-width: 1120px; margin: 0 auto;
+}
+.uipack-grid.wide {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+}
+.uipack-card {
+  background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, .05);
+}
+.uipack-card canvas {
+  image-rendering: pixelated; max-width: 100%; height: auto; border-radius: 6px; background: #18202a;
+}
+.uipack-card .cap {
+  font-size: 11px; color: var(--muted); text-align: center; word-break: break-all; line-height: 1.35;
+}
